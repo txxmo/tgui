@@ -77,10 +77,9 @@ void Window::Do( ) {
 	wcex.hbrBackground = CreateSolidBrush( RGB( 0, 0, 0 ) ); // black
 
 	// Create application window
-	//ImGui_ImplWin32_EnableDpiAwareness();
-	WindowClass = { sizeof( WNDCLASSEX ), CS_CLASSDC, WndProc, 0L, 0L, GetModuleHandle( NULL ), NULL, LoadCursor( NULL, IDC_ARROW ), NULL, NULL, _T( "bosshack" ), NULL };
+	WindowClass = { sizeof( WNDCLASSEX ), CS_CLASSDC, WndProc, 0L, 0L, GetModuleHandle( NULL ), NULL, LoadCursor( NULL, IDC_ARROW ), NULL, NULL, _T( "TGUI" ), NULL };
 	::RegisterClassEx( &WindowClass );
-	WindowHWND = ::CreateWindowEx( WS_EX_LAYERED, WindowClass.lpszClassName, "bosshack", WS_POPUP, 0, 0, 1920, 1080, NULL, NULL, WindowClass.hInstance, NULL );
+	WindowHWND = ::CreateWindowEx( WS_EX_LAYERED, WindowClass.lpszClassName, "TGUI", WS_POPUP, 0, 0, 1920, 1080, NULL, NULL, WindowClass.hInstance, NULL );
 
 	SetLayeredWindowAttributes( WindowHWND, 0, 255, LWA_ALPHA );
 	SetLayeredWindowAttributes( WindowHWND, RGB( 0, 0, 0 ), 0, LWA_COLORKEY );
