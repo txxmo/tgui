@@ -1,7 +1,6 @@
 # TGui
 
-tgui is a object orientated user interface I made out of boredom. Lots of this could be done better and in no way should one learn from this.
-This Source includes a full directx9 renderer and creates a example window.
+tgui is a object orientated user interface I made out of boredom. Lots of this could be done better. This Source includes a full directx9 renderer and creates a example window.
 
 ## Preview
 
