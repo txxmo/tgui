@@ -3,31 +3,15 @@
 
 using namespace TGUI;
 
-void TGUI::Groupbox::AddControl( Button* Butt )
-{
-	if ( this->Visible )
-	{
-		Butt->CurrentIndex = Menu::Index;
-
-		D3DVIEWPORT9 OldViewport = Draw->GetViewport( );
-		Draw->SetViewport( { ( DWORD )this->Pos.x, ( DWORD )this->Pos.y + 25, ( DWORD )this->Size.x, ( DWORD )this->Size.y - 25, 0.f, 1.f } );
-
-		Butt->Pos = Vector2D( this->ControlOffset[ this->CurrentIndex ].x + 2, this->ControlOffset[ this->CurrentIndex ].y );
-		Butt->Run( );
-
-		this->ControlOffset[ this->CurrentIndex ].y += 30;
-		this->MaxElementsY[ this->CurrentIndex ] += 30;
-		Menu::Index++;
-
-		Draw->SetViewport( OldViewport );
-	}
-}
-
-
 TGUI::Button::Button( std::string Name, ButtonFn Func )
 {
 	this->Name = Name;
 	this->Func = Func;
+}
+
+void TGUI::Button::Render()
+{
+
 }
 
 void TGUI::Button::Run( )
@@ -53,11 +37,30 @@ void TGUI::Button::Run( )
 	{
 		Once = false;
 	}
+}
 
-	Draw->Rect( this->Pos, ButtonSize, Style::LightOutline );
-	Draw->Rect( this->Pos + Vector2D( 1, 1 ), ButtonSize - Vector2D( 2, 2 ), Style::Outline );
-	Draw->RectFilled( this->Pos + Vector2D( 2, 2 ), ButtonSize - Vector2D( 3, 3 ), Style::DarkBG );
+void TGUI::Button::Render(float tabAlpha)
+{
+	Vector2D ButtonSize = { 151, 20 };
 
-	auto Wid = Draw->GetTextWidth( this->Name.c_str( ), Draw->F.Segoe );
-	Draw->Text( this->Pos + Vector2D( ButtonSize.x / 2 - Wid / 2, 3 ), Draw->F.Segoe, this->Name, Style::Text );
+	// Helper to apply tab alpha to any color
+	auto ApplyAlpha = [tabAlpha](Color c) {
+		return Color((int)(c.a() * tabAlpha), c.r(), c.g(), c.b());
+		};
+
+	// Outlines
+	Draw->Rect(this->Pos, ButtonSize, ApplyAlpha(Style::LightOutline));
+	Draw->Rect(this->Pos + Vector2D(1, 1), ButtonSize - Vector2D(2, 2), ApplyAlpha(Style::Outline));
+
+	// Background
+	Draw->RectFilled(this->Pos + Vector2D(2, 2),
+		ButtonSize - Vector2D(3, 3),
+		ApplyAlpha(Style::DarkBG));
+
+	// Centered text
+	auto Wid = Draw->GetTextWidth(this->Name.c_str(), Draw->F.Segoe);
+	Draw->Text(this->Pos + Vector2D(ButtonSize.x / 2 - Wid / 2, 3),
+		Draw->F.Segoe,
+		this->Name,
+		ApplyAlpha(Style::Text));
 }

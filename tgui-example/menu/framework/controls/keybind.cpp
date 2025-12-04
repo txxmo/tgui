@@ -3,30 +3,15 @@ std::string KeyName[264];
 
 using namespace TGUI;
 
-void TGUI::Groupbox::AddControl( Keybind* Bind )
-{
-	if ( this->Visible )
-	{
-		Bind->CurrentIndex = Menu::Index;
-
-		D3DVIEWPORT9 OldViewport = Draw->GetViewport( );
-		Draw->SetViewport( { ( DWORD )this->Pos.x, ( DWORD )this->Pos.y + 25, ( DWORD )this->Size.x, ( DWORD )this->Size.y - 25, 0.f, 1.f } );
-
-		Bind->Pos = Vector2D( this->ControlOffset[ this->CurrentIndex ].x + 2, this->ControlOffset[ this->CurrentIndex ].y );
-		Bind->Run( );
-
-		this->ControlOffset[ this->CurrentIndex ] += Vector2D( 0, 25 );
-		this->MaxElementsY[ this->CurrentIndex ] += 25;
-		Menu::Index++;
-
-		Draw->SetViewport( OldViewport );
-	}
-}
-
 TGUI::Keybind::Keybind( std::string Name, int* Key )
 {
 	this->Name = Name;
 	this->Key = Key;
+}
+
+void TGUI::Keybind::Render()
+{
+
 }
 
 void TGUI::Keybind::Run( )
@@ -39,11 +24,6 @@ void TGUI::Keybind::Run( )
 	
 	if ( Hovered && Input::KeyPress( VK_LBUTTON ) )
 		LastIndex = Menu::Index;
-
-	Draw->Text( this->Pos, Draw->F.Segoe, this->Name, Style::TextDim );
-	Draw->RectFilled( this->Pos + Offset, Size, Style::MenuBG );
-	Draw->Rect( this->Pos + Offset, Size, Style::LightOutline );
-	Draw->Rect( this->Pos + Offset + Vector2D( 1, 1 ), Size - Vector2D( 2, 2 ), Style::Outline );
 
 	if ( Active )
 	{
@@ -79,7 +59,31 @@ void TGUI::Keybind::Run( )
 			KeyName[ Menu::Index ] = "~";
 
 	}
+}
 
-	auto Width = Draw->GetTextWidth( KeyName[ Menu::Index ].c_str( ), Draw->F.Segoe );
-	Draw->Text( this->Pos + Offset + Vector2D( 20, 1 ) - Vector2D( Width / 2, 0 ), Draw->F.Segoe, KeyName[ Menu::Index ], Style::Text );
+void TGUI::Keybind::Render(float tabAlpha)
+{
+	Vector2D Size = { 40, 15 };
+	Vector2D Offset = { 111, 0 };
+
+	auto ApplyAlpha = [tabAlpha](Color c) {
+		return Color((int)(c.a() * tabAlpha), c.r(), c.g(), c.b());
+		};
+
+	// Label
+	Draw->Text(this->Pos, Draw->F.Segoe, this->Name, ApplyAlpha(Style::TextDim));
+
+	// Box background
+	Draw->RectFilled(this->Pos + Offset, Size, ApplyAlpha(Style::MenuBG));
+
+	// Outlines
+	Draw->Rect(this->Pos + Offset, Size, ApplyAlpha(Style::LightOutline));
+	Draw->Rect(this->Pos + Offset + Vector2D(1, 1), Size - Vector2D(2, 2), ApplyAlpha(Style::Outline));
+
+	// Key text
+	auto Width = Draw->GetTextWidth(KeyName[Menu::Index].c_str(), Draw->F.Segoe);
+	Draw->Text(this->Pos + Offset + Vector2D(20, 1) - Vector2D(Width / 2, 0),
+		Draw->F.Segoe,
+		KeyName[Menu::Index],
+		ApplyAlpha(Style::Text));
 }

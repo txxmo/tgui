@@ -1,106 +1,248 @@
 #include "controls.hpp"
 using namespace TGUI;
 
-static short int OuterPos[ MAXCONTROLS ];
-int Alphpapa[ MAXCONTROLS ];
+static short int OuterPos[MAXCONTROLS];
+int Alphpapa[MAXCONTROLS];
+int headerHeight = 20;
 
-void TGUI::Window::AddGroup( Groupbox* Group )
+void TGUI::Window::AddGroup(std::unique_ptr<Groupbox> group)
 {
-	Group->Visible = *this->Tab == Group->Tab;
+    // Position groupbox inside window (window header offset likely 21)
+    group->Pos = this->Pos + Vector2D(5, 21) + group->Pos;
 
-	if ( Group->Visible )
-	{
-		Group->Pos += this->Pos + Vector2D( 5, 21 );
-		Group->Run( );
-		Group->Render( );
+    // Initialize per-group scroll/alpha using the group’s stable id
+    const int gid = group->GroupId; // see Groupbox constructor below
+    OuterPos[gid] = 0;
+    Alphpapa[gid] = 0;
 
-		Menu::Index++;
-	}
+    group->Visible = (this->Tab && *this->Tab == group->Tab);
+
+    if (group->Visible)
+        group->Run();
+
+    groups.push_back(std::move(group)); // keep ownership
 }
 
-TGUI::Groupbox::Groupbox( )
-{
+TGUI::Groupbox::Groupbox() {}
 
+TGUI::Groupbox::Groupbox(std::string Name, Vector2D Pos, Vector2D Size, int Index, int Tab)
+{
+    this->Name = Name;
+    this->Pos = Pos;
+    this->Size = Size;
+    this->Tab = Tab;
+    this->RelativePos = Pos;
+
+    // Use a stable group id for indexing shared arrays (OuterPos/Alphpapa)
+    this->GroupId = Index;
+
+    // Reset internal stacking
+    this->NextY = 0;
 }
 
-TGUI::Groupbox::Groupbox( std::string Name, Vector2D Pos, Vector2D Size, int Index, int Tab )
+void TGUI::Groupbox::AddControl(std::unique_ptr<BaseControl> control)
 {
-	this->Name = Name;
-	this->Pos = Pos;
-	this->Size = Size;
-	this->CurrentIndex = Index;
-	this->Tab = Tab;
+    if (!Visible)
+        return;
+
+    // Controls use Menu::Index for their own indexing
+    control->CurrentIndex = Menu::Index;
+
+    // Absolute position relative to groupbox content area (below header)
+    control->RelativePos = { 7, (float)headerHeight + NextY };
+    control->Pos = this->Pos + control->RelativePos;
+    NextY += control->GetHeight();
+
+    // Keep if you use it elsewhere
+    MaxElementsY[GroupId] += control->GetHeight();
+
+    Menu::Index++;
+    Controls.push_back(std::move(control));
 }
 
-void TGUI::Groupbox::Run( )
+void TGUI::Groupbox::Run()
 {
-	this->ControlOffset[ this->CurrentIndex ] = { this->Pos.x + 7, this->Pos.y + 27 + OuterPos[ this->CurrentIndex ] };
+    // Reset stacking offset when (re)running the group
+    NextY = 0;
 }
 
-void TGUI::Groupbox::Render( )
+void Groupbox::Render()
 {
-	Draw->Rect( this->Pos - Vector2D( 1, 1 ), this->Size + Vector2D( 2, 2 ), Style::Outline );
-	Draw->Rect( this->Pos - Vector2D( 2, 2 ), this->Size + Vector2D( 4, 4 ), Style::LightOutline );
+    if (!Visible) return;
 
-	Draw->Text( this->Pos + Vector2D( this->Size.x / 2 - Draw->GetTextWidth( this->Name.c_str( ), Draw->F.Segoe ) / 2, 3 ), Draw->F.Segoe, this->Name, Style::Text, false );
+    // draw groupbox outline
+    Draw->Rect(this->Pos - Vector2D(1, 1), this->Size + Vector2D(2, 2), Style::Outline);
+    Draw->Rect(this->Pos - Vector2D(2, 2), this->Size + Vector2D(4, 4), Style::LightOutline);
+
+    // title
+    Draw->Text(this->Pos + Vector2D(this->Size.x / 2 -
+        Draw->GetTextWidth(this->Name.c_str(), Draw->F.Segoe) / 2, 3),
+        Draw->F.Segoe, this->Name, Style::Text, false);
+
+    // clipping region (exclude header)
+    RECT clip;
+    clip.left = (LONG)Pos.x;
+    clip.top = (LONG)(Pos.y + headerHeight);
+    clip.right = (LONG)(Pos.x + Size.x);
+    clip.bottom = (LONG)(Pos.y + Size.y);
+    Draw->SetClipRect(clip);
+
+    // Use the stable group id here
+    const int gid = this->GroupId;
+    const int yOffset = OuterPos[gid];
+
+    for (auto& control : Controls)
+    {
+        Vector2D basePos = control->Pos;
+
+        // Apply scroll offset only during render
+        control->Pos.y = basePos.y + yOffset;
+
+        bool insideClip =
+            control->Pos.y >= clip.top &&
+            (control->Pos.y + control->GetHeight()) <= clip.bottom;
+
+        if (insideClip)
+        {
+            control->Run();
+            control->Render();
+        }
+        else
+        {
+            // Still render (clipped), but skip input if you prefer
+            control->Render();
+        }
+
+        // Restore absolute position
+        control->Pos = basePos;
+    }
+
+    Draw->ResetClip();
 }
 
-void TGUI::Groupbox::Scroll( )
+void Groupbox::Render(float alpha)
 {
-	bool Hovered = Input::IsHovering( this->Pos, this->Size );
+    if (!Visible) return;
 
-	if ( Hovered )
-	{
-		if ( Input::MouseWheel != 0 )
-		{
-			if ( this->MaxElementsY[ this->CurrentIndex ] > ( this->Size.y - 8 ) )
-			{
-				OuterPos[ this->CurrentIndex ] += Input::MouseWheel * 10;
+    auto ApplyAlpha = [alpha](Color c) {
+        return Color((int)(c.a() * alpha), c.r(), c.g(), c.b());
+        };
 
-				Input::MouseWheel = 0;
+    // background outlines
+    Draw->Rect(this->Pos - Vector2D(1, 1), this->Size + Vector2D(2, 2), ApplyAlpha(Style::Outline));
+    Draw->Rect(this->Pos - Vector2D(2, 2), this->Size + Vector2D(4, 4), ApplyAlpha(Style::LightOutline));
 
-				if ( OuterPos[ this->CurrentIndex ] > 0 )
-					OuterPos[ this->CurrentIndex ] = 0;
+    // title
+    Draw->Text(this->Pos + Vector2D(this->Size.x / 2 -
+        Draw->GetTextWidth(this->Name.c_str(), Draw->F.Segoe) / 2, 3),
+        Draw->F.Segoe, this->Name, ApplyAlpha(Style::Text), false);
 
-				if ( OuterPos[ this->CurrentIndex ] < ( this->Size.y - 24 ) - this->MaxElementsY[ this->CurrentIndex ] )
-					OuterPos[ this->CurrentIndex ] = ( this->Size.y - 24 ) - this->MaxElementsY[ this->CurrentIndex ];
-			}
-		}
+    // clipping region
+    RECT clip;
+    clip.left = (LONG)Pos.x;
+    clip.top = (LONG)(Pos.y + headerHeight);
+    clip.right = (LONG)(Pos.x + Size.x);
+    clip.bottom = (LONG)(Pos.y + Size.y);
+    Draw->SetClipRect(clip);
 
-		if ( Alphpapa[ this->CurrentIndex ] < 255 )
-			Alphpapa[ this->CurrentIndex ] += 12.09;
+    const int gid = this->GroupId;
+    const int yOffset = OuterPos[gid];
 
-		Alphpapa[ this->CurrentIndex ] = std::clamp( Alphpapa[ this->CurrentIndex ], 0, 255 );
-	}
-	else
-	{
-		if ( Alphpapa[ this->CurrentIndex ] > 0 )
-			Alphpapa[ this->CurrentIndex ] -= 16.09;
+    for (auto& control : Controls)
+    {
+        // Absolute position = groupbox position + control's relative offset + scroll offset
+        Vector2D drawPos = this->Pos + control->RelativePos;
+        drawPos.y += yOffset;
 
-		Alphpapa[ this->CurrentIndex ] = std::clamp( Alphpapa[ this->CurrentIndex ], 0, 255 );
-	}
+        bool insideClip =
+            drawPos.y >= clip.top &&
+            (drawPos.y + control->GetHeight()) <= clip.bottom;
 
-	if ( this->Visible && this->MaxElementsY[ this->CurrentIndex ] > ( this->Size.y - 24 ) )
-	{
-		int MaxScrollValue = this->MaxElementsY[ this->CurrentIndex ] - ( this->Size.y - 24 );
+        // Temporarily set Pos for Run/Render
+        Vector2D basePos = control->Pos;
+        control->Pos = drawPos;
 
-		float ScrollPos = ( ( float )OuterPos[ this->CurrentIndex ] / ( float )this->MaxElementsY[ this->CurrentIndex ] ) * ( this->Size.y - 20.f ) * ( -1 );
+        if (insideClip)
+        {
+            control->Run();
+            control->Render(alpha);
+        }
+        else
+        {
+            control->Render(alpha);
+        }
 
-		auto ScrollPosMax = MaxScrollValue / ( float )this->MaxElementsY[ this->CurrentIndex ] * ( this->Size.y + 20.f );
+        // Restore stored absolute position if you want to keep it stable
+        control->Pos = basePos;
+    }
 
-		static int Old;
+    Draw->ResetClip();
 
-		if ( Old != MaxScrollValue )
-		{
-			Old = MaxScrollValue;
+    // Second pass: render dropdowns that are open
+    for (auto& control : Controls)
+        if (auto combo = dynamic_cast<Combobox*>(control.get()))
+            if (combo->IsOpen)
+                combo->RenderDropDown(alpha, this->Pos + control->RelativePos + Vector2D(0, OuterPos[gid]));
+}
 
-			if ( OuterPos[ this->CurrentIndex ] > 0 )
-				OuterPos[ this->CurrentIndex ] = 0;
+int Groupbox::computeContentHeight() const {
+    int bottom = 0;
+    for (auto& control : Controls) {
+        int controlBottom = control->RelativePos.y + control->GetHeight();
+        if (controlBottom > bottom)
+            bottom = controlBottom;
+    }
+    return bottom;
+}
 
-			if ( OuterPos[ this->CurrentIndex ] < ( this->Size.y - 8 ) - this->MaxElementsY[ this->CurrentIndex ] )
-				OuterPos[ this->CurrentIndex ] = ( this->Size.y - 8 ) - this->MaxElementsY[ this->CurrentIndex ];
-		}
+void Groupbox::Scroll()
+{
+    const int gid = this->GroupId;
 
-		Draw->RectFilled( Vector2D( this->Pos.x + this->Size.x - 4, this->Pos.y + ScrollPos + 3 ), Vector2D( 2, this->Size.y - ScrollPosMax - 1 ), Color( Alphpapa[ this->CurrentIndex ], Style::Accent.r( ), Style::Accent.g( ), Style::Accent.b( ) ) );
-	}
+    bool hovered = Input::IsHovering(this->Pos, this->Size);
+    int contentHeight = computeContentHeight();
+    int visibleHeight = this->Size.y - headerHeight;
+    int maxScroll = myMax(contentHeight - visibleHeight, 0);
+
+    if (!Controls.empty())
+        maxScroll -= Controls.back()->GetHeight();
+
+    // mouse wheel scroll
+    if (hovered && Input::MouseWheel != 0 && contentHeight > visibleHeight)
+    {
+        OuterPos[gid] += Input::MouseWheel * 10;
+        Input::MouseWheel = 0;
+
+        OuterPos[gid] = myMin((int)OuterPos[gid], 0);
+        OuterPos[gid] = myMax((int)OuterPos[gid],  (-maxScroll - 5));
+    }
+
+    // fade alpha
+    if (hovered)
+        Alphpapa[gid] = myMin(Alphpapa[gid] + 12, 255);
+    else
+        Alphpapa[gid] = myMax(Alphpapa[gid] - 16, 0);
+
+    // scrollbar
+    if (this->Visible && contentHeight > visibleHeight)
+    {
+        float scrollRatio = (float)-OuterPos[gid] / (float)maxScroll;
+        scrollRatio = myMin(myMax(scrollRatio, 0.0f), 1.0f);
+
+        float barHeightRatio = (float)visibleHeight / (float)contentHeight;
+        barHeightRatio = myMin(myMax(barHeightRatio, 0.1f), 1.0f);
+
+        float barHeight = barHeightRatio * (float)visibleHeight;
+        float scrollRange = (float)this->Size.y - barHeight - 6;
+        float barY = this->Pos.y + 3 + scrollRatio * scrollRange;
+
+        Draw->RectFilled(
+            Vector2D(this->Pos.x + this->Size.x - 4, barY),
+            Vector2D(2, barHeight),
+            Color(Alphpapa[gid],
+                Style::Accent.r(),
+                Style::Accent.g(),
+                Style::Accent.b())
+        );
+    }
 }

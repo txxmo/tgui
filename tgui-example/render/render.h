@@ -1,72 +1,81 @@
 #pragma once
-#include <array>
-#include <mutex>
-#include <shared_mutex>
-
 #include <d3d9.h>
 #include <d3dx9.h>
+#include <string>
+#include "../math/math.h"
+#include "color.h"
 
 #pragma comment(lib, "d3d9.lib")
 #pragma comment(lib, "d3dx9.lib")
 
-#include "../math/math.h"
-#include "color.h"
-
-struct Vertice
+struct Vertex
 {
-	float X, Y, Z, W;
-	int C;
+    float x, y, z, w;   // Transformed vertices
+    D3DCOLOR color;
 };
+
+#define VERTEX_FVF (D3DFVF_XYZRHW | D3DFVF_DIFFUSE)
+
+// Tune these for your expected peak batch size
+static const size_t kMaxBatchVerts = 4096;
 
 class CRender
 {
 public:
-	CRender( IDirect3DDevice9* Device )
-	{
-		this->Device = Device;
-		this->VertexShader = VertexShader;
+    CRender(IDirect3DDevice9* device);
+    CRender() = default;
 
-		Device->GetViewport( &ScreenSize );
-	}
+    bool InitDevice();
+    void Shutdown();
 
-	CRender( ) { }
+    // Optional per-frame scope
+    void Begin();
+    void End();
 
-	void InitDevice( );
-	void Shutdown( );
+    // Drawing
+    void Rect(Vector2D pos, Vector2D size, Color c);
+    void RectFilled(Vector2D pos, Vector2D size, Color c);
+    void Line(Vector2D startPos, Vector2D endPos, Color c);
+    void Gradient(Vector2D pos, Vector2D size, Color c1, Color c2, bool horizontal = false);
 
-public:
-	void Rect( Vector2D Pos, Vector2D Size, Color C );
-	void RectFilled( Vector2D Pos, Vector2D Size, Color C );
-	void Line( Vector2D StartPos, Vector2D EndPos, Color C );
-	void Gradient( Vector2D Pos, Vector2D Size, Color C1, Color C2, bool Horz = false );
+    void Text(Vector2D pos, LPD3DXFONT font, const std::string& text, Color c, bool center = false, int shadow = 0, Color sc = Color());
+    int GetTextWidth(const char* text, LPD3DXFONT font);
 
-	void Text( Vector2D Pos, LPD3DXFONT Font, std::string Text, Color C, bool Center = false, int Shadow = 0, Color SC = Color( ) );
-	int GetTextWidth( const char* Text, LPD3DXFONT Font );
+    // Viewport
+    void SetViewport(const D3DVIEWPORT9& vp);
+    D3DVIEWPORT9 GetViewport() const;
 
-public:
-	struct
-	{
-		LPD3DXFONT Segoe;
-		LPD3DXFONT SegoeBold;
-	} F;
+    void SetClipRect(const RECT& rc);
+    void ResetClip();
 
 public:
-	void SetViewport( D3DVIEWPORT9 ViewP )
-	{
-		Device->SetViewport( &ViewP );
-	}
+    struct
+    {
+        LPD3DXFONT Segoe = nullptr;
+        LPD3DXFONT SegoeBold = nullptr;
+    } F;
 
-	D3DVIEWPORT9 GetViewport( )
-	{
-		D3DVIEWPORT9 ViewP;
-		Device->GetViewport( &ViewP );
-		return ViewP;
-	}
+private:
+    // batching helpers
+    void FlushTriangles(size_t triCount);
+    void FlushLines(size_t lineCount);
+    void PushVertex(const Vertex& v);
 
-public:
-	IDirect3DDevice9* Device;
-	D3DVIEWPORT9 ScreenSize;
-	IDirect3DVertexShader9* VertexShader;
+private:
+    IDirect3DDevice9* Device = nullptr;
+    D3DVIEWPORT9 ScreenSize{};
+
+    // resources we own
+    IDirect3DVertexBuffer9* VertexBuffer = nullptr;
+    IDirect3DStateBlock9* StateBlock = nullptr;
+
+    // CPU-side batch buffer
+    Vertex* CPUBuffer = nullptr;
+    size_t CPUBufferCapacity = 0;
+    size_t CPUBufferCount = 0;
+
+    // draw mode tracking: TRIANGLESTRIP or LINELIST
+    enum class BatchMode { None, Triangles, Lines } Mode = BatchMode::None;
 };
 
 extern CRender* Draw;

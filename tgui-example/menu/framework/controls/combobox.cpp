@@ -1,67 +1,112 @@
-#include "controls.hpp"
+﻿#include "controls.hpp"
 
 using namespace TGUI;
-
-void TGUI::Groupbox::AddControl( Combobox* Combo )
-{
-	if ( this->Visible )
-	{
-		Combo->CurrentIndex = Menu::Index;
-
-		D3DVIEWPORT9 OldViewport = Draw->GetViewport( );
-		Draw->SetViewport( { ( DWORD )this->Pos.x, ( DWORD )this->Pos.y + 25, ( DWORD )this->Size.x, ( DWORD )this->Size.y - 25, 0.f, 1.f } );
-
-		Combo->Pos = Vector2D( this->ControlOffset[ this->CurrentIndex ].x + 1, this->ControlOffset[ this->CurrentIndex ].y );
-		Combo->Run( );
-
-		this->ControlOffset[ this->CurrentIndex ].y += 40;
-		this->MaxElementsY[ this->CurrentIndex ] += 40;
-		Menu::Index++;
-
-		Draw->SetViewport( OldViewport );
-	}
-}
 
 TGUI::Combobox::Combobox( std::string Name, int* Value, std::vector<std::string> Items )
 {
 	this->Name = Name;
 	this->Value = Value;
 	this->Items = Items;
+	this->IsOpen = false;
 }
 
-void TGUI::Combobox::Run( )
+void TGUI::Combobox::Render()
 {
-	static int LastHoverIndex = 1;
-	static int ShouldBeOpen = false;
+
+}
+
+void Combobox::Run()
+{
+	static Vector2D ComboSize = { 107, 20 };
+	static Vector2D ItemSize = { 107, 20 };
+
+	bool hoverMain = Input::IsHovering(this->Pos, ComboSize);
+	if (hoverMain && Input::KeyPress(VK_LBUTTON)) {
+		IsOpen = !IsOpen;
+		if (IsOpen)
+			TGUI::Focus::ActiveControl = this;
+		else if (TGUI::Focus::ActiveControl == this)
+			TGUI::Focus::ActiveControl = nullptr;
+
+		Input::MouseConsumed = true; 
+	}
+
+	if (IsOpen) {
+		bool clickedInside = false;
+
+		// Items
+		for (int i = 0; i < (int)Items.size(); i++) {
+			Vector2D itemPos = this->Pos + Vector2D(0, ComboSize.y * (i + 1));
+			if (Input::IsHovering(itemPos, ItemSize)) {
+				clickedInside = true;
+				if (Input::KeyPress(VK_LBUTTON)) {
+					*Value = i;
+					IsOpen = false;
+					TGUI::Focus::ActiveControl = nullptr;
+					Input::MouseConsumed = true;
+				}
+			}
+		}
+
+		// Outside click closes
+		if (Input::KeyPress(VK_LBUTTON) && !hoverMain && !clickedInside) {
+			IsOpen = false;
+			TGUI::Focus::ActiveControl = nullptr;
+			Input::MouseConsumed = true;
+		}
+	}
+	
+}
+
+void TGUI::Combobox::Render(float tabAlpha)
+{
 	static Vector2D ComboSize = { 107, 20 };
 
-	bool HoverSub = Input::IsHovering( this->Pos, { 20, 20 } );
-	bool HoverAdd = Input::IsHovering( this->Pos + Vector2D( ComboSize.x + 24, 0 ), { 20, 20 } );
+	auto ApplyAlpha = [tabAlpha](Color c) {
+		return Color((int)(c.a() * tabAlpha), c.r(), c.g(), c.b());
+		};
 
-	if ( *this->Value > 0 && HoverSub && Input::KeyPress( VK_LBUTTON ) )
-		*this->Value -= 1;
+	// Draw main box
+	Draw->Rect(this->Pos, ComboSize, ApplyAlpha(Style::LightOutline));
+	Draw->Rect(this->Pos + Vector2D(1, 1), ComboSize - Vector2D(2, 2), ApplyAlpha(Style::Outline));
+	Draw->RectFilled(this->Pos + Vector2D(2, 2), ComboSize - Vector2D(3, 3), ApplyAlpha(Style::MenuBG));
 
-	if ( *this->Value < this->Items.size( ) - 1 && HoverAdd && Input::KeyPress( VK_LBUTTON ) )
-		*this->Value += 1;
+	// Current item text
+	auto Wid = Draw->GetTextWidth(this->Items[*this->Value].c_str(), Draw->F.Segoe);
+	Draw->Text(this->Pos + Vector2D(ComboSize.x / 2 - Wid / 2, 4),
+		Draw->F.Segoe,
+		this->Items[*this->Value],
+		ApplyAlpha(Style::Text));
 
-	/* Main */
-	Draw->Rect( this->Pos + Vector2D( 22, 0 ), ComboSize, Style::LightOutline );
-	Draw->Rect( this->Pos + Vector2D( 23, 1 ), ComboSize - Vector2D( 2, 2 ), Style::Outline );
-	Draw->RectFilled( this->Pos + Vector2D( 24, 2 ), ComboSize - Vector2D( 3, 3 ), Style::MenuBG );
+	// Dropdown arrow
+	Draw->Text(this->Pos + Vector2D(ComboSize.x - 12, 4), Draw->F.SegoeBold, "▼", ApplyAlpha(Style::TextDim));
 
-	/* Sub */
-	Draw->Rect( this->Pos, { 20, 20 }, Style::LightOutline );
-	Draw->Rect( this->Pos + Vector2D( 1, 1 ), Vector2D( 18, 18 ), Style::Outline );
-	Draw->RectFilled( this->Pos + Vector2D( 2, 2 ), Vector2D( 17, 17 ), Style::MenuBG );
-	Draw->Text( this->Pos + Vector2D( 9, 3 ), Draw->F.SegoeBold, "-", Style::TextDim );
+	// Label
+	Draw->Text(this->Pos + Vector2D(0, ComboSize.y + 2), Draw->F.Segoe, this->Name, ApplyAlpha(Style::Text));
+}
 
-	/* Add */
-	Draw->Rect( this->Pos + Vector2D( ComboSize.x + 24, 0 ), { 20, 20 }, Style::LightOutline );
-	Draw->Rect( this->Pos + Vector2D( ComboSize.x + 25, 1 ), Vector2D( 18, 18 ), Style::Outline );
-	Draw->RectFilled( this->Pos + Vector2D( ComboSize.x + 26, 2 ), Vector2D( 17, 17 ), Style::MenuBG );
-	Draw->Text( this->Pos + Vector2D( ComboSize.x + 31, 3 ), Draw->F.SegoeBold, "+", Style::TextDim );
+void TGUI::Combobox::RenderDropDown(float tabAlpha, Vector2D drawPos)
+{
+	static Vector2D ItemSize = { 107, 20 };
 
-	Draw->Text( this->Pos + Vector2D( 0, 21 ), Draw->F.Segoe, this->Name, Style::Text );
-	auto Wid = Draw->GetTextWidth( this->Items[ *this->Value ].c_str( ), Draw->F.Segoe );
-	Draw->Text( this->Pos + Vector2D( 22 + ComboSize.x / 2 - Wid / 2, 4 ), Draw->F.Segoe, this->Items[ *this->Value ], Style::Text );
+	auto ApplyAlpha = [tabAlpha](Color c) {
+		return Color((int)(c.a() * tabAlpha), c.r(), c.g(), c.b());
+		};
+
+	for (int i = 0; i < (int)Items.size(); i++)
+	{
+		Vector2D itemPos = drawPos + Vector2D(0, ItemSize.y * (i + 1));
+
+		// background + outline
+		Draw->Rect(itemPos, ItemSize, ApplyAlpha(Style::LightOutline));
+		Draw->Rect(itemPos + Vector2D(1, 1), ItemSize - Vector2D(2, 2), ApplyAlpha(Style::Outline));
+		Draw->RectFilled(itemPos + Vector2D(2, 2), ItemSize - Vector2D(3, 3), ApplyAlpha(Style::MenuBG));
+
+		// item text centered
+		auto itemWid = Draw->GetTextWidth(Items[i].c_str(), Draw->F.Segoe);
+		Draw->Text(itemPos + Vector2D(ItemSize.x / 2 - itemWid / 2, 4),
+			Draw->F.Segoe,
+			Items[i],
+			ApplyAlpha(Style::Text));
+	}
 }

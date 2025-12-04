@@ -2,16 +2,26 @@
 
 using namespace TGUI;
 
+BaseControl* Focus::ActiveControl = nullptr;
+bool Focus::JustClosed = false;
+
+static unsigned long handleKeysCalls = 0;
+
 void Input::HandleKeys( )
 {
+    handleKeysCalls++;
+
     for ( int i = 0; i < 256; i++ ) {
         PrevKeyState[ i ] = KeyState[ i ];
         KeyState[ i ] = GetAsyncKeyState( i );
     }
+
+    Input::MouseConsumed = false;
 }
 
 void Input::HandleMouse( UINT Msg, WPARAM WParam, LPARAM LParam )
 {
+
     if ( Msg == WM_KEYDOWN )
     {
         if ( WParam == VK_INSERT )
@@ -36,17 +46,35 @@ bool Input::IsHovering( Vector2D Pos, Vector2D Area )
         MousePos.x < Pos.x + Area.x && MousePos.y < Pos.y + Area.y;
 }
 
-bool Input::KeyPress( const int Key )
+bool Input::KeyPress(int vk)
 {
-    return KeyState[ Key ] && !PrevKeyState[ Key ];
+    if (MouseConsumed)
+    {
+        printf("Consumed\n");
+        return false;
+    }
+
+    return (KeyState[vk]) && !(PrevKeyState[vk]);
 }
 
 bool Input::KeyDown( const int Key )
 {
+    if (MouseConsumed)
+    {
+        printf("Consumed\n");
+        return false;
+    }
+
     return KeyState[ Key ];
 }
 
 bool Input::KeyRelease( const int Key )
 {
+    if (MouseConsumed)
+    {
+        printf("Consumed\n");
+        return false;
+    }
+
     return KeyState[ Key ] && PrevKeyState[ Key ];
 }

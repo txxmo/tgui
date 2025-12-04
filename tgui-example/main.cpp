@@ -10,7 +10,6 @@ static D3DPRESENT_PARAMETERS    g_d3dpp = { };
 HWND WindowHWND;
 WNDCLASSEX WindowClass;
 int Width, Height;
-CRender* Draw;
 
 bool Window::CreateDeviceD3D( HWND hWnd ) {
 	if ( NULL == ( g_pD3D = Direct3DCreate9( D3D_SDK_VERSION ) ) )
@@ -39,9 +38,7 @@ void Window::CleanupDeviceD3D( )
 
 void Window::ResetDevice( )
 {
-
 	HRESULT hr = g_pd3dDevice->Reset( &g_d3dpp );
-
 }
 
 LRESULT WINAPI Window::WndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam )
@@ -109,24 +106,41 @@ void Window::Do( ) {
 		g_pd3dDevice->SetRenderState( D3DRS_ZENABLE, FALSE );
 		g_pd3dDevice->SetRenderState( D3DRS_ALPHABLENDENABLE, FALSE );
 		g_pd3dDevice->SetRenderState( D3DRS_SCISSORTESTENABLE, FALSE );
+		g_pd3dDevice->SetSamplerState(0, D3DSAMP_MINFILTER, D3DTEXF_POINT);
+		g_pd3dDevice->SetSamplerState(0, D3DSAMP_MAGFILTER, D3DTEXF_POINT);
 		g_pd3dDevice->Clear( 0, NULL, D3DCLEAR_TARGET, D3DCOLOR_ARGB( 0, 0, 0, 0 ), 1.0f, 0 );
 
 		if ( g_pd3dDevice->BeginScene( ) >= 0 )
 		{
-			if ( Draw == NULL )
+			if (Draw == nullptr)
 			{
-				Draw = new CRender( g_pd3dDevice );
-				D3DXCreateFont( g_pd3dDevice, 14, 0, 400, 4, FALSE, DEFAULT_CHARSET, 1, ANTIALIASED_QUALITY, DEFAULT_PITCH, "Segoe UI", &Draw->F.Segoe );
-				D3DXCreateFont( g_pd3dDevice, 14, 0, 800, 4, FALSE, DEFAULT_CHARSET, 1, ANTIALIASED_QUALITY, DEFAULT_PITCH, "Segoe UI", &Draw->F.SegoeBold );
+				Draw = new CRender(g_pd3dDevice);
+				if (Draw->InitDevice())
+				{
+					// Create fonts once
+					D3DXCreateFont(g_pd3dDevice, 14, 0, FW_NORMAL, 1, FALSE,
+						DEFAULT_CHARSET, OUT_DEFAULT_PRECIS,
+						ANTIALIASED_QUALITY, DEFAULT_PITCH | FF_DONTCARE,
+						"Segoe UI", &Draw->F.Segoe);
+
+					D3DXCreateFont(g_pd3dDevice, 14, 0, FW_BOLD, 1, FALSE,
+						DEFAULT_CHARSET, OUT_DEFAULT_PRECIS,
+						ANTIALIASED_QUALITY, DEFAULT_PITCH | FF_DONTCARE,
+						"Segoe UI", &Draw->F.SegoeBold);
+				}
 			}
 
-			Draw->InitDevice( );
+			TGUI::Debug::FrameCount++;
+
+			Draw->Begin();
 
 			TGui->Create( );
 
+			Draw->End();
+
 			g_pd3dDevice->EndScene( );
 		}
-		HRESULT result = g_pd3dDevice->Present( NULL, NULL, NULL, NULL );
+		HRESULT result = g_pd3dDevice->Present( nullptr, nullptr, nullptr, nullptr);
 
 		// Handle loss of D3D9 device
 		if ( result == D3DERR_DEVICELOST && g_pd3dDevice->TestCooperativeLevel( ) == D3DERR_DEVICENOTRESET )

@@ -15,10 +15,16 @@ namespace TGUI
 		void Create( );
 	};
 
+	namespace Debug
+	{
+		static unsigned long FrameCount = 0;
+	}
+
 	namespace Input
 	{
 		inline static bool KeyState[ 256 ];
 		inline static bool PrevKeyState[ 256 ];
+		inline bool MouseConsumed = false;
 
 		bool KeyPress( const int Key );
 		bool KeyDown( const int Key );
