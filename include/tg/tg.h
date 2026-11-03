@@ -1,0 +1,20 @@
+// tg.h — include everything.
+#pragma once
+#include "context.h"
+#include "draw.h"
+#include "font.h"
+#include "renderer.h"
+#include "theme.h"
+#include "widget.h"
+
+#include "widgets/box.h"
+#include "widgets/button.h"
+#include "widgets/chart.h"
+#include "widgets/checkbox.h"
+#include "widgets/image.h"
+#include "widgets/label.h"
+#include "widgets/progress.h"
+#include "widgets/scrollview.h"
+#include "widgets/slider.h"
+#include "widgets/textinput.h"
+#include "widgets/toggle.h"
