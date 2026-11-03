@@ -20,6 +20,7 @@ namespace tg
 
         ScrollStyle Style;
         bool StickToBottom = false;
+        float MaxHeight = 0; // when sized by content (dropdowns): cap the natural height and scroll beyond it
 
         Widget& Content() { return *Children()[ 0 ]; }
         void ScrollTo( float Y );

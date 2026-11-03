@@ -57,6 +57,8 @@ namespace tg
         // ---- shapes ----
         void RectFilled( Rect r, Color c, float Radius = 0, uint8_t Corners = CornersAll );
         void RectGradient( Rect r, Color Top, Color Bottom, float Radius = 0, uint8_t Corners = CornersAll );
+        // Square-cornered rect with a color per corner (color pickers, hue bars).
+        void RectMultiColor( Rect r, Color TL, Color TR, Color BR, Color BL );
         void RectStroke( Rect r, Color c, float Radius = 0, float Thickness = 1, uint8_t Corners = CornersAll );
         void CircleFilled( Vec2 Center, float Radius, Color c );
         void CircleStroke( Vec2 Center, float Radius, Color c, float Thickness = 1 );

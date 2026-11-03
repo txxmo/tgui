@@ -215,6 +215,19 @@ namespace tg
         ShadeVertical( Start, r.y, r.Bottom(), Top, Bottom );
     }
 
+    void DrawList::RectMultiColor( Rect r, Color TL, Color TR, Color BR, Color BL )
+    {
+        if ( r.Empty() || Culled( r ) ) return;
+        SetTexture( AtlasTexture );
+        uint32_t Base = uint32_t( Vtx.size() );
+        Vtx.push_back( { r.Pos(), WhiteUV, TL.Pack() } );
+        Vtx.push_back( { { r.Right(), r.y }, WhiteUV, TR.Pack() } );
+        Vtx.push_back( { r.Max(), WhiteUV, BR.Pack() } );
+        Vtx.push_back( { { r.x, r.Bottom() }, WhiteUV, BL.Pack() } );
+        Tri( Base, Base + 1, Base + 2 );
+        Tri( Base, Base + 2, Base + 3 );
+    }
+
     void DrawList::CircleFilled( Vec2 C, float R, Color c )
     {
         if ( c.a == 0 || Culled( { C.x - R, C.y - R, R * 2, R * 2 } ) ) return;

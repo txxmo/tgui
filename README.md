@@ -1,26 +1,100 @@
 # tg
 
-A small retained-mode C++20 GUI framework for real apps (chat clients with screen shares, server dashboards, tools), built so that **you can find and change anything in one place.**
+A small retained-mode C++20 GUI framework for real apps (chat clients with screen shares, server dashboards, tools, overlays), built so that **you can find and change anything in one place**, and so that making a window with a checkbox takes about as much code as in ImGui.
+
+```cpp
+#include "tg/app.h"
+#include <cstdio>
+
+int main()
+{
+    tg::App App( "hello tg", 900, 600 );
+
+    static bool Enabled = true;
+    static float Volume = 0.5f;
+    static int Quality = 1;
+    static tg::Color Tint = tg::Color::Hex( 0x6EB7D4 );
+
+    auto& W = App.Window( "Settings" );
+    W.Checkbox( "Enabled", &Enabled );
+    W.Slider( "Volume", &Volume, 0, 1 );
+    W.Combo( "Quality", { "Low", "Medium", "High", "Ultra" }, &Quality );
+    W.ColorPicker( "Tint", &Tint );
+    W.Button( "Print", [] { std::printf( "volume=%.2f\n", Volume ); } );
+
+    return App.Run();
+}
+```
+
+<img src="docs/hello.png" width="420">
+
+That's the whole program (`examples/hello`). There are no asset files to ship, because the font is compiled into the library.
+
+## Screenshots
+
+These come from `tg_headless`, which renders with the built-in software rasterizer. The OpenGL backend produces the same pixels.
 
 <img src="docs/dashboard.png" width="640">
 
-<img src="docs/chat.png" width="640">
-
 | | |
 |---|---|
-| <img src="docs/controls.png" width="400"> | <img src="docs/dashboard_light.png" width="400"> |
+| <img src="docs/chat.png" width="400"> | <img src="docs/windows.png" width="400"> |
+| <img src="docs/combo_open.png" width="400"> | <img src="docs/multicombo_open.png" width="400"> |
+| <img src="docs/colorpicker_open.png" width="400"> | <img src="docs/controls_light.png" width="400"> |
 
-These screenshots come from `tg_headless`, which renders with the built-in software rasterizer. The OpenGL backend produces the same pixels.
+## Use it in your project
 
-## Why it exists
+**CMake, via FetchContent:**
 
-ImGui is great, but restyling one checkbox means digging through a style system, a giant widgets file, and a pile of flags. tg aims for the opposite:
+```cmake
+include( FetchContent )
+FetchContent_Declare( tg GIT_REPOSITORY https://github.com/txxmo/tgui.git GIT_TAG <branch-or-commit> )
+FetchContent_MakeAvailable( tg )
 
-- **One widget = one header + one `.cpp`.** The checkbox is `include/tg/widgets/checkbox.h` (its `CheckboxStyle`) and `src/widgets/checkbox.cpp` (about 30 lines of `Draw()`, numbered top to bottom). To change how it looks, edit that file.
-- **Retained, OOP widget tree**, like the old tgui `Window → Groupbox → Control`, but with real layout, ownership, and events.
-- **Only redraws when something changes.** Nothing happens when idle. Animations, caret blink and posted data request exactly the frames they need.
-- **Renderer-agnostic.** Widgets draw into a `DrawList` (textured triangles with anti-aliased edges). A backend implements five functions. OpenGL 3 and a CPU software renderer are included.
-- **Fast to build.** The core is about 3k lines with no dependencies besides stb (vendored). A full rebuild of the core library takes about 9s on 4 cores (mostly stb_truetype). Editing a widget and relinking takes about 2s.
+add_executable( myapp main.cpp )
+target_link_libraries( myapp PRIVATE tg::app )   # tg::app = tg + GLFW + OpenGL 3 + tg::App
+```
+
+You can also copy the repo in and use `add_subdirectory( tg )`. When tg is pulled in this way, its examples are off by default. GLFW is used if it's installed. Otherwise CMake fetches it.
+
+**Targets:**
+
+| target | what | deps |
+|---|---|---|
+| `tg::tg` | widgets, layout, text, DrawList | none (stb is vendored) |
+| `tg::app` | `tg::App`: window + GL3 renderer + event loop | GLFW, OpenGL 3.3 |
+| `tg::soft` | software renderer → PNG (tests, screenshots) | none |
+
+To use your own window or renderer (Win32, SDL, D3D11, an existing game engine), link just `tg::tg` and see [Bring your own platform/renderer](#bring-your-own-platform--renderer).
+
+## Controls
+
+| widget | one-liner (`Container` helper) | notes |
+|---|---|---|
+| Label | `W.Text( "hi" )`, `W.Heading(..)`, `W.Caption(..)` | wrapping |
+| Button | `W.Button( "Go", [] { ... } )` | `Button::Primary() / Danger() / Ghost()` styles |
+| Checkbox | `W.Checkbox( "Enabled", &b )` | bind to your `bool`, or `OnChange` |
+| Toggle | `W.Toggle( "Dark mode", &b )` | switch |
+| Slider | `W.Slider( "Volume", &f, 0, 1 )`, `W.SliderInt( "FPS", &i, 30, 240 )` | label + slider + value |
+| TextInput | `W.Input( "Nickname", &str )` | selection, clipboard, password mode |
+| Combo | `W.Combo( "Region", items, &index )` | dropdown, scrolls when long |
+| MultiCombo | `W.MultiCombo( "Alerts", items, &vectorOfBool )` | checkboxes in the dropdown; shows "a, b" or "3 selected" |
+| ListBox | `W.List( items, SelectMode::Single, &index )` | `SelectMode::None` = plain list, `Single`, `Multi`; switch live with `SetMode()` |
+| ColorPicker | `W.ColorPicker( "Tint", &color )` | swatch → popup: SV square, hue, alpha, hex input |
+| ColorPanel | `W.ColorPanel( &color )` | the picker, inline |
+| ProgressBar | `W.Progress( 0.4f )` | optional warn/hot thresholds |
+| Window | `App.Window( "Title", pos, size )` | drag, resize, close, raise on click |
+| ScrollView, Image, LineChart, Box | `Add<T>(...)` | chat logs, live textures/screen share, charts, cards |
+
+Layout helpers: `W.Row()`, `W.Column()`, `W.Card( "Title" )`, `W.Separator()`, `W.Spacer()`. They return Containers, so the helpers chain:
+
+```cpp
+auto& Btns = W.Row();
+Btns.Button( "Apply" ).Style = tg::Button::Primary();
+Btns.Button( "Reset" );
+```
+
+Every helper returns the real widget, so you can keep going: `W.Checkbox( "x", &b ).Style.Radius = 0;`.
 
 ## Styling: four levels, pick the closest one
 
@@ -33,7 +107,7 @@ tg::GetTheme().UseColors( tg::Theme::Light() );           // runtime theme switc
 tg::Checkbox::Defaults().Radius = 0;
 
 // 3. Per instance: just this one.
-auto& Cb = Panel.Add<tg::Checkbox>( "Square & red", &MyBool );
+auto& Cb = W.Checkbox( "Square & red", &MyBool );
 Cb.Style.Radius = 0;
 Cb.Style.Fill   = tg::Tok::Danger;             // a theme token...
 Cb.Style.Check  = tg::Color( 255, 255, 255 );  // ...or a literal color
@@ -42,117 +116,84 @@ Cb.Style.Check  = tg::Color( 255, 255, 255 );  // ...or a literal color
 //    or subclass and override Draw().
 ```
 
-Style colors are `Paint`s. A `Paint` is either a theme token (it follows theme changes) or a fixed `Color`.
+Each widget is one header plus one `.cpp`. Its tunables are a `XxxStyle` struct at the top of the header, and its whole look is the `Draw()` function in its `.cpp`. Style colors are `Paint`s. A `Paint` is either a theme token (it follows theme changes) or a fixed `Color`.
 
-## Building a UI
+## How it works (the 60-second version)
 
-```cpp
-#include "tg/tg.h"
-using namespace tg;
-
-auto& Card = Ctx.Root().Add<Box>( Dir::Column, /*gap*/ 10, /*padding*/ Insets( 16 ) );
-Card.Style = Box::Card();
-
-auto& Row = AddRow( Card, 8 );
-Row.Add<Label>( "Volume" );
-auto& Vol = Row.Add<Slider>( &Volume, 0, 100, /*step*/ 1 );
-Vol.Layout.Width = Grow();                      // take the leftover space
-
-Card.Add<Checkbox>( "Auto-restart", &AutoRestart );    // bind to your bool, like old tgui
-Card.Add<Button>( "Deploy", [] { Deploy(); } ).Style = Button::Primary();
-
-auto& Log = Card.Add<ScrollView>();
-Log.StickToBottom = true;                        // chat / console behaviour
-Log.Content().Add<Label>( "hello", /*wrap*/ true );
-```
-
-**Layout** is a small flexbox. `Dir::Column`, `Dir::Row` or `Dir::Stack`, plus `Gap`, `Padding`, `MainAlign` and `CrossAlign`. Each child sets its size per axis to `Fit()` (content size), `Px(n)` (fixed), or `Grow(weight)` (shares the leftover space).
-
-**Threads.** Never touch widgets from another thread. Post instead:
-
-```cpp
-Ctx.Post( [&] { CpuChart->Push( Sample ); CpuLabel->SetText( Text ); } ); // safe from any thread, wakes the UI
-```
-
-**Live textures** (screen share, video, camera):
-
-```cpp
-TextureId Tex = Ctx.GetRenderer().CreateTexture( W, H, nullptr );
-auto& View = Panel.Add<Image>( Tex, W, H );    // Style.Mode = Contain / Cover / Stretch
-// per decoded frame (via Post):
-Ctx.GetRenderer().UpdateTexture( Tex, W, H, Rgba ); View.Redraw();
-```
+- **Retained tree.** You build widgets once, keep references to the ones you care about, and change them when data changes. This is the same model as the old tgui `Window → Groupbox → Control`, but with ownership, layout and events.
+- **Flex layout.** `Dir::Column / Row / Stack / Free`, plus `Gap`, `Padding` and alignment. Each child sizes itself per axis with `Fit()`, `Px(n)` or `Grow(weight)`. `Dir::Free` places children at `Layout.Offset`, which is how floating windows work.
+- **Redraws only on change.** An idle window does nothing. Animations (`Animate(value, target)` inside `Draw`) and the caret blink request exactly the frames they need. If you're making a game overlay, use `AppConfig::Continuous` to redraw every frame.
+- **Popups** (dropdowns, pickers) live on an overlay layer drawn above everything. They close on an outside click or Escape.
+- **Threads.** Never touch widgets from another thread. Post instead: `Ctx.Post( [&] { Chart->Push( Sample ); } );`. It's safe from any thread and wakes the UI.
+- **Live textures** (screen share, video): `CreateTexture` once, `UpdateTexture` per frame, and show it with an `Image` widget.
 
 ## Writing a widget
 
-Subclass `Widget`, then: set `Interactive = true` if it takes the mouse, override `Measure` if its size depends on content, `Draw` to paint, and `OnEvent` to react. The demo's `Avatar` is the whole thing:
+Subclass `Widget`. Set `Interactive = true` if it takes the mouse. Override `Measure` if its size depends on content, `Draw` to paint, and `OnEvent` to react. For example, the demo's avatar:
 
 ```cpp
 class Avatar : public tg::Widget {
 public:
-    Avatar( std::string I, tg::Color Bg ) : Initials( std::move( I ) ), Bg( Bg ) { Layout.Width = Px( 34 ); Layout.Height = Px( 34 ); }
+    Avatar( std::string I, tg::Color Bg ) : Initials( std::move( I ) ), Bg( Bg ) { Layout.Width = tg::Px( 34 ); Layout.Height = tg::Px( 34 ); }
     void Draw( tg::DrawList& D ) override {
         D.CircleFilled( Bounds.Center(), Bounds.w / 2, Bg );
-        D.Text( *GetTheme().Bold, /*pos*/ ..., Initials, { 255, 255, 255 } );
+        D.Text( *tg::GetTheme().Bold, /*pos*/ ..., Initials, { 255, 255, 255 } );
     }
     std::string Initials; tg::Color Bg;
 };
 ```
 
-To animate, call `Animate( Value, Target )` inside `Draw`. It eases the value and keeps requesting frames until it settles. That replaces the global `CurAlpha[264]` arrays in the old checkbox.
+`DrawList` gives you anti-aliased rects and rounded rects (fill, stroke, gradient, per-corner color), circles, polylines, text, images, clipping and shadows. To build a new dropdown-style picker, subclass `DropdownBase` (see `combo.h`). For any other floating panel, call `tg::OpenPopup( *this, Bounds )`.
 
-## Layout of the repo
+## Repo layout
 
 ```
-include/tg/            public headers
-  core.h               Vec2, Rect, Color, Insets
-  draw.h               DrawList: rects, rounded rects, strokes, circles, polylines, text, images, clipping
-  font.h               stb_truetype atlas, UTF-8, wrapping
-  theme.h              palette tokens, Paint, Theme::Dark()/Light()
-  widget.h             Widget base + flex layout
-  context.h            tree owner, input routing, focus, frame scheduling, Post()
-  renderer.h           the 5-function backend interface
-  widgets/*.h          Box, Label, Button, Checkbox, Toggle, Slider, ProgressBar, TextInput, ScrollView, Image, LineChart
-src/                   implementations (one .cpp per widget)
+include/tg/            public headers (tg.h = everything, app.h = tg::App)
+  core.h draw.h font.h theme.h widget.h context.h renderer.h input.h
+  widgets/*.h          one header per widget
+src/                   one .cpp per header; default_fonts.cpp = embedded Inter (generated by tools/embed_fonts.py)
 backends/
-  gl3_renderer.*       OpenGL 3.3 core, no loader lib needed
-  glfw_platform.*      GLFW → tg input/cursor/clipboard/DPI + event-driven wait
-  soft_renderer.*      CPU rasterizer → PNG (headless tests, screenshots)
+  app.cpp              tg::App on GLFW + GL3
+  gl3_renderer.*       OpenGL 3.3 core renderer, no loader library needed
+  glfw_platform.*      GLFW → tg input / cursor / clipboard / DPI, event-driven wait
+  soft_renderer.*      CPU rasterizer → PNG
 examples/
-  common/demo_ui.*     the demo app (dashboard, chat + screen share, controls)
-  showcase/            GLFW + GL3 window; background threads feed data via Post()
-  headless/            software-rendered run with scripted input + assertions (ctest)
-assets/fonts/          Inter (OFL)
+  hello/               the snippet at the top of this README
+  showcase/            full demo: dashboard, chat + screen share, controls, floating windows
+  headless/            same demo, software-rendered, scripted input + assertions (ctest)
+assets/fonts/          Inter (OFL) source files
 legacy-tgui-example/   the original DX9 tgui, kept for reference
 ```
 
-## Build
+## Build the examples
 
-Needs CMake 3.16+ and a C++20 compiler (MSVC 2019+, GCC 10+, Clang 12+). GLFW is used if it's installed. Otherwise CMake fetches it.
+You need CMake 3.16+ and a C++20 compiler (MSVC 2019+, GCC 10+, or Clang 12+).
 
 ```sh
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
 cmake --build build
-./build/tg_showcase                 # the window
-./build/tg_headless out/            # writes out/*.png and runs the checks
+./build/tg_hello
+./build/tg_showcase
+./build/tg_headless out/       # writes out/*.png and runs the checks
 ctest --test-dir build
 ```
 
-On Windows, `cmake -S . -B build -G "Visual Studio 17 2022"` and open `build/tg.sln`. Use `-DTG_BUILD_EXAMPLES=OFF` to build only the library and the headless test (no GLFW).
+On Windows, run `cmake -S . -B build -G "Visual Studio 17 2022"` and open `build/tg.sln`.
 
-## Using a different renderer / platform
+**Build speed:** a full rebuild of the core library takes about 9s on 4 cores, most of it stb_truetype. Editing a widget and relinking takes about 2s.
 
-- **Renderer**: implement `tg::Renderer` (`CreateTexture`, `UpdateTexture`, `DestroyTexture`, `Render`). `Render` walks `DrawList::Cmds`. Each command is a scissor rect, a texture and an index range over `Vtx`/`Idx`. Vertex format: `float2 pos, float2 uv, rgba8 color`, straight-alpha blending. Read `backends/gl3_renderer.cpp` (about 200 lines) as the template.
-- **Platform**: call `Ctx.OnMouseMove/OnMouseButton/OnMouseWheel/OnKey/OnText` and `Ctx.SetViewport(size, dpiScale)`. Then loop: `if (Ctx.NeedsFrame()) { Ctx.Frame(); Ctx.Render(fb); present(); } else wait(Ctx.SecondsUntilNextFrame());`. See `backends/glfw_platform.cpp`.
+## Bring your own platform / renderer
+
+- **Renderer:** implement `tg::Renderer`, which has four functions: `CreateTexture`, `UpdateTexture`, `DestroyTexture` and `Render`. `Render` walks `DrawList::Cmds`; each command is a scissor rect, a texture and an index range over `Vtx`/`Idx`. The vertex format is `float2 pos, float2 uv, rgba8 color`, with straight-alpha blending. `backends/gl3_renderer.cpp` (about 220 lines) is the template.
+- **Platform:** feed `Ctx.OnMouseMove / OnMouseButton / OnMouseWheel / OnKey / OnText` and `Ctx.SetViewport( size, dpiScale )`. Then loop: `if ( Ctx.NeedsFrame() ) { Ctx.Frame(); Ctx.Render( fb ); present(); } else wait( Ctx.SecondsUntilNextFrame() );`. `backends/glfw_platform.cpp` is the template.
 
 ## Roadmap
 
-Not built yet, roughly in priority order:
-
-- [ ] Win32 + D3D11 backend (native Windows, no GLFW)
-- [ ] Overlay layer: dropdown/combobox, tooltips, context menus, modals
-- [ ] Virtualized list for very long chat histories (only measure and draw what's visible)
+- [ ] Win32 + D3D11 backend (native Windows, no GLFW); Metal for macOS
+- [ ] Single-header + single-.cpp bundle for copy-in use without CMake
+- [ ] Tooltips, context menus, modal dialogs (the popup layer is in place)
+- [ ] Keyboard navigation (Tab focus order, arrow keys in lists/combos), keybind widget from old tgui
+- [ ] Virtualized lists for very long chat histories
 - [ ] Multi-line text area, word-wise caret movement, undo
-- [ ] Keyboard navigation (Tab focus order), keybind widget (from old tgui)
-- [ ] Font fallback (emoji / CJK) and dynamic glyph caching
+- [ ] Font fallback (emoji / CJK), IME
 - [ ] Tabs, split panes, tables

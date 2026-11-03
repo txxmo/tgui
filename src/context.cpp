@@ -1,6 +1,7 @@
 #include "tg/context.h"
 #include "tg/renderer.h"
 #include "tg/theme.h"
+#include "tg/widgets/popup.h"
 #include <algorithm>
 #include <chrono>
 #include <mutex>
@@ -13,23 +14,69 @@ namespace tg
         std::vector<std::function<void()>> Q;
     };
 
+    namespace fonts
+    {
+        extern const unsigned char InterRegular[], InterSemiBold[];
+        extern const size_t InterRegularSize, InterSemiBoldSize;
+    }
+
+    // Overlay layer: popups are placed under their anchor (or above when there's no room),
+    // anything else by Layout.Offset.
+    class OverlayLayer : public Widget
+    {
+    public:
+        void Arrange( Rect R ) override
+        {
+            Bounds = R;
+            for ( auto& K : Children() )
+            {
+                if ( !K->Visible ) continue;
+                auto* P = dynamic_cast<Popup*>( K.get() );
+                if ( !P ) { Vec2 S = K->MeasureCached( R.w ); K->Arrange( { K->Layout.Offset, S } ); continue; }
+                float W = P->Layout.Width.K == Size::Kind::Fixed ? P->Layout.Width.V : std::max( P->MinWidth, P->MeasureCached( R.w ).x );
+                W = std::min( W, R.w - 8 );
+                float H = std::min( P->MeasureCached( W ).y, R.h - 8 );
+                float X = std::clamp( P->Anchor.x, 4.f, std::max( 4.f, R.w - W - 4 ) );
+                float Y = P->Anchor.Bottom() + 4;
+                if ( Y + H > R.h - 4 && P->Anchor.y - 4 - H >= 4 ) Y = P->Anchor.y - 4 - H; // flip above
+                Y = std::clamp( Y, 4.f, std::max( 4.f, R.h - H - 4 ) );
+                P->Arrange( { X, Y, W, H } );
+            }
+        }
+    };
+
     double Context::Clock() const
     {
         using namespace std::chrono;
         return duration<double>( steady_clock::now().time_since_epoch() ).count() - Start;
     }
 
-    Context::Context( Renderer& Rend ) : R( Rend ), RootWidget( std::make_unique<Widget>() ), Posts( std::make_unique<PostQueue>() )
+    Context::Context( Renderer& Rend ) : R( Rend ), RootWidget( std::make_unique<Widget>() ), OverlayWidget( std::make_unique<OverlayLayer>() ), Posts( std::make_unique<PostQueue>() )
     {
         Start = 0;
         Start = Clock();
         RootWidget->Ctx = this;
+        OverlayWidget->Ctx = this;
     }
 
     Context::~Context()
     {
+        OverlayWidget.reset(); // popups first: they notify their owners, which live in the root
         RootWidget.reset();
         if ( Fonts.Texture ) R.DestroyTexture( Fonts.Texture );
+    }
+
+    bool Context::LoadDefaultFonts( float S )
+    {
+        Theme& T = GetTheme();
+        auto Reg = [] { return std::vector<unsigned char>( fonts::InterRegular, fonts::InterRegular + fonts::InterRegularSize ); };
+        auto Semi = [] { return std::vector<unsigned char>( fonts::InterSemiBold, fonts::InterSemiBold + fonts::InterSemiBoldSize ); };
+        T.Body = Fonts.AddFromMemory( Reg(), 15 );
+        T.Small = Fonts.AddFromMemory( Reg(), 12.5f );
+        T.Bold = Fonts.AddFromMemory( Semi(), 15 );
+        T.Title = Fonts.AddFromMemory( Semi(), 20 );
+        Scale = S;
+        return Fonts.Build( R, S );
     }
 
     bool Context::LoadDefaultFonts( const std::string& Dir, float S )
@@ -71,9 +118,28 @@ namespace tg
         return false;
     }
 
+    Widget* Context::HitTestAll( Vec2 P )
+    {
+        if ( Widget* H = OverlayWidget->HitTest( P ) ) return H;
+        return RootWidget->HitTest( P );
+    }
+
+    bool Context::HasPopups() const
+    {
+        for ( auto& K : OverlayWidget->Children() )
+            if ( auto* P = dynamic_cast<Popup*>( K.get() ); P && !P->IsClosed() ) return true;
+        return false;
+    }
+
+    void Context::ClosePopups()
+    {
+        for ( auto& K : OverlayWidget->Children() )
+            if ( auto* P = dynamic_cast<Popup*>( K.get() ) ) P->Close();
+    }
+
     void Context::UpdateHover()
     {
-        Widget* H = RootWidget->HitTest( Mouse );
+        Widget* H = HitTestAll( Mouse );
         if ( H == HoverW ) return;
         Widget* Old = HoverW;
         HoverW = H;
@@ -101,6 +167,19 @@ namespace tg
         E.Button = B;
         if ( Down )
         {
+            // Click outside a popup closes it (unless it's on the popup's owner, which toggles it itself).
+            for ( auto& K : OverlayWidget->Children() )
+            {
+                auto* P = dynamic_cast<Popup*>( K.get() );
+                if ( !P || P->IsClosed() ) continue;
+                bool Inside = false;
+                for ( Widget* W = HoverW; W; W = W->GetParent() )
+                    if ( W == P || W == P->Owner ) { Inside = true; break; }
+                if ( !Inside ) P->Close();
+            }
+            for ( Widget* W = HoverW; W; W = W->GetParent() )
+                if ( W->RaiseOnClick ) W->BringToFront();
+
             if ( B == MouseButton::Left )
             {
                 PressW = HoverW && HoverW->Enabled ? HoverW : nullptr;
@@ -130,6 +209,15 @@ namespace tg
 
     void Context::OnKey( Key K, bool Down, uint8_t Mods, bool Repeat )
     {
+        if ( Down && K == Key::Escape && HasPopups() )
+        {
+            // Escape closes the newest popup first.
+            auto& Kids = OverlayWidget->Children();
+            for ( auto It = Kids.rbegin(); It != Kids.rend(); ++It )
+                if ( auto* P = dynamic_cast<Popup*>( It->get() ); P && !P->IsClosed() ) { P->Close(); break; }
+            RequestFrame();
+            return;
+        }
         Event E; E.Type = Down ? EventType::KeyDown : EventType::KeyUp;
         E.KeyCode = K;
         E.Mods = Mods;
@@ -228,6 +316,7 @@ namespace tg
             LayoutDirty = false;
             Widget::LayoutGeneration++;
             RootWidget->Arrange( { 0, 0, Viewport.x, Viewport.y } );
+            OverlayWidget->Arrange( { 0, 0, Viewport.x, Viewport.y } );
             UpdateHover(); // things moved
             FrameRequested = false;
         }
@@ -235,6 +324,7 @@ namespace tg
         List.Reset( { 0, 0, Viewport.x, Viewport.y }, Scale, Fonts.Texture, Fonts.WhiteUV );
         List.RectFilled( { 0, 0, Viewport.x, Viewport.y }, GetTheme()[ Tok::Background ] );
         RootWidget->Draw( List );
+        OverlayWidget->Draw( List );
         return List;
     }
 

@@ -73,7 +73,7 @@ namespace tg
         if ( E.Type == EventType::MouseDown ) return true;
         if ( E.Type == EventType::MouseUp )
         {
-            if ( IsHovered() && OnClick ) OnClick();
+            if ( IsHovered() && OnClick ) { auto Fn = OnClick; Fn(); } // copy: the handler may delete us
             return true;
         }
         return false;

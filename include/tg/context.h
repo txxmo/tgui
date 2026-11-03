@@ -26,11 +26,16 @@ namespace tg
         Renderer& GetRenderer() { return R; }
         FontAtlas Fonts;
 
-        // Loads Inter (assets/fonts) at the usual sizes, builds the atlas, wires up the theme fonts.
+        // Loads Inter at the usual sizes, builds the atlas, wires up the theme fonts.
+        // No arguments = the copy compiled into the library (nothing to ship next to your exe).
         // Scale = DPI scale so text is rasterized crisply on hi-dpi screens.
-        bool LoadDefaultFonts( const std::string& FontDir, float Scale = 1.f );
+        bool LoadDefaultFonts( float Scale = 1.f );
+        bool LoadDefaultFonts( const std::string& FontDir, float Scale );
 
         Widget& Root() { return *RootWidget; }
+        Widget& Overlay() { return *OverlayWidget; } // popups live here, above everything
+        void ClosePopups();                          // close every open popup
+        bool HasPopups() const;
 
         // ---- feed input (UI units, not framebuffer pixels) ----
         void SetViewport( Vec2 Size, float Scale = 1.f ); // Size in UI units, Scale = framebuffer px per unit
@@ -76,7 +81,7 @@ namespace tg
 
     private:
         Renderer& R;
-        std::unique_ptr<Widget> RootWidget;
+        std::unique_ptr<Widget> RootWidget, OverlayWidget;
         DrawList List;
         Vec2 Viewport, Mouse;
         float Scale = 1;
@@ -92,6 +97,7 @@ namespace tg
         std::unique_ptr<PostQueue> Posts;
 
         void UpdateHover();
+        Widget* HitTestAll( Vec2 P );
         bool Dispatch( Widget* Target, const Event& E ); // bubbles up
     };
 }

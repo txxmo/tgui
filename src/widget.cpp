@@ -36,6 +36,16 @@ namespace tg
         Invalidate();
     }
 
+    void Widget::BringToFront()
+    {
+        if ( !Parent ) return;
+        auto& K = Parent->Kids;
+        auto It = std::find_if( K.begin(), K.end(), [ this ]( auto& P ) { return P.get() == this; } );
+        if ( It == K.end() || It + 1 == K.end() ) return;
+        std::rotate( It, It + 1, K.end() );
+        Redraw();
+    }
+
     Context* Widget::GetContext() const
     {
         const Widget* W = this;
@@ -138,6 +148,19 @@ namespace tg
         if ( Vis.empty() ) return Out;
         const float Gaps = Layout.Gap * float( Vis.size() - 1 );
 
+        if ( Layout.Direction == Dir::Free )
+        {
+            for ( Widget* K : Vis )
+            {
+                const LayoutSpec& L = K->Layout;
+                float W = Fixed( L.Width ) ? L.Width.V : K->MeasureCached( InnerW ).x;
+                float H = Fixed( L.Height ) ? L.Height.V : K->MeasureCached( W ).y;
+                Out.x = std::max( Out.x, L.Offset.x + W );
+                Out.y = std::max( Out.y, L.Offset.y + H );
+            }
+            return Out;
+        }
+
         if ( Layout.Direction == Dir::Row )
         {
             // Same width split as ArrangeChildren, so wrapped text inside Grow children
@@ -195,6 +218,18 @@ namespace tg
         if ( Vis.empty() ) return;
 
         const LayoutSpec& L = Layout;
+
+        if ( L.Direction == Dir::Free )
+        {
+            for ( Widget* K : Vis )
+            {
+                const LayoutSpec& KL = K->Layout;
+                float W = Fixed( KL.Width ) ? KL.Width.V : Grows( KL.Width ) ? In.w - KL.Offset.x : K->MeasureCached( In.w ).x;
+                float H = Fixed( KL.Height ) ? KL.Height.V : Grows( KL.Height ) ? In.h - KL.Offset.y : K->MeasureCached( W ).y;
+                K->Arrange( { In.x + KL.Offset.x, In.y + KL.Offset.y, W, H } );
+            }
+            return;
+        }
 
         if ( L.Direction == Dir::Stack )
         {

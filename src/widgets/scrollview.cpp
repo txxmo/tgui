@@ -33,7 +33,9 @@ namespace tg
     {
         const Insets& P = Layout.Padding;
         Vec2 C = Content().MeasureCached( Avail - P.Horizontal() );
-        return { C.x + P.Horizontal(), C.y + P.Vertical() };
+        float H = C.y + P.Vertical();
+        if ( MaxHeight > 0 && H > MaxHeight ) { H = MaxHeight; C.x += Style.BarWidth + Style.BarMargin; }
+        return { C.x + P.Horizontal(), H };
     }
 
     void ScrollView::Arrange( Rect R )

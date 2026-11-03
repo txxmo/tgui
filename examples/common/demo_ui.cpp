@@ -67,7 +67,7 @@ static Box& BuildStatCard( Widget& Parent, const char* Title, Label*& Value, Pro
     return Card;
 }
 
-static void BuildDashboard( DemoApp& App, Widget& Page )
+static void BuildDashboard( DemoApp& App, Container& Page )
 {
     Theme& T = GetTheme();
     Page.Layout.Padding = Insets( 24 );
@@ -132,7 +132,7 @@ static void BuildDashboard( DemoApp& App, Widget& Page )
     }
 }
 
-static void BuildChat( DemoApp& App, Widget& Page )
+static void BuildChat( DemoApp& App, Container& Page )
 {
     Theme& T = GetTheme();
     Page.Layout.Direction = Dir::Row;
@@ -202,7 +202,7 @@ static void BuildChat( DemoApp& App, Widget& Page )
     App.AddMessage( "alex", "sharing my screen \xE2\x80\x94 check the latency graph on the right, p99 went from 180ms to 40ms after the redis change", "10:44" );
 }
 
-static void BuildControls( DemoApp& App, Widget& Page )
+static void BuildControls( DemoApp& App, Container& Page )
 {
     Theme& T = GetTheme();
     Page.Layout.Padding = Insets( 24 );
@@ -257,6 +257,33 @@ static void BuildControls( DemoApp& App, Widget& Page )
     auto& Dis = Right.Add<Button>( "Disabled" );
     Dis.Enabled = false;
 
+    // ---- pickers + list (built with the Container helpers: one line per control)
+    auto& Row2 = Page.Row( 16 );
+    auto& Pick = Row2.Card( "Pickers" );
+    Pick.Layout.Width = Grow();
+    Pick.LabelWidth = 80;
+    App.RegionCombo = &Pick.Combo( "Region", { "Frankfurt", "Amsterdam", "London", "New York", "Toronto", "S\xC3\xA3o Paulo",
+                                               "Singapore", "Tokyo", "Sydney", "Mumbai", "Johannesburg" }, &App.Region );
+    App.AlertCombo = &Pick.MultiCombo( "Alerts", { "CPU > 90%", "Disk > 85%", "Service down", "New SSH login", "Backup failed" }, &App.Alerts );
+    App.AccentPicker = &Pick.ColorPicker( "Accent", &App.Accent, false );
+    App.AccentPicker->OnChange = [ &App ]( Color C ) {
+        GetTheme()[ Tok::Accent ] = C;
+        GetTheme()[ Tok::AccentHover ] = C;
+        App.Ctx->RequestFrame();
+    };
+    Pick.ColorPicker( "Highlight", &App.Tint );
+
+    auto& Lst = Row2.Card( "Servers" );
+    Lst.Layout.Width = Grow();
+    App.ServerList = &Lst.List( { "vps-fra-01  \xC2\xB7  Frankfurt", "vps-ams-02  \xC2\xB7  Amsterdam", "vps-nyc-01  \xC2\xB7  New York",
+                                  "vps-sgp-01  \xC2\xB7  Singapore", "vps-syd-01  \xC2\xB7  Sydney", "db-fra-01  \xC2\xB7  Frankfurt",
+                                  "cache-ams-01  \xC2\xB7  Amsterdam" }, SelectMode::Single, &App.Server );
+    App.ServerList->Layout.Height = Px( 150 );
+    auto& Opts = Lst.Row( 18 );
+    auto Apply = [ &App ] { App.ServerList->SetMode( !App.ListSelectable ? SelectMode::None : App.ListMulti ? SelectMode::Multi : SelectMode::Single ); };
+    Opts.Toggle( "Selectable", &App.ListSelectable ).OnChange = [ Apply ]( bool ) { Apply(); };
+    Opts.Toggle( "Multi-select", &App.ListMulti ).OnChange = [ Apply ]( bool ) { Apply(); };
+
     auto& Note = AddCard( Page, Dir::Column, 6 );
     AddText( Note, "Where's the code?", T.Bold );
     AddText( Note, "Every widget is one header + one .cpp in src/widgets. Its look lives in Draw(), its tunables in a Style struct "
@@ -264,13 +291,44 @@ static void BuildControls( DemoApp& App, Widget& Page )
                    "every accent (Theme), or just edit Draw().", nullptr, Tok::TextDim, true );
 }
 
+// Floating windows, ImGui-style: every control is one line.
+static void BuildWindows( DemoApp& App, Container& Page )
+{
+    Page.Layout.Direction = Dir::Free;
+
+    auto& Hint = Page.Add<Label>( "Drag the title bars, resize from the corner, close with the X.  Code: examples/common/demo_ui.cpp \xE2\x86\x92 BuildWindows()" );
+    Hint.Style.TextColor = Tok::TextDim;
+    Hint.Style.TextFont = GetTheme().Small;
+    Hint.Layout.Offset = { 24, 20 };
+
+    auto& W = Page.Add<Window>( "Overlay settings", Vec2{ 24, 52 }, Vec2{ 360, 0 } );
+    App.SettingsWin = &W;
+    W.Checkbox( "Enable overlay", &App.Overlay );
+    W.Checkbox( "Show FPS counter", &App.ShowFps );
+    W.Checkbox( "Crosshair", &App.Crosshair );
+    W.Separator();
+    W.Slider( "Opacity", &App.Opacity, 0, 1 );
+    W.SliderInt( "FPS cap", &App.FpsCap, 30, 240 );
+    W.Combo( "Position", { "Top left", "Top right", "Bottom left", "Bottom right" }, &App.Mode );
+    W.ColorPicker( "Tint", &App.Tint );
+    auto& Btns = W.Row();
+    Btns.Button( "Apply" ).Style = Button::Primary();
+    Btns.Button( "Reset" );
+
+    auto& P = Page.Add<Window>( "Players", Vec2{ 420, 90 }, Vec2{ 300, 360 } );
+    App.PlayersWin = &P;
+    P.Input( "Nickname", &App.Nickname );
+    auto& L = P.List( { "alex", "mo", "rika", "you", "guest_4021", "guest_7734", "nightowl", "packetloss", "sudo_rm" }, SelectMode::Multi );
+    L.Layout.Height = Grow();
+    P.Caption( "Multi-select list in a resizable window." );
+}
+
 // ---------------------------------------------------------------- app
 
-void DemoApp::Build( Context& C )
+void DemoApp::Build( Context& C, Widget& Root )
 {
     Ctx = &C;
     Theme& T = GetTheme();
-    Widget& Root = C.Root();
     Root.Layout.Direction = Dir::Row;
 
     auto& Side = Root.Add<Box>( Dir::Column, 4, Insets( 14, 18 ) );
@@ -282,8 +340,8 @@ void DemoApp::Build( Context& C )
     AddText( Brand, "tg", T.Title );
     AddText( Brand, "demo", T.Small, Tok::TextDim );
 
-    const char* Names[] = { "Dashboard", "Chat", "Controls" };
-    for ( int i = 0; i < 3; i++ )
+    const char* Names[] = { "Dashboard", "Chat", "Controls", "Windows" };
+    for ( int i = 0; i < 4; i++ )
     {
         auto& B = Side.Add<Button>( Names[ i ], [ this, i ]() { ShowPage( i ); } );
         B.Style = Button::Ghost();
@@ -296,10 +354,11 @@ void DemoApp::Build( Context& C )
 
     auto& Stack = Root.Add<Box>( Dir::Stack );
     Stack.Layout.Width = Grow();
-    for ( int i = 0; i < 3; i++ ) Pages.push_back( &Stack.Add<Box>( Dir::Column ) );
+    for ( int i = 0; i < 4; i++ ) Pages.push_back( &Stack.Add<Container>( Dir::Column, 0 ) );
     BuildDashboard( *this, *Pages[ 0 ] );
     BuildChat( *this, *Pages[ 1 ] );
     BuildControls( *this, *Pages[ 2 ] );
+    BuildWindows( *this, *Pages[ 3 ] );
 
     for ( int i = 0; i < 90; i++ ) TickStats( i * 1.0 - 90 );
     TickScreenShare( 0 );

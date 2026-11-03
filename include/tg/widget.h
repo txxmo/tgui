@@ -6,7 +6,8 @@
 // something changed or an animation is running — so an idle dashboard uses ~0% CPU.
 //
 // Layout is a small flexbox:
-//   Direction  Column (default) stacks children top->bottom, Row left->right, Stack on top of each other.
+//   Direction  Column (default) stacks children top->bottom, Row left->right, Stack on top of each other,
+//              Free = each child sits at its own Layout.Offset (floating windows, popups).
 //   Width/Height per child:  Fit() = as big as content, Px(n) = fixed, Grow(w) = share leftover space.
 //   Padding, Gap, MainAlign (along Direction), CrossAlign (the other axis).
 #pragma once
@@ -22,7 +23,7 @@ namespace tg
     class Context;
     class DrawList;
 
-    enum class Dir : uint8_t { Column, Row, Stack };
+    enum class Dir : uint8_t { Column, Row, Stack, Free };
     enum class Align : uint8_t { Start, Center, End, Stretch };
 
     struct Size
@@ -43,6 +44,7 @@ namespace tg
         Align MainAlign = Align::Start;
         Align CrossAlign = Align::Stretch;
         float MinWidth = 0, MinHeight = 0;
+        Vec2 Offset; // position inside a Dir::Free parent
     };
 
     class Widget
@@ -66,6 +68,7 @@ namespace tg
         Widget& AddChild( std::unique_ptr<Widget> W );
         void Remove( Widget* W );
         void Clear();
+        void BringToFront(); // draw last among siblings (and get hit first)
         Widget* GetParent() const { return Parent; }
         const std::vector<std::unique_ptr<Widget>>& Children() const { return Kids; }
 
@@ -76,6 +79,7 @@ namespace tg
         bool Enabled = true;
         bool Interactive = false; // gets hover/press/click (otherwise mouse falls through to the parent)
         bool Focusable = false;   // can take keyboard focus
+        bool RaiseOnClick = false; // move to the top of its parent when clicked (windows)
 
         // ---- override points ----
         // Natural size (including Layout.Padding) when given at most AvailWidth. Used for Fit().
