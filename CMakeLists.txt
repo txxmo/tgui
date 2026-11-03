@@ -35,6 +35,7 @@ add_library( tg STATIC
     src/widgets/progress.cpp
     src/widgets/scrollview.cpp
     src/widgets/slider.cpp
+    src/widgets/table.cpp
     src/widgets/textinput.cpp
     src/widgets/toggle.cpp
     src/widgets/window.cpp

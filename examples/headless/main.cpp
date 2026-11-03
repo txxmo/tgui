@@ -200,8 +200,44 @@ int main( int Argc, char** Argv )
     CHECK( OpenPopup( Ctx ) == nullptr );
     tg::GetTheme()[ tg::Tok::Accent ] = tg::GetTheme()[ tg::Tok::AccentHover ] = App.Accent = Old;
 
-    // ---------------- floating windows: drag by title, resize, close
+    // ---------------- tables: sort, select, scroll, resize
     Click( Ctx, *App.NavButtons[ 3 ] );
+    Settle( Ctx );
+    tg::Table& Tb = *App.Procs;
+    auto Num = [ & ]( size_t Pos, size_t Col ) { return std::atof( Tb.GetCell( Tb.DisplayRow( Pos ), Col ).c_str() ); };
+    CHECK( Tb.SortColumn() == 3 && !Tb.SortAscending() );
+    for ( size_t i = 0; i + 1 < Tb.RowCount(); i++ ) CHECK( Num( i, 3 ) >= Num( i + 1, 3 ) ); // CPU desc, numeric ("9.5%" < "12.0%")
+    Shot( Ctx, "tables" );
+    // click "PID" header -> ascending numeric
+    tg::Rect Tbb = Tb.Bounds;
+    ClickAt( Ctx, { Tbb.x + 40, Tbb.y + 17 } );
+    CHECK( Tb.SortColumn() == 0 && Tb.SortAscending() );
+    for ( size_t i = 0; i + 1 < Tb.RowCount(); i++ ) CHECK( Num( i, 0 ) < Num( i + 1, 0 ) );
+    ClickAt( Ctx, { Tbb.x + 40, Tbb.y + 17 } ); // again -> descending
+    CHECK( !Tb.SortAscending() && Num( 0, 0 ) > Num( 1, 0 ) );
+    // click the 3rd visible row -> selects that underlying row
+    ClickAt( Ctx, { Tbb.x + 300, Tbb.y + Tb.Style.HeaderHeight + Tb.Style.RowHeight * 2.5f } );
+    CHECK( App.ProcSel == int( Tb.DisplayRow( 2 ) ) );
+    // wheel scrolls
+    Ctx.OnMouseMove( { Tbb.x + 300, Tbb.y + 200 } );
+    Ctx.OnMouseWheel( { 0, -3 } );
+    Settle( Ctx );
+    CHECK( Tb.GetScroll() > 0 );
+    // drag the PID column edge wider
+    float X0 = Tbb.x + 80;
+    Drag( Ctx, { X0, Tbb.y + 17 }, { X0 + 40, Tbb.y + 17 } );
+    CHECK( Tb.Column( 0 ).Width.K == tg::Size::Kind::Fixed && Tb.Column( 0 ).Width.V == 120 );
+    // plain table ignores clicks
+    ClickAt( Ctx, { App.Conns->Bounds.x + 60, App.Conns->Bounds.y + 50 } );
+    CHECK( App.Conns->GetSelected() == -1 );
+    // the selection follows the row, not the position, when re-sorted
+    int Sel = App.ProcSel;
+    Tb.SortBy( 1, true );
+    CHECK( App.ProcSel == Sel && Tb.IsSelected( size_t( Sel ) ) );
+    Tb.SortBy( 3, false );
+
+    // ---------------- floating windows: drag by title, resize, close
+    Click( Ctx, *App.NavButtons[ 4 ] );
     Settle( Ctx );
     tg::Vec2 Pos0 = App.SettingsWin->GetPosition();
     tg::Rect B = App.SettingsWin->Bounds;
@@ -210,7 +246,7 @@ int main( int Argc, char** Argv )
     CHECK( Pos1.x == Pos0.x + 60 && Pos1.y == Pos0.y + 40 );
     // clicking the other window raises it above
     Click( Ctx, *Find<tg::TextInput>( *App.PlayersWin ) );
-    CHECK( App.Pages[ 3 ]->Children().back().get() == App.PlayersWin );
+    CHECK( App.Pages[ 4 ]->Children().back().get() == App.PlayersWin );
     tg::Rect Pb = App.PlayersWin->Bounds;
     Drag( Ctx, { Pb.Right() - 5, Pb.Bottom() - 5 }, { Pb.Right() + 45, Pb.Bottom() + 25 } );
     Settle( Ctx );

@@ -38,6 +38,9 @@ struct DemoApp
     tg::ColorPicker* AccentPicker = nullptr;
     tg::Window* SettingsWin = nullptr;
     tg::Window* PlayersWin = nullptr;
+    tg::Table* Procs = nullptr;
+    tg::Table* Conns = nullptr;
+    int ProcSel = -1;
 
     // plain app state bound to controls, like the old tgui did with bool*
     bool AutoRestart = true, Notifications = false, Compact = false, LightTheme = false;

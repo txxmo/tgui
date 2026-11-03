@@ -323,6 +323,87 @@ static void BuildWindows( DemoApp& App, Container& Page )
     P.Caption( "Multi-select list in a resizable window." );
 }
 
+// Tables: a live, sortable process list with custom cells, and a plain read-only table.
+static void BuildTables( DemoApp& App, Container& Page )
+{
+    Theme& T = GetTheme();
+    Page.Layout.Padding = Insets( 24 );
+    Page.Layout.Gap = 16;
+    auto& Head = Page.Row( 10 );
+    Head.Layout.CrossAlign = Align::Center;
+    Head.Add<Label>( "Processes" ).Style.TextFont = T.Title;
+    Head.Caption( "click a header to sort, drag a header edge to resize, rows update live" );
+
+    auto& Body = Page.Row( 16 );
+    Body.Layout.Height = Grow();
+    Body.Layout.CrossAlign = Align::Stretch;
+
+    // ---- processes: built by hand for full control over columns
+    auto& Tbl = Body.Add<Table>();
+    App.Procs = &Tbl;
+    Tbl.Layout.Width = Grow( 2 );
+    Tbl.AddColumn( "PID", Px( 80 ), Align::End );
+    Tbl.AddColumn( "Name", Grow() );
+    Tbl.AddColumn( "User", Px( 100 ) );
+    Tbl.AddColumn( "CPU", Px( 80 ), Align::End );
+    Tbl.AddColumn( "Memory", Px( 170 ) );
+    Tbl.AddColumn( "Status", Px( 100 ) );
+    Tbl.Bind = &App.ProcSel;
+
+    const char* Names[] = { "nginx: worker", "postgres", "redis-server", "chat-server", "node", "dockerd", "containerd", "sshd",
+                            "systemd-journald", "cron", "python3 stats.py", "prometheus", "grafana-server", "fail2ban", "rsyslogd",
+                            "tg_showcase", "ffmpeg -i rtmp", "certbot", "unattended-upgr", "bash" };
+    const char* Users[] = { "www-data", "postgres", "redis", "chat", "app", "root", "root", "root", "root", "root",
+                            "app", "prometheus", "grafana", "root", "syslog", "you", "chat", "root", "root", "you" };
+    for ( int i = 0; i < 60; i++ )
+    {
+        int k = i % 20;
+        float Cpu = std::fmod( 37.f * i * 0.731f, 48.f ) * ( k < 6 ? 1.f : 0.15f );
+        float Mem = std::fmod( 113.f * ( i + 3 ), 1900.f ) + 12;
+        char C[ 16 ], M[ 24 ];
+        std::snprintf( C, sizeof( C ), "%.1f%%", Cpu );
+        std::snprintf( M, sizeof( M ), "%.0f MB", Mem );
+        Tbl.AddRow( { std::to_string( 1200 + i * 37 ), Names[ k ], Users[ k ], C, M, i % 17 == 5 ? "stopped" : i % 7 == 3 ? "sleeping" : "running" } );
+    }
+    Tbl.SortBy( 3, false ); // CPU, highest first
+
+    // Memory column: a bar + the number. Status column: colored text.
+    Tbl.DrawCell = [ &Tbl ]( DrawList& D, Rect Cell, size_t Row, size_t Col ) {
+        if ( Col != 4 ) return false;
+        const Font& F = *GetTheme().Body;
+        float Mb = float( std::atof( Tbl.GetCell( Row, Col ).c_str() ) );
+        Rect In = Cell.Shrink( Insets( 12, 0 ) );
+        Rect Bar = { In.x, std::floor( In.y + In.h * 0.5f - 3 ), In.w - 70, 6 };
+        D.RectFilled( Bar, GetTheme()[ Tok::Raised ], 3 );
+        D.RectFilled( { Bar.x, Bar.y, std::max( 6.f, Bar.w * std::min( 1.f, Mb / 2048 ) ), Bar.h }, GetTheme()[ Tok::Accent ], 3 );
+        const std::string& Txt = Tbl.GetCell( Row, Col );
+        D.Text( F, { In.Right() - F.Width( Txt ), std::floor( In.y + ( In.h - F.LineHeight ) * 0.5f ) }, Txt, GetTheme()[ Tok::TextDim ] );
+        return true;
+    };
+    Tbl.CellColor = [ &Tbl ]( size_t Row, size_t Col, Color& Out ) {
+        if ( Col == 0 || Col == 2 ) { Out = GetTheme()[ Tok::TextDim ]; return true; }
+        if ( Col != 5 ) return false;
+        const std::string& S = Tbl.GetCell( Row, Col );
+        Out = GetTheme()[ S == "running" ? Tok::Success : S == "stopped" ? Tok::Danger : Tok::Warning ];
+        return true;
+    };
+
+    // ---- connections: the one-line helper, plain (non-selectable) table with grid lines
+    auto& Side = Body.Card( "Open connections" );
+    Side.Layout.Width = Grow( 1 );
+    auto& C = Side.Table( { "Remote", "Port", "State" }, SelectMode::None );
+    App.Conns = &C;
+    C.Column( 1 ).Width = Px( 64 );
+    C.Column( 1 ).TextAlign = Align::End;
+    C.Column( 2 ).Width = Px( 110 );
+    C.Style.GridLines = true;
+    const char* Ips[] = { "81.2.69.160", "203.0.113.7", "198.51.100.23", "192.0.2.44", "100.64.12.9", "172.16.4.2", "10.0.4.18", "45.33.32.156" };
+    const char* Ports[] = { "443", "443", "22", "8443", "443", "5432", "6379", "80" };
+    const char* States[] = { "ESTABLISHED", "ESTABLISHED", "ESTABLISHED", "TIME_WAIT", "ESTABLISHED", "LISTEN", "LISTEN", "CLOSE_WAIT" };
+    for ( int i = 0; i < 8; i++ ) C.AddRow( { Ips[ i ], Ports[ i ], States[ i ] } );
+    Side.Caption( "Built with W.Table( { \"Remote\", \"Port\", \"State\" }, SelectMode::None )" );
+}
+
 // ---------------------------------------------------------------- app
 
 void DemoApp::Build( Context& C, Widget& Root )
@@ -340,8 +421,8 @@ void DemoApp::Build( Context& C, Widget& Root )
     AddText( Brand, "tg", T.Title );
     AddText( Brand, "demo", T.Small, Tok::TextDim );
 
-    const char* Names[] = { "Dashboard", "Chat", "Controls", "Windows" };
-    for ( int i = 0; i < 4; i++ )
+    const char* Names[] = { "Dashboard", "Chat", "Controls", "Tables", "Windows" };
+    for ( int i = 0; i < 5; i++ )
     {
         auto& B = Side.Add<Button>( Names[ i ], [ this, i ]() { ShowPage( i ); } );
         B.Style = Button::Ghost();
@@ -354,11 +435,12 @@ void DemoApp::Build( Context& C, Widget& Root )
 
     auto& Stack = Root.Add<Box>( Dir::Stack );
     Stack.Layout.Width = Grow();
-    for ( int i = 0; i < 4; i++ ) Pages.push_back( &Stack.Add<Container>( Dir::Column, 0 ) );
+    for ( int i = 0; i < 5; i++ ) Pages.push_back( &Stack.Add<Container>( Dir::Column, 0 ) );
     BuildDashboard( *this, *Pages[ 0 ] );
     BuildChat( *this, *Pages[ 1 ] );
     BuildControls( *this, *Pages[ 2 ] );
-    BuildWindows( *this, *Pages[ 3 ] );
+    BuildTables( *this, *Pages[ 3 ] );
+    BuildWindows( *this, *Pages[ 4 ] );
 
     for ( int i = 0; i < 90; i++ ) TickStats( i * 1.0 - 90 );
     TickScreenShare( 0 );
@@ -415,6 +497,13 @@ void DemoApp::TickStats( double T )
     NetBar->SetValue( Net / 50 );
     CpuChart->Push( Cpu );
     NetChart->Push( Net );
+    if ( Procs )
+        for ( size_t r = 0; r < 6 && r < Procs->RowCount(); r++ )
+        {
+            char C[ 16 ];
+            std::snprintf( C, sizeof( C ), "%.1f%%", std::fabs( 30 * std::sin( T * 0.3 + r * 1.7 ) + 8 * std::sin( T * 1.1 + r ) ) );
+            Procs->SetCell( r, 3, C );
+        }
 }
 
 void DemoApp::TickScreenShare( double T )

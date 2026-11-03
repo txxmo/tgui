@@ -22,6 +22,7 @@
 #include "widgets/progress.h"
 #include "widgets/scrollview.h"
 #include "widgets/slider.h"
+#include "widgets/table.h"
 #include "widgets/textinput.h"
 #include "widgets/toggle.h"
 #include "widgets/window.h"

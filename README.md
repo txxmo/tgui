@@ -36,6 +36,8 @@ These come from `tg_headless`, which renders with the built-in software rasteriz
 
 <img src="docs/dashboard.png" width="640">
 
+<img src="docs/tables.png" width="640">
+
 | | |
 |---|---|
 | <img src="docs/chat.png" width="400"> | <img src="docs/windows.png" width="400"> |
@@ -83,6 +85,7 @@ To use your own window or renderer (Win32, SDL, D3D11, an existing game engine),
 | ColorPicker | `W.ColorPicker( "Tint", &color )` | swatch → popup: SV square, hue, alpha, hex input |
 | ColorPanel | `W.ColorPanel( &color )` | the picker, inline |
 | ProgressBar | `W.Progress( 0.4f )` | optional warn/hot thresholds |
+| Table | `W.Table( { "Name", "CPU", "Memory" } )` | sortable headers (numbers sort as numbers), drag-to-resize columns, None/Single/Multi row select, custom cells, only visible rows drawn |
 | Window | `App.Window( "Title", pos, size )` | drag, resize, close, raise on click |
 | ScrollView, Image, LineChart, Box | `Add<T>(...)` | chat logs, live textures/screen share, charts, cards |
 
@@ -126,6 +129,21 @@ Each widget is one header plus one `.cpp`. Its tunables are a `XxxStyle` struct 
 - **Popups** (dropdowns, pickers) live on an overlay layer drawn above everything. They close on an outside click or Escape.
 - **Threads.** Never touch widgets from another thread. Post instead: `Ctx.Post( [&] { Chart->Push( Sample ); } );`. It's safe from any thread and wakes the UI.
 - **Live textures** (screen share, video): `CreateTexture` once, `UpdateTexture` per frame, and show it with an `Image` widget.
+
+## Tables
+
+```cpp
+auto& T = W.Table( { "PID", "Name", "CPU", "Status" } );
+T.Column( 0 ).Width = tg::Px( 80 );
+T.Column( 2 ).TextAlign = tg::Align::End;
+T.AddRow( { "1234", "nginx", "3.2%", "running" } );
+T.SortBy( 2, /*ascending*/ false );
+T.SetCell( row, 2, "4.0%" );                    // live updates re-sort automatically
+T.CellColor = [&]( size_t Row, size_t Col, tg::Color& Out ) { ... return true; };  // e.g. red "stopped"
+T.DrawCell  = [&]( tg::DrawList& D, tg::Rect Cell, size_t Row, size_t Col ) { ... return true; }; // bars, icons
+```
+
+Row numbers are stable: sorting changes the display order, not the indices you use for `SetCell`, selection or `Bind`. Rows are painted directly instead of being widgets, and only the visible ones are drawn. With 100k rows, a scroll frame takes about 0.04 ms and a full re-sort about 0.1 s.
 
 ## Writing a widget
 
@@ -196,4 +214,5 @@ On Windows, run `cmake -S . -B build -G "Visual Studio 17 2022"` and open `build
 - [ ] Virtualized lists for very long chat histories
 - [ ] Multi-line text area, word-wise caret movement, undo
 - [ ] Font fallback (emoji / CJK), IME
-- [ ] Tabs, split panes, tables
+- [ ] Tabs, split panes
+- [ ] Table: editable cells, column reordering, keyboard row navigation

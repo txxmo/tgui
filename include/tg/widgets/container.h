@@ -28,6 +28,8 @@ namespace tg
     class ColorPicker;
     class ColorPanel;
     class ProgressBar;
+    class Table;
+    struct TableColumn;
 
     class Container : public Box
     {
@@ -54,6 +56,8 @@ namespace tg
         tg::ColorPicker& ColorPicker( std::string Label, tg::Color* Value = nullptr, bool Alpha = true );
         tg::ColorPanel& ColorPanel( tg::Color* Value = nullptr, bool Alpha = true );
         tg::ProgressBar& Progress( float Value = 0 );
+        // W.Table( { "Name", "CPU", "Memory" } ) — Grow columns; tweak with T.Column( i ).Width = Px( 80 )
+        tg::Table& Table( std::vector<std::string> Columns, SelectMode Mode = SelectMode::Single, int* Selected = nullptr );
 
         // structure (all return Containers, so the helpers chain)
         Container& Row( float Gap = 8 );
