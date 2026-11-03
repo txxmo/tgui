@@ -70,7 +70,6 @@ static Box& BuildStatCard( Widget& Parent, const char* Title, Label*& Value, Pro
 static void BuildDashboard( DemoApp& App, Container& Page )
 {
     Theme& T = GetTheme();
-    Page.Layout.Padding = Insets( 24 );
     Page.Layout.Gap = 16;
 
     // header
@@ -136,6 +135,7 @@ static void BuildChat( DemoApp& App, Container& Page )
 {
     Theme& T = GetTheme();
     Page.Layout.Direction = Dir::Row;
+    Page.Style = Box::Card(); // frame the chat like a panel
 
     // conversation column
     auto& Conv = AddColumn( Page, 0 );
@@ -202,65 +202,46 @@ static void BuildChat( DemoApp& App, Container& Page )
     App.AddMessage( "alex", "sharing my screen \xE2\x80\x94 check the latency graph on the right, p99 went from 180ms to 40ms after the redis change", "10:44" );
 }
 
+// tgui-style: two rows of titled groupboxes that fill the page. Every control is one line.
 static void BuildControls( DemoApp& App, Container& Page )
 {
-    Theme& T = GetTheme();
-    Page.Layout.Padding = Insets( 24 );
-    Page.Layout.Gap = 16;
-    AddText( Page, "Controls", T.Title );
+    Page.Layout.Gap = 12;
 
-    auto& Row = AddRow( Page, 16 );
+    auto& Top = Page.Columns( 12 );
 
-    auto& Left = AddCard( Row, Dir::Column, 14 );
-    Left.Layout.Width = Grow();
-    AddText( Left, "Toggles", T.Bold );
-    Left.Add<Checkbox>( "Auto-restart crashed services", &App.AutoRestart );
-    Left.Add<Checkbox>( "Desktop notifications", &App.Notifications );
-    Left.Add<Checkbox>( "Compact message layout", &App.Compact );
-
+    auto& Toggles = Top.Group( "Toggles" );
+    Toggles.Checkbox( "Auto-restart crashed services", &App.AutoRestart );
+    Toggles.Checkbox( "Desktop notifications", &App.Notifications );
+    Toggles.Checkbox( "Compact message layout", &App.Compact );
     // The thing that was painful in imgui: restyling ONE checkbox. Here it's just its Style.
-    auto& Custom = Left.Add<Checkbox>( "Custom styled (square, red)" );
+    auto& Custom = Toggles.Checkbox( "Custom styled (square, red)" );
     Custom.Style.Radius = 0;
     Custom.Style.Fill = Tok::Danger;
     Custom.Style.BoxHoverStroke = Tok::Danger;
     Custom.SetChecked( true );
-
-    AddDivider( Left );
-    Left.Add<Toggle>( "Light theme", &App.LightTheme ).OnChange = [ &App ]( bool On ) {
+    Toggles.Separator();
+    Toggles.Toggle( "Light theme", &App.LightTheme ).OnChange = [ &App ]( bool On ) {
         GetTheme().UseColors( On ? Theme::Light() : Theme::Dark() );
         App.Ctx->RequestFrame();
     };
 
-    auto& Mid = AddCard( Row, Dir::Column, 14 );
-    Mid.Layout.Width = Grow();
-    AddText( Mid, "Inputs", T.Bold );
-    auto& VolRow = AddRow( Mid, 12 );
-    VolRow.Layout.CrossAlign = Align::Center;
-    AddText( VolRow, "Volume", nullptr, Tok::TextDim );
-    auto& Sl = VolRow.Add<Slider>( &App.Volume, 0, 100, 1 );
-    Sl.Layout.Width = Grow();
-    App.SliderValue = &AddText( VolRow, "65" );
-    App.SliderValue->Layout.MinWidth = 28;
-    Sl.OnChange = [ &App ]( float V ) { App.SliderValue->SetText( std::to_string( int( V ) ) ); };
-    Mid.Add<TextInput>( "Server address" ).SetText( "ssh://root@10.0.4.21" );
-    Mid.Add<TextInput>( "Password" ).Password = true;
-    auto& Prog = Mid.Add<ProgressBar>( 0.42f );
-    Prog.Style.Height = 6;
+    auto& Inputs = Top.Group( "Inputs" );
+    Inputs.LabelWidth = 64;
+    Inputs.Slider( "Volume", &App.Volume, 0, 100, 1 );
+    Inputs.Input( "Server address" ).SetText( "ssh://root@10.0.4.21" );
+    Inputs.Input( "Password" ).Password = true;
+    Inputs.Progress( 0.42f ).Style.Height = 6;
 
-    auto& Right = AddCard( Row, Dir::Column, 12 );
-    Right.Layout.Width = Grow();
-    AddText( Right, "Buttons", T.Bold );
-    Right.Add<Button>( "Default" );
-    Right.Add<Button>( "Primary" ).Style = Button::Primary();
-    Right.Add<Button>( "Danger" ).Style = Button::Danger();
-    Right.Add<Button>( "Ghost" ).Style = Button::Ghost();
-    auto& Dis = Right.Add<Button>( "Disabled" );
-    Dis.Enabled = false;
+    auto& Buttons = Top.Group( "Buttons" );
+    Buttons.Button( "Default" );
+    Buttons.Button( "Primary" ).Style = Button::Primary();
+    Buttons.Button( "Danger" ).Style = Button::Danger();
+    Buttons.Button( "Ghost" ).Style = Button::Ghost();
+    Buttons.Button( "Disabled" ).Enabled = false;
 
-    // ---- pickers + list (built with the Container helpers: one line per control)
-    auto& Row2 = Page.Row( 16 );
-    auto& Pick = Row2.Card( "Pickers" );
-    Pick.Layout.Width = Grow();
+    auto& Bottom = Page.Columns( 12 );
+
+    auto& Pick = Bottom.Group( "Pickers" );
     Pick.LabelWidth = 80;
     App.RegionCombo = &Pick.Combo( "Region", { "Frankfurt", "Amsterdam", "London", "New York", "Toronto", "S\xC3\xA3o Paulo",
                                                "Singapore", "Tokyo", "Sydney", "Mumbai", "Johannesburg" }, &App.Region );
@@ -273,25 +254,22 @@ static void BuildControls( DemoApp& App, Container& Page )
     };
     Pick.ColorPicker( "Highlight", &App.Tint );
 
-    auto& Lst = Row2.Card( "Servers" );
-    Lst.Layout.Width = Grow();
-    App.ServerList = &Lst.List( { "vps-fra-01  \xC2\xB7  Frankfurt", "vps-ams-02  \xC2\xB7  Amsterdam", "vps-nyc-01  \xC2\xB7  New York",
-                                  "vps-sgp-01  \xC2\xB7  Singapore", "vps-syd-01  \xC2\xB7  Sydney", "db-fra-01  \xC2\xB7  Frankfurt",
-                                  "cache-ams-01  \xC2\xB7  Amsterdam" }, SelectMode::Single, &App.Server );
-    App.ServerList->Layout.Height = Px( 150 );
-    auto& Opts = Lst.Row( 18 );
+    auto& Servers = Bottom.Group( "Servers" );
+    App.ServerList = &Servers.List( { "vps-fra-01  \xC2\xB7  Frankfurt", "vps-ams-02  \xC2\xB7  Amsterdam", "vps-nyc-01  \xC2\xB7  New York",
+                                      "vps-sgp-01  \xC2\xB7  Singapore", "vps-syd-01  \xC2\xB7  Sydney", "db-fra-01  \xC2\xB7  Frankfurt",
+                                      "cache-ams-01  \xC2\xB7  Amsterdam" }, SelectMode::Single, &App.Server );
+    App.ServerList->Layout.Height = Grow();
+    App.ServerList->Layout.MinHeight = 120;
+    auto& Opts = Servers.Row( 18 );
     auto Apply = [ &App ] { App.ServerList->SetMode( !App.ListSelectable ? SelectMode::None : App.ListMulti ? SelectMode::Multi : SelectMode::Single ); };
     Opts.Toggle( "Selectable", &App.ListSelectable ).OnChange = [ Apply ]( bool ) { Apply(); };
     Opts.Toggle( "Multi-select", &App.ListMulti ).OnChange = [ Apply ]( bool ) { Apply(); };
 
-    auto& Note = AddCard( Page, Dir::Column, 6 );
-    AddText( Note, "Where's the code?", T.Bold );
-    AddText( Note, "Every widget is one header + one .cpp in src/widgets. Its look lives in Draw(), its tunables in a Style struct "
-                   "next to it, and colors come from the Theme palette. Change one checkbox (Style), every checkbox (Checkbox::Defaults()), "
-                   "every accent (Theme), or just edit Draw().", nullptr, Tok::TextDim, true );
+    Page.Caption( "Every widget is one header + one .cpp in src/widgets: tunables in its Style struct, look in its Draw(). "
+                  "Change one checkbox (Style), every checkbox (Checkbox::Defaults()), every accent (Theme), or edit Draw()." );
 }
 
-// Floating windows, ImGui-style: every control is one line.
+// Floating windows. The first one is the old tgui layout: classic chrome, tabs, groupboxes side by side.
 static void BuildWindows( DemoApp& App, Container& Page )
 {
     Page.Layout.Direction = Dir::Free;
@@ -299,23 +277,59 @@ static void BuildWindows( DemoApp& App, Container& Page )
     auto& Hint = Page.Add<Label>( "Drag the title bars, resize from the corner, close with the X.  Code: examples/common/demo_ui.cpp \xE2\x86\x92 BuildWindows()" );
     Hint.Style.TextColor = Tok::TextDim;
     Hint.Style.TextFont = GetTheme().Small;
-    Hint.Layout.Offset = { 24, 20 };
+    Hint.Layout.Offset = { 4, 4 };
 
-    auto& W = Page.Add<Window>( "Overlay settings", Vec2{ 24, 52 }, Vec2{ 360, 0 } );
+    auto& W = Page.Add<Window>( "Test Window", Vec2{ 4, 32 }, Vec2{ 480, 380 } );
     App.SettingsWin = &W;
-    W.Checkbox( "Enable overlay", &App.Overlay );
-    W.Checkbox( "Show FPS counter", &App.ShowFps );
-    W.Checkbox( "Crosshair", &App.Crosshair );
-    W.Separator();
-    W.Slider( "Opacity", &App.Opacity, 0, 1 );
-    W.SliderInt( "FPS cap", &App.FpsCap, 30, 240 );
-    W.Combo( "Position", { "Top left", "Top right", "Bottom left", "Bottom right" }, &App.Mode );
-    W.ColorPicker( "Tint", &App.Tint );
-    auto& Btns = W.Row();
+    W.Chrome = Window::Classic();
+    W.Footer = "v.2.5";
+    W.Layout.Padding = Insets( 8 );
+
+    auto& Visuals = W.Tab( "Visuals" );
+    auto& Cols = Visuals.Columns( 8 );
+    auto& G1 = Cols.Group( "Example Group" );
+    G1.LabelWidth = 56;
+    G1.Checkbox( "Enable overlay", &App.Overlay );
+    G1.Checkbox( "Show FPS counter", &App.ShowFps );
+    G1.Checkbox( "Crosshair", &App.Crosshair );
+    G1.Slider( "Opacity", &App.Opacity, 0, 1 );
+    G1.SliderInt( "FPS cap", &App.FpsCap, 30, 240 );
+    G1.Combo( "", { "Top left", "Top right", "Bottom left", "Bottom right" }, &App.Mode );
+    G1.Checkbox( "Outline text" );
+    G1.Checkbox( "Shadow" );
+
+    auto& G2 = Cols.Group( "Example Group 2" );
+    G2.LabelWidth = 0;
+    G2.ColorPicker( "Tint", &App.Tint );
+    G2.ColorPicker( "Text", nullptr, false ).SetColor( Color( 230, 232, 238 ) );
+    G2.MultiCombo( "", { "Players", "Items", "Vehicles", "Waypoints" } );
+    G2.Toggle( "Streamer mode" );
+    auto& Btns = G2.Row();
     Btns.Button( "Apply" ).Style = Button::Primary();
     Btns.Button( "Reset" );
 
-    auto& P = Page.Add<Window>( "Players", Vec2{ 420, 90 }, Vec2{ 300, 360 } );
+    auto& Misc = W.Tab( "Misc" );
+    auto& MCols = Misc.Columns( 8 );
+    auto& G3 = MCols.Group( "Movement" );
+    G3.Checkbox( "Auto run" );
+    G3.Checkbox( "Bunny hop" );
+    G3.Slider( "Speed", nullptr, 0, 10 );
+    auto& G4 = MCols.Group( "Chat" );
+    G4.Checkbox( "Timestamps" );
+    G4.Checkbox( "Filter profanity" );
+    G4.Input( "Nickname", &App.Nickname );
+
+    auto& Cfg = W.Tab( "Config" );
+    auto& CCols = Cfg.Columns( 8 );
+    auto& G5 = CCols.Group( "Configs" );
+    G5.List( { "default", "legit", "streaming", "lan" }, SelectMode::Single ).Layout.Height = Grow();
+    auto& G6 = CCols.Group( "Actions" );
+    G6.Input( "Config name" );
+    G6.Button( "Save" ).Style = Button::Primary();
+    G6.Button( "Load" );
+    G6.Button( "Delete" ).Style = Button::Danger();
+
+    auto& P = Page.Add<Window>( "Players", Vec2{ 520, 60 }, Vec2{ 300, 360 } );
     App.PlayersWin = &P;
     P.Input( "Nickname", &App.Nickname );
     auto& L = P.List( { "alex", "mo", "rika", "you", "guest_4021", "guest_7734", "nightowl", "packetloss", "sudo_rm" }, SelectMode::Multi );
@@ -327,7 +341,6 @@ static void BuildWindows( DemoApp& App, Container& Page )
 static void BuildTables( DemoApp& App, Container& Page )
 {
     Theme& T = GetTheme();
-    Page.Layout.Padding = Insets( 24 );
     Page.Layout.Gap = 16;
     auto& Head = Page.Row( 10 );
     Head.Layout.CrossAlign = Align::Center;
@@ -410,32 +423,32 @@ void DemoApp::Build( Context& C, Widget& Root )
 {
     Ctx = &C;
     Theme& T = GetTheme();
-    Root.Layout.Direction = Dir::Row;
+    Root.Layout.Direction = Dir::Column;
 
-    auto& Side = Root.Add<Box>( Dir::Column, 4, Insets( 14, 18 ) );
-    Side.Style = Box::Panel();
-    Side.Layout.Width = Px( 210 );
-    auto& Brand = AddRow( Side, 8, Insets( 8, 0, 0, 14 ) );
-    Brand.Layout.CrossAlign = Align::Center;
-    Brand.Add<Dot>( Tok::Accent, 12 );
-    AddText( Brand, "tg", T.Title );
-    AddText( Brand, "demo", T.Small, Tok::TextDim );
+    // ---- header bar (tgui): centered title, accent line underneath
+    auto& Header = Root.Add<Box>( Dir::Stack );
+    Header.Style = Box::Panel();
+    Header.Layout.Height = Px( 46 );
+    auto& Bar = AddRow( Header, 8, Insets( 18, 0 ) );
+    Bar.Layout.CrossAlign = Align::Center;
+    Bar.Add<Dot>( Tok::Accent, 10 );
+    AddText( Bar, "tg", T.Title );
+    AddSpacer( Bar );
+    AddText( Bar, "redraws only when something changes  \xC2\xB7  v0.4", T.Small, Tok::TextDim );
+    auto& Title = AddText( Header, "tg showcase", T.Bold );
+    Title.Style.HAlign = Align::Center;
+    auto& Accent = Root.Add<Box>();
+    Accent.Style.Fill = Tok::Accent;
+    Accent.Layout.Height = Px( 2 );
 
+    // ---- tabs across the top, one page each
+    auto& Body = Root.Add<Container>( Dir::Column, 0, Insets( 16, 14, 16, 16 ) );
+    Body.Layout.Height = Grow();
     const char* Names[] = { "Dashboard", "Chat", "Controls", "Tables", "Windows" };
-    for ( int i = 0; i < 5; i++ )
-    {
-        auto& B = Side.Add<Button>( Names[ i ], [ this, i ]() { ShowPage( i ); } );
-        B.Style = Button::Ghost();
-        NavButtons.push_back( &B );
-    }
-    AddSpacer( Side );
-    AddText( Side, "redraws only when something changes", T.Small, Tok::TextDim, true );
+    for ( const char* N : Names ) Pages.push_back( &Body.Tab( N ) );
+    Tabs = Body.Tabs();
+    Tabs->OnChange = [ this ]( int i ) { Page = i; };
 
-    AddDivider( Root, true );
-
-    auto& Stack = Root.Add<Box>( Dir::Stack );
-    Stack.Layout.Width = Grow();
-    for ( int i = 0; i < 5; i++ ) Pages.push_back( &Stack.Add<Container>( Dir::Column, 0 ) );
     BuildDashboard( *this, *Pages[ 0 ] );
     BuildChat( *this, *Pages[ 1 ] );
     BuildControls( *this, *Pages[ 2 ] );
@@ -444,19 +457,12 @@ void DemoApp::Build( Context& C, Widget& Root )
 
     for ( int i = 0; i < 90; i++ ) TickStats( i * 1.0 - 90 );
     TickScreenShare( 0 );
-    ShowPage( 0 );
 }
 
 void DemoApp::ShowPage( int Index )
 {
+    Tabs->Select( Index );
     Page = Index;
-    for ( size_t i = 0; i < Pages.size(); i++ )
-    {
-        Pages[ i ]->Visible = int( i ) == Index;
-        NavButtons[ i ]->Style = int( i ) == Index ? Button::Defaults() : Button::Ghost();
-        NavButtons[ i ]->Style.Stroke = Color( 0, 0, 0, 0 );
-    }
-    Ctx->InvalidateLayout();
 }
 
 void DemoApp::AddMessage( const std::string& Who, const std::string& Text, const std::string& Time )

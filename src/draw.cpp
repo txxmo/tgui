@@ -207,6 +207,17 @@ namespace tg
         }
     }
 
+    void DrawList::FadeFrom( size_t Start, float Alpha )
+    {
+        if ( Alpha >= 1 ) return;
+        for ( size_t i = Start; i < Vtx.size(); i++ )
+        {
+            Color C = Color::Unpack( Vtx[ i ].Col );
+            C.a = uint8_t( C.a * Clamp( Alpha, 0, 1 ) );
+            Vtx[ i ].Col = C.Pack();
+        }
+    }
+
     void DrawList::RectGradient( Rect r, Color Top, Color Bottom, float Radius, uint8_t Corners )
     {
         if ( r.Empty() || Culled( r ) ) return;

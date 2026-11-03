@@ -38,6 +38,12 @@ static void ClickAt( tg::Context& Ctx, tg::Vec2 P )
 
 static void Click( tg::Context& Ctx, tg::Widget& W ) { ClickAt( Ctx, W.Bounds.Center() ); }
 
+static void ClickTab( tg::Context& Ctx, DemoApp& App, int i )
+{
+    ClickAt( Ctx, App.Tabs->TabRect( size_t( i ) ).Center() );
+    Settle( Ctx ); // let the cross-fade finish
+}
+
 static void Drag( tg::Context& Ctx, tg::Vec2 From, tg::Vec2 To )
 {
     Ctx.OnMouseMove( From );
@@ -85,7 +91,7 @@ int main( int Argc, char** Argv )
     Shot( Ctx, "dashboard" );
 
     // ---------------- chat: nav, focus, type, Enter, stick-to-bottom
-    Click( Ctx, *App.NavButtons[ 1 ] );
+    ClickTab( Ctx, App, 1 );
     CHECK( App.Page == 1 );
     Click( Ctx, *App.Composer );
     CHECK( Ctx.Focused() == App.Composer );
@@ -104,7 +110,7 @@ int main( int Argc, char** Argv )
     Shot( Ctx, "chat" );
 
     // ---------------- controls: bound checkbox
-    Click( Ctx, *App.NavButtons[ 2 ] );
+    ClickTab( Ctx, App, 2 );
     tg::Checkbox* Notif = nullptr;
     for ( int i = 0; auto* C = Find<tg::Checkbox>( *App.Pages[ 2 ], i ); i++ )
         if ( C->Bind == &App.Notifications ) Notif = C;
@@ -201,7 +207,7 @@ int main( int Argc, char** Argv )
     tg::GetTheme()[ tg::Tok::Accent ] = tg::GetTheme()[ tg::Tok::AccentHover ] = App.Accent = Old;
 
     // ---------------- tables: sort, select, scroll, resize
-    Click( Ctx, *App.NavButtons[ 3 ] );
+    ClickTab( Ctx, App, 3 );
     Settle( Ctx );
     tg::Table& Tb = *App.Procs;
     auto Num = [ & ]( size_t Pos, size_t Col ) { return std::atof( Tb.GetCell( Tb.DisplayRow( Pos ), Col ).c_str() ); };
@@ -237,13 +243,30 @@ int main( int Argc, char** Argv )
     Tb.SortBy( 3, false );
 
     // ---------------- floating windows: drag by title, resize, close
-    Click( Ctx, *App.NavButtons[ 4 ] );
+    ClickTab( Ctx, App, 4 );
     Settle( Ctx );
     tg::Vec2 Pos0 = App.SettingsWin->GetPosition();
     tg::Rect B = App.SettingsWin->Bounds;
     Drag( Ctx, { B.x + 100, B.y + 18 }, { B.x + 160, B.y + 58 } );
     tg::Vec2 Pos1 = App.SettingsWin->GetPosition();
     CHECK( Pos1.x == Pos0.x + 60 && Pos1.y == Pos0.y + 40 );
+    // tgui layout inside the window: groupbox scrolls on its own, window tabs switch
+    tg::Groupbox* G1 = Find<tg::Groupbox>( *App.SettingsWin );
+    CHECK( G1 && G1->Title == "Example Group" );
+    Ctx.OnMouseMove( G1->Bounds.Center() );
+    Ctx.OnMouseWheel( { 0, -2 } );
+    Settle( Ctx );
+    CHECK( G1->GetScroll() > 0 );
+    tg::TabView* WTabs = App.SettingsWin->Tabs();
+    CHECK( WTabs && WTabs->TabCount() == 3 );
+    ClickAt( Ctx, WTabs->TabRect( 2 ).Center() );
+    Settle( Ctx );
+    CHECK( WTabs->GetIndex() == 2 );
+    CHECK( Find<tg::ListBox>( *App.SettingsWin ) != nullptr );
+    ClickAt( Ctx, WTabs->TabRect( 0 ).Center() );
+    Settle( Ctx );
+    CHECK( WTabs->GetIndex() == 0 );
+
     // clicking the other window raises it above
     Click( Ctx, *Find<tg::TextInput>( *App.PlayersWin ) );
     CHECK( App.Pages[ 4 ]->Children().back().get() == App.PlayersWin );
@@ -263,7 +286,7 @@ int main( int Argc, char** Argv )
     // ---------------- light theme
     tg::GetTheme().UseColors( tg::Theme::Light() );
     App.SettingsWin->Show();
-    Click( Ctx, *App.NavButtons[ 2 ] );
+    ClickTab( Ctx, App, 2 );
     Shot( Ctx, "controls_light" );
 
     std::printf( "headless: all checks passed\n" );

@@ -6,7 +6,9 @@
 #include "tg/widgets/combo.h"
 #include "tg/widgets/label.h"
 #include "tg/widgets/progress.h"
+#include "tg/widgets/groupbox.h"
 #include "tg/widgets/slider.h"
+#include "tg/widgets/tabview.h"
 #include "tg/widgets/table.h"
 #include "tg/widgets/textinput.h"
 #include "tg/widgets/toggle.h"
@@ -51,12 +53,15 @@ namespace tg
 
     tg::Slider& Container::Slider( std::string Label, float* V, float Min, float Max, float Step, const char* Format )
     {
-        auto& R = Labeled( std::move( Label ) );
-        auto& S = R.Add<tg::Slider>( V, Min, Max, Step );
-        S.Layout.Width = Grow();
-        auto& Val = R.Add<tg::Label>();
-        Val.Layout.MinWidth = 40;
+        // tgui layout: [label ........ value] on one line, the slider full width underneath.
+        auto& Col = Column( 2 );
+        auto& Top = Col.Row( 8 );
+        auto& L = Top.Add<tg::Label>( std::move( Label ) );
+        L.Style.TextColor = Tok::TextDim;
+        L.Layout.Width = Grow();
+        auto& Val = Top.Add<tg::Label>();
         Val.Style.HAlign = Align::End;
+        auto& S = Col.Add<tg::Slider>( V, Min, Max, Step );
         std::string Fmt = Step >= 1 ? "%.0f" : Format;
         auto Show = [ &Val, Fmt ]( float X ) { char B[ 32 ]; std::snprintf( B, sizeof( B ), Fmt.c_str(), X ); Val.SetText( B ); };
         Show( S.GetValue() );
@@ -121,6 +126,39 @@ namespace tg
         T.Mode = Mode;
         T.Bind = Sel;
         return T;
+    }
+
+    tg::TabView* Container::Tabs()
+    {
+        for ( auto& K : Children() )
+            if ( auto* T = dynamic_cast<tg::TabView*>( K.get() ) ) return T;
+        return nullptr;
+    }
+
+    Container& Container::Tab( std::string Name )
+    {
+        tg::TabView* T = Tabs();
+        if ( !T ) T = &Add<tg::TabView>();
+        auto& Page = T->AddTab( std::move( Name ) );
+        Page.LabelWidth = LabelWidth;
+        return Page;
+    }
+
+    tg::Groupbox& Container::Group( std::string Title )
+    {
+        auto& G = Add<tg::Groupbox>( std::move( Title ) );
+        G.Layout.Width = Layout.Direction == Dir::Row ? Grow() : Fit();
+        G.Layout.Height = Grow();
+        G.LabelWidth = LabelWidth;
+        return G;
+    }
+
+    Container& Container::Columns( float Gap )
+    {
+        auto& R = Add<Container>( Dir::Row, Gap );
+        R.Layout.Height = Grow();
+        R.LabelWidth = LabelWidth;
+        return R;
     }
 
     Container& Container::Row( float Gap ) { return Add<Container>( Dir::Row, Gap ); }

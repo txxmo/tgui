@@ -20,6 +20,9 @@ namespace tg
         float Radius = 10, TitleHeight = 36;
         bool Shadow = true;
         float MinWidth = 180, MinHeight = 90;
+        bool CenterTitle = false;
+        bool AccentLine = false;  // accent bar under the title (tgui)
+        Paint Accent = Tok::Accent;
     };
 
     class Window : public Container
@@ -33,6 +36,9 @@ namespace tg
         WindowStyle Chrome; // window frame look (Style is the inherited Box style, unused here)
 
         static WindowStyle& Defaults();
+        static WindowStyle Classic(); // the old tgui look: centered title, accent line, compact header
+
+        std::string Footer; // small dim text bottom-right, e.g. "v.2.5"
 
         void Show();  // make visible + bring to front
         void Close(); // hide (keeps the widgets; Show() brings it back)

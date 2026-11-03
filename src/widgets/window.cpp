@@ -13,6 +13,16 @@ namespace tg
         return S;
     }
 
+    WindowStyle Window::Classic()
+    {
+        WindowStyle S = Defaults();
+        S.CenterTitle = true;
+        S.AccentLine = true;
+        S.TitleHeight = 30;
+        S.Radius = 6;
+        return S;
+    }
+
     Window::Window( std::string T, Vec2 Pos, Vec2 Size ) : Container( Dir::Column, 10, Insets( 14 ) ), Title( std::move( T ) ), Chrome( Defaults() )
     {
         Interactive = true;
@@ -47,7 +57,8 @@ namespace tg
     Vec2 Window::Measure( float Avail )
     {
         Vec2 C = MeasureChildren( std::max( 0.f, Avail - Layout.Padding.Horizontal() ) );
-        return { C.x + Layout.Padding.Horizontal(), C.y + Layout.Padding.Vertical() + Chrome.TitleHeight };
+        float Foot = Footer.empty() ? 0 : GetTheme().Small->LineHeight;
+        return { C.x + Layout.Padding.Horizontal(), C.y + Layout.Padding.Vertical() + Chrome.TitleHeight + Foot };
     }
 
     void Window::Arrange( Rect R )
@@ -58,7 +69,9 @@ namespace tg
         CloseR = { R.Right() - Th, R.y, Th, Th };
         GripR = { R.Right() - 14, R.Bottom() - 14, 14, 14 };
         BodyR = { R.x, R.y + Th, R.w, R.h - Th };
-        ArrangeChildren( BodyR.Shrink( Layout.Padding ) );
+        Rect In = BodyR.Shrink( Layout.Padding );
+        if ( !Footer.empty() ) In.h -= GetTheme().Small->LineHeight;
+        ArrangeChildren( In );
     }
 
     void Window::Draw( DrawList& D )
@@ -72,9 +85,13 @@ namespace tg
 
         // title bar
         D.RectFilled( TitleR, S.TitleFill.Resolve(), S.Radius, CornersTop );
-        D.RectFilled( { TitleR.x, TitleR.Bottom() - 1, TitleR.w, 1 }, GetTheme()[ Tok::Border ] );
-        D.PushClip( { TitleR.x, TitleR.y, TitleR.w - ( Closable ? S.TitleHeight : 0 ), TitleR.h } );
-        D.Text( F, { TitleR.x + 14, std::floor( TitleR.y + ( TitleR.h - F.LineHeight ) * 0.5f ) }, Title, S.TitleText.Resolve() );
+        if ( S.AccentLine ) D.RectFilled( { TitleR.x, TitleR.Bottom() - 2, TitleR.w, 2 }, S.Accent.Resolve() );
+        else D.RectFilled( { TitleR.x, TitleR.Bottom() - 1, TitleR.w, 1 }, GetTheme()[ Tok::Border ] );
+        float Reserve = Closable ? S.TitleHeight : 0;
+        float Tw = F.Width( Title );
+        float Tx = S.CenterTitle ? std::floor( TitleR.x + ( TitleR.w - Tw ) * 0.5f ) : TitleR.x + 14;
+        D.PushClip( { TitleR.x, TitleR.y, TitleR.w - Reserve, TitleR.h } );
+        D.Text( F, { Tx, std::floor( TitleR.y + ( TitleR.h - 2 - F.LineHeight ) * 0.5f ) }, Title, S.TitleText.Resolve() );
         D.PopClip();
 
         // close button: an X that turns red on hover
@@ -91,6 +108,13 @@ namespace tg
         D.PushClip( BodyR );
         DrawChildren( D );
         D.PopClip();
+
+        if ( !Footer.empty() )
+        {
+            const Font& Sf = *GetTheme().Small;
+            D.Text( Sf, { Bounds.Right() - Layout.Padding.Right - Sf.Width( Footer ) - ( Resizable ? 10 : 0 ), Bounds.Bottom() - Layout.Padding.Bottom - Sf.LineHeight + 4 },
+                    Footer, GetTheme()[ Tok::TextDim ] );
+        }
 
         // resize grip: three diagonal ticks
         if ( Resizable )

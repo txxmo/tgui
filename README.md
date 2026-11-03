@@ -26,9 +26,7 @@ int main()
 }
 ```
 
-<img src="docs/hello.png" width="420">
-
-That's the whole program (`examples/hello`). There are no asset files to ship, because the font is compiled into the library.
+That's the whole program. There are no asset files to ship, because the font is compiled into the library. (`examples/hello` is the old tgui README example ported to tg, shown further down.)
 
 ## Screenshots
 
@@ -41,8 +39,9 @@ These come from `tg_headless`, which renders with the built-in software rasteriz
 | | |
 |---|---|
 | <img src="docs/chat.png" width="400"> | <img src="docs/windows.png" width="400"> |
+| <img src="docs/controls.png" width="400"> | <img src="docs/controls_light.png" width="400"> |
 | <img src="docs/combo_open.png" width="400"> | <img src="docs/multicombo_open.png" width="400"> |
-| <img src="docs/colorpicker_open.png" width="400"> | <img src="docs/controls_light.png" width="400"> |
+| <img src="docs/colorpicker_open.png" width="400"> | |
 
 ## Use it in your project
 
@@ -69,6 +68,30 @@ You can also copy the repo in and use `add_subdirectory( tg )`. When tg is pulle
 
 To use your own window or renderer (Win32, SDL, D3D11, an existing game engine), link just `tg::tg` and see [Bring your own platform/renderer](#bring-your-own-platform--renderer).
 
+## tgui-style layout: window, tabs, groupboxes
+
+The old tgui organisation (a window with tabs across the top and titled groupboxes side by side) is built in:
+
+```cpp
+auto& W = App.Window( "Test Window", { 40, 40 }, { 440, 320 } );
+W.Chrome = tg::Window::Classic();      // centered title + accent line
+W.Footer = "v.2.5";
+
+auto& Tab1 = W.Tab( "Tab 1" );         // tabs appear on first use; switching cross-fades
+W.Tab( "Tab 2" );
+
+auto& Groups = Tab1.Columns();         // full-height row
+auto& G = Groups.Group( "Example Group" );   // titled frame, scrolls when it overflows
+G.Checkbox( "Checkbox", &BooleanEx );
+G.Slider( "Slider float", &SliderEx, 0, 100 );
+G.Combo( "", { "Item 1", "Item 2", "Item 3" }, &iComboEx );
+Groups.Group( "Example Group 2" ).Button( "Print", [] { ... } );
+```
+
+`Tab()`, `Columns()` and `Group()` work on any Container (windows, cards, the main area), so the same shape works for a full app. The showcase's top-level menu is the same `Tab()` strip.
+
+<img src="docs/hello.png" width="440">
+
 ## Controls
 
 | widget | one-liner (`Container` helper) | notes |
@@ -86,7 +109,9 @@ To use your own window or renderer (Win32, SDL, D3D11, an existing game engine),
 | ColorPanel | `W.ColorPanel( &color )` | the picker, inline |
 | ProgressBar | `W.Progress( 0.4f )` | optional warn/hot thresholds |
 | Table | `W.Table( { "Name", "CPU", "Memory" } )` | sortable headers (numbers sort as numbers), drag-to-resize columns, None/Single/Multi row select, custom cells, only visible rows drawn |
-| Window | `App.Window( "Title", pos, size )` | drag, resize, close, raise on click |
+| Window | `App.Window( "Title", pos, size )` | drag, resize, close, raise on click; `Window::Classic()` look |
+| TabView | `W.Tab( "Name" )` | equal-width tab strip, sliding highlight, cross-fade, optional `int*` bind |
+| Groupbox | `Cols.Group( "Title" )` | titled frame, scrolls its own contents |
 | ScrollView, Image, LineChart, Box | `Add<T>(...)` | chat logs, live textures/screen share, charts, cards |
 
 Layout helpers: `W.Row()`, `W.Column()`, `W.Card( "Title" )`, `W.Separator()`, `W.Spacer()`. They return Containers, so the helpers chain:

@@ -19,7 +19,7 @@ struct DemoApp
 
     // things we update later
     std::vector<tg::Container*> Pages;
-    std::vector<tg::Button*> NavButtons;
+    tg::TabView* Tabs = nullptr;
     tg::Label* CpuValue = nullptr;
     tg::Label* RamValue = nullptr;
     tg::Label* DiskValue = nullptr;
@@ -31,7 +31,6 @@ struct DemoApp
     tg::Image* Share = nullptr;
     tg::TextureId ShareTex = 0;
     std::vector<uint32_t> SharePixels;
-    tg::Label* SliderValue = nullptr;
     tg::Combo* RegionCombo = nullptr;
     tg::MultiCombo* AlertCombo = nullptr;
     tg::ListBox* ServerList = nullptr;

@@ -7,7 +7,8 @@
 //   W.Button( "Apply", [] { Apply(); } );
 //
 // Every helper returns the real widget, so you can keep styling it:  W.Checkbox( "x" ).Style.Radius = 0;
-// Labeled controls (Slider, Combo, ColorPicker, ...) are a row: [label | control].
+// Labeled controls (Combo, ColorPicker, ...) are a row: [label | control].
+// Sliders stack like tgui did: [label ..... value] with the bar underneath.
 #pragma once
 #include "box.h"
 #include "listbox.h"
@@ -29,6 +30,8 @@ namespace tg
     class ColorPanel;
     class ProgressBar;
     class Table;
+    class Groupbox;
+    class TabView;
     struct TableColumn;
 
     class Container : public Box
@@ -60,6 +63,12 @@ namespace tg
         tg::Table& Table( std::vector<std::string> Columns, SelectMode Mode = SelectMode::Single, int* Selected = nullptr );
 
         // structure (all return Containers, so the helpers chain)
+        // tgui-style organisation
+        Container& Tab( std::string Name );            // adds a tab (creates the TabView on first use); returns its page
+        tg::Groupbox& Group( std::string Title );      // titled, scrolling frame; fills the space it's given
+        Container& Columns( float Gap = 8 );           // a full-height row: put Groups side by side in it
+        tg::TabView* Tabs();                           // the TabView made by Tab(), if any
+
         Container& Row( float Gap = 8 );
         Container& Column( float Gap = 8 );
         Container& Card( std::string Title = {} );

@@ -27,6 +27,7 @@ add_library( tg STATIC
     src/widgets/colorpicker.cpp
     src/widgets/combo.cpp
     src/widgets/container.cpp
+    src/widgets/groupbox.cpp
     src/widgets/image.cpp
     src/widgets/label.cpp
     src/widgets/listbox.cpp
@@ -36,6 +37,7 @@ add_library( tg STATIC
     src/widgets/scrollview.cpp
     src/widgets/slider.cpp
     src/widgets/table.cpp
+    src/widgets/tabview.cpp
     src/widgets/textinput.cpp
     src/widgets/toggle.cpp
     src/widgets/window.cpp

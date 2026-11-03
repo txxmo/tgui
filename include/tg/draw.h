@@ -80,6 +80,9 @@ namespace tg
         void PathRoundedRect( Rect r, float Radius, uint8_t Corners = CornersAll );
         void PathArc( Vec2 Center, float Radius, float A0, float A1, int Segments = 0 );
 
+        // Multiply the alpha of everything drawn since VtxStart (fade a whole subtree: tab transitions).
+        void FadeFrom( size_t VtxStart, float Alpha );
+
         // Recolor vertices [VtxStart, end) with a vertical gradient, keeping each vertex's alpha factor.
         void ShadeVertical( size_t VtxStart, float Y0, float Y1, Color Top, Color Bottom );
 
