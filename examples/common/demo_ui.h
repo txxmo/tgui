@@ -40,6 +40,9 @@ struct DemoApp
     tg::Table* Procs = nullptr;
     tg::Table* Conns = nullptr;
     int ProcSel = -1;
+    tg::Keybind* AimBind = nullptr;
+    tg::Keybind* MenuBind = nullptr;
+    tg::Key AimKey = tg::Key::Mouse5, MenuKey = tg::Key::Insert;
 
     // plain app state bound to controls, like the old tgui did with bool*
     bool AutoRestart = true, Notifications = false, Compact = false, LightTheme = false;

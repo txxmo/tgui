@@ -107,6 +107,7 @@ Groups.Group( "Example Group 2" ).Button( "Print", [] { ... } );
 | ListBox | `W.List( items, SelectMode::Single, &index )` | `SelectMode::None` = plain list, `Single`, `Multi`; switch live with `SetMode()` |
 | ColorPicker | `W.ColorPicker( "Tint", &color )` | swatch → popup: SV square, hue, alpha, hex input |
 | ColorPanel | `W.ColorPanel( &color )` | the picker, inline |
+| Keybind | `W.Keybind( "Aim key", &key )` | click, press any key or mouse button (incl. side buttons); Escape unbinds; right-click for hold / toggle / always; `IsActive()` |
 | ProgressBar | `W.Progress( 0.4f )` | optional warn/hot thresholds |
 | Table | `W.Table( { "Name", "CPU", "Memory" } )` | sortable headers (numbers sort as numbers), drag-to-resize columns, None/Single/Multi row select, custom cells, only visible rows drawn |
 | Window | `App.Window( "Title", pos, size )` | drag, resize, close, raise on click; `Window::Classic()` look |
@@ -169,6 +170,22 @@ T.DrawCell  = [&]( tg::DrawList& D, tg::Rect Cell, size_t Row, size_t Col ) { ..
 ```
 
 Row numbers are stable: sorting changes the display order, not the indices you use for `SetCell`, selection or `Bind`. Rows are painted directly instead of being widgets, and only the visible ones are drawn. With 100k rows, a scroll frame takes about 0.04 ms and a full re-sort about 0.1 s.
+
+## Keys and hotkeys
+
+```cpp
+static tg::Key AimKey = tg::Key::Mouse5;
+auto& Aim = W.Keybind( "Aim key", &AimKey );      // bound to your tg::Key, like tgui's int*
+if ( Aim.IsActive() ) { ... }                       // respects hold / toggle / always
+
+Ctx.IsKeyDown( tg::Key::LeftShift );                // poll any key or mouse button
+Ctx.OnKeyEvent = [&]( tg::Key K, bool Down ) {      // global hotkeys, e.g. Insert toggles the menu
+    if ( Down && K == MenuKey ) { Menu.Visible ? Menu.Close() : Menu.Show(); return true; }
+    return false;
+};
+```
+
+`tg::Key` covers the full keyboard (letters, digits, F1–F24, keypad, modifiers, punctuation) plus `Mouse1`–`Mouse5`. `tg::KeyName()` gives display names like `F5`, `LSHIFT` and `MOUSE4`. The hotkey hook doesn't fire while a Keybind is listening or while you're typing in a text field.
 
 ## Writing a widget
 

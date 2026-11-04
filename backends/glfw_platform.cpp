@@ -29,29 +29,7 @@ namespace tg::glfw
 
         Key MapKey( int K )
         {
-            switch ( K )
-            {
-            case GLFW_KEY_TAB: return Key::Tab;
-            case GLFW_KEY_ENTER: case GLFW_KEY_KP_ENTER: return Key::Enter;
-            case GLFW_KEY_ESCAPE: return Key::Escape;
-            case GLFW_KEY_BACKSPACE: return Key::Backspace;
-            case GLFW_KEY_DELETE: return Key::Delete;
-            case GLFW_KEY_SPACE: return Key::Space;
-            case GLFW_KEY_LEFT: return Key::Left;
-            case GLFW_KEY_RIGHT: return Key::Right;
-            case GLFW_KEY_UP: return Key::Up;
-            case GLFW_KEY_DOWN: return Key::Down;
-            case GLFW_KEY_HOME: return Key::Home;
-            case GLFW_KEY_END: return Key::End;
-            case GLFW_KEY_PAGE_UP: return Key::PageUp;
-            case GLFW_KEY_PAGE_DOWN: return Key::PageDown;
-            case GLFW_KEY_A: return Key::A;
-            case GLFW_KEY_C: return Key::C;
-            case GLFW_KEY_V: return Key::V;
-            case GLFW_KEY_X: return Key::X;
-            case GLFW_KEY_Z: return Key::Z;
-            default: return Key::Unknown;
-            }
+#include "glfw_keys.inc"
         }
 
         GLFWcursor* Cursors[ 5 ] = {};
@@ -65,8 +43,9 @@ namespace tg::glfw
 
         glfwSetCursorPosCallback( W, []( GLFWwindow* W, double X, double Y ) { Ctx( W ).OnMouseMove( ToUI( W, X, Y ) ); } );
         glfwSetMouseButtonCallback( W, []( GLFWwindow* W, int B, int Action, int ) {
-            if ( B > 2 ) return;
-            MouseButton Mb = B == GLFW_MOUSE_BUTTON_RIGHT ? MouseButton::Right : B == GLFW_MOUSE_BUTTON_MIDDLE ? MouseButton::Middle : MouseButton::Left;
+            if ( B > 4 ) return;
+            static const MouseButton Map[] = { MouseButton::Left, MouseButton::Right, MouseButton::Middle, MouseButton::Back, MouseButton::Forward };
+            MouseButton Mb = Map[ B ];
             Ctx( W ).OnMouseButton( Mb, Action == GLFW_PRESS );
         } );
         glfwSetScrollCallback( W, []( GLFWwindow* W, double X, double Y ) { Ctx( W ).OnMouseWheel( { float( X ), float( Y ) } ); } );

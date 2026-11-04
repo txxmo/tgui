@@ -67,6 +67,19 @@ namespace tg
         void SetFocus( Widget* W );
         Cursor GetCursor() const;
 
+        // ---- keyboard / mouse-button state (for your app: poll binds, hotkeys) ----
+        bool IsKeyDown( Key K ) const { return KeyState[ size_t( K ) ]; }
+        uint32_t KeyPressCount( Key K ) const { return PressCount[ size_t( K ) ]; } // rising edges since start
+        // Sees every key / mouse-button press before widgets do (not while a Keybind is listening,
+        // and keyboard keys not while a text field has focus).
+        // Return true to swallow it. Example: toggle a menu with Insert, like the old tgui.
+        std::function<bool( Key K, bool Down )> OnKeyEvent;
+
+        // Route every mouse button + key event to W until released (a Keybind waiting for a key).
+        void Capture( Widget* W ) { CaptureW = W; RequestFrame(); }
+        void ReleaseCapture( Widget* W ) { if ( CaptureW == W ) CaptureW = nullptr; RequestFrame(); }
+        Widget* Captured() const { return CaptureW; }
+
         // Called by the tree when a widget is destroyed so we never keep dangling pointers.
         void Forget( Widget* W );
 
@@ -91,7 +104,10 @@ namespace tg
         double Start;
         double Clock() const; // seconds since the context was created
         bool LayoutDirty = true, FrameRequested = true;
-        Widget *HoverW = nullptr, *PressW = nullptr, *FocusW = nullptr;
+        Widget *HoverW = nullptr, *PressW = nullptr, *FocusW = nullptr, *CaptureW = nullptr;
+        bool KeyState[ size_t( Key::Count ) ] = {};
+        uint32_t PressCount[ size_t( Key::Count ) ] = {};
+        bool TrackKey( Key K, bool Down ); // updates state; returns true if OnKeyEvent swallowed it
 
         struct PostQueue;
         std::unique_ptr<PostQueue> Posts;

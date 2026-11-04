@@ -18,6 +18,7 @@ add_library( tg STATIC
     src/default_fonts.cpp
     src/draw.cpp
     src/font.cpp
+    src/input.cpp
     src/theme.cpp
     src/widget.cpp
     src/widgets/box.cpp
@@ -29,6 +30,7 @@ add_library( tg STATIC
     src/widgets/container.cpp
     src/widgets/groupbox.cpp
     src/widgets/image.cpp
+    src/widgets/keybind.cpp
     src/widgets/label.cpp
     src/widgets/listbox.cpp
     src/widgets/listitem.cpp

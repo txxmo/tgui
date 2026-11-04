@@ -292,6 +292,8 @@ static void BuildWindows( DemoApp& App, Container& Page )
     G1.Checkbox( "Enable overlay", &App.Overlay );
     G1.Checkbox( "Show FPS counter", &App.ShowFps );
     G1.Checkbox( "Crosshair", &App.Crosshair );
+    App.AimBind = &G1.Keybind( "Aim key", &App.AimKey );
+    App.AimBind->ShowMode = true;
     G1.Slider( "Opacity", &App.Opacity, 0, 1 );
     G1.SliderInt( "FPS cap", &App.FpsCap, 30, 240 );
     G1.Combo( "", { "Top left", "Top right", "Bottom left", "Bottom right" }, &App.Mode );
@@ -314,6 +316,10 @@ static void BuildWindows( DemoApp& App, Container& Page )
     G3.Checkbox( "Auto run" );
     G3.Checkbox( "Bunny hop" );
     G3.Slider( "Speed", nullptr, 0, 10 );
+    G3.Separator();
+    App.MenuBind = &G3.Keybind( "Menu key", &App.MenuKey );
+    App.MenuBind->AllowModes = false;
+    G3.Caption( "Press it anywhere to show/hide this window (Escape while binding = none)." );
     auto& G4 = MCols.Group( "Chat" );
     G4.Checkbox( "Timestamps" );
     G4.Checkbox( "Filter profanity" );
@@ -454,6 +460,14 @@ void DemoApp::Build( Context& C, Widget& Root )
     BuildControls( *this, *Pages[ 2 ] );
     BuildTables( *this, *Pages[ 3 ] );
     BuildWindows( *this, *Pages[ 4 ] );
+
+    // Global hotkey, like the old tgui Insert key: show/hide the Test Window.
+    C.OnKeyEvent = [ this ]( Key K, bool Down ) {
+        if ( !Down || K != MenuKey || K == Key::None || !SettingsWin ) return false;
+        if ( SettingsWin->Visible ) SettingsWin->Close();
+        else SettingsWin->Show();
+        return true;
+    };
 
     for ( int i = 0; i < 90; i++ ) TickStats( i * 1.0 - 90 );
     TickScreenShare( 0 );

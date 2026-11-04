@@ -31,6 +31,7 @@ namespace tg
     class ProgressBar;
     class Table;
     class Groupbox;
+    class Keybind;
     class TabView;
     struct TableColumn;
 
@@ -59,6 +60,7 @@ namespace tg
         tg::ColorPicker& ColorPicker( std::string Label, tg::Color* Value = nullptr, bool Alpha = true );
         tg::ColorPanel& ColorPanel( tg::Color* Value = nullptr, bool Alpha = true );
         tg::ProgressBar& Progress( float Value = 0 );
+        tg::Keybind& Keybind( std::string Label, tg::Key* Value = nullptr ); // [label ....... [ KEY ]]
         // W.Table( { "Name", "CPU", "Memory" } ) — Grow columns; tweak with T.Column( i ).Width = Px( 80 )
         tg::Table& Table( std::vector<std::string> Columns, SelectMode Mode = SelectMode::Single, int* Selected = nullptr );
 

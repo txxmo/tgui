@@ -181,6 +181,7 @@ namespace tg
             if ( !HasSel ) Anchor = NextCp( Text, Caret );
             EraseSelection(); Changed(); return true;
         case Key::Enter:
+        case Key::KpEnter:
             if ( OnSubmit ) OnSubmit( Text );
             if ( ClearOnSubmit ) SetText( {} );
             return true;

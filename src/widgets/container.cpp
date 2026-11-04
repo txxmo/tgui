@@ -7,6 +7,7 @@
 #include "tg/widgets/label.h"
 #include "tg/widgets/progress.h"
 #include "tg/widgets/groupbox.h"
+#include "tg/widgets/keybind.h"
 #include "tg/widgets/slider.h"
 #include "tg/widgets/tabview.h"
 #include "tg/widgets/table.h"
@@ -118,6 +119,7 @@ namespace tg
 
     tg::ColorPanel& Container::ColorPanel( tg::Color* V, bool Alpha ) { return Add<tg::ColorPanel>( V, Alpha ); }
     tg::ProgressBar& Container::Progress( float V ) { return Add<tg::ProgressBar>( V ); }
+    tg::Keybind& Container::Keybind( std::string Label, tg::Key* V ) { return Add<tg::Keybind>( std::move( Label ), V ); }
 
     tg::Table& Container::Table( std::vector<std::string> Columns, SelectMode Mode, int* Sel )
     {

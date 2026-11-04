@@ -10,6 +10,7 @@ int main()
     static bool BooleanEx = true;
     static float SliderEx = 40, fSliderEx = 12;
     static int iComboEx = 0;
+    static tg::Key iKeybind = tg::Key::F;
     static tg::Color ColorEx = tg::Color::Hex( 0x6EB7D4 );
 
     /* Create our example window */
@@ -28,6 +29,7 @@ int main()
     auto& ExampleGroup = Groups.Group( "Example Group" );
     {
         ExampleGroup.Checkbox( "Checkbox", &BooleanEx );
+        ExampleGroup.Keybind( "Keybind", &iKeybind );
         ExampleGroup.Slider( "Slider float", &SliderEx, 0, 100 );
         ExampleGroup.Slider( "Slider int", &fSliderEx, 0, 100, 1 );
         ExampleGroup.Combo( "", { "Item 1", "Item 2", "Item 3" }, &iComboEx );
@@ -35,7 +37,7 @@ int main()
     auto& ExampleGroup2 = Groups.Group( "Example Group 2" );
     {
         ExampleGroup2.ColorPicker( "Color", &ColorEx );
-        ExampleGroup2.Button( "Print", [] { std::printf( "checkbox=%d slider=%.2f combo=%d\n", BooleanEx, SliderEx, iComboEx ); } );
+        ExampleGroup2.Button( "Print", [] { std::printf( "checkbox=%d slider=%.2f combo=%d key=%s\n", BooleanEx, SliderEx, iComboEx, tg::KeyName( iKeybind ) ); } );
     }
 
     Tab2.Columns().Group( "Another Group" ).Checkbox( "Another checkbox" );

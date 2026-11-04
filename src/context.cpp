@@ -159,12 +159,33 @@ namespace tg
         Dispatch( PressW ? PressW : HoverW, E );
     }
 
+    bool Context::TrackKey( Key K, bool Down )
+    {
+        size_t i = size_t( K );
+        if ( i >= size_t( Key::Count ) ) return false;
+        if ( Down && !KeyState[ i ] ) PressCount[ i ]++;
+        KeyState[ i ] = Down;
+        if ( CaptureW || !OnKeyEvent ) return false;
+        bool IsMouse = K >= Key::Mouse1 && K <= Key::Mouse5;
+        if ( !IsMouse && FocusW ) return false; // typing in a text field: letters are text, not hotkeys
+        return OnKeyEvent( K, Down );
+    }
+
     void Context::OnMouseButton( MouseButton B, bool Down )
     {
         UpdateHover();
         Event E; E.Type = Down ? EventType::MouseDown : EventType::MouseUp;
         E.Pos = Mouse;
         E.Button = B;
+        bool Swallowed = TrackKey( MouseKey( B ), Down );
+        if ( CaptureW ) // a widget is listening for "any button": it gets this one, nothing else does
+        {
+            CaptureW->OnEvent( E );
+            RequestFrame();
+            return;
+        }
+        if ( Swallowed ) return;
+        if ( B == MouseButton::Back || B == MouseButton::Forward ) { Dispatch( HoverW, E ); return; }
         if ( Down )
         {
             // Click outside a popup closes it (unless it's on the popup's owner, which toggles it itself).
@@ -209,6 +230,18 @@ namespace tg
 
     void Context::OnKey( Key K, bool Down, uint8_t Mods, bool Repeat )
     {
+        bool Swallowed = Repeat ? false : TrackKey( K, Down );
+        if ( CaptureW )
+        {
+            Event E; E.Type = Down ? EventType::KeyDown : EventType::KeyUp;
+            E.KeyCode = K;
+            E.Mods = Mods;
+            E.Repeat = Repeat;
+            CaptureW->OnEvent( E );
+            RequestFrame();
+            return;
+        }
+        if ( Swallowed ) return;
         if ( Down && K == Key::Escape && HasPopups() )
         {
             // Escape closes the newest popup first.
@@ -227,6 +260,7 @@ namespace tg
 
     void Context::OnText( uint32_t Cp )
     {
+        if ( CaptureW ) return; // a listening Keybind doesn't want typed text anywhere
         Event E; E.Type = EventType::Text;
         E.Codepoint = Cp;
         Dispatch( FocusW, E );
@@ -246,6 +280,7 @@ namespace tg
     {
         if ( HoverW == W ) HoverW = nullptr;
         if ( PressW == W ) PressW = nullptr;
+        if ( CaptureW == W ) CaptureW = nullptr;
         if ( FocusW == W ) FocusW = nullptr;
     }
 

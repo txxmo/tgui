@@ -267,6 +267,69 @@ int main( int Argc, char** Argv )
     Settle( Ctx );
     CHECK( WTabs->GetIndex() == 0 );
 
+    // ---------------- keybind: listen, bind keys / mouse buttons, unbind, modes
+    tg::Keybind& Kb = *App.AimBind;
+    CHECK( Kb.GetKey() == tg::Key::Mouse5 );
+    Click( Ctx, Kb );
+    CHECK( Kb.IsListening() && Ctx.Captured() == &Kb );
+    Ctx.OnText( 'x' ); // typed text goes nowhere while listening
+    Settle( Ctx );
+    Shot( Ctx, "keybind_listening" );
+    Ctx.OnKey( tg::Key::F5, true, 0 );
+    Ctx.OnKey( tg::Key::F5, false, 0 );
+    CHECK( App.AimKey == tg::Key::F5 && !Kb.IsListening() && Ctx.Captured() == nullptr );
+    Click( Ctx, Kb );
+    Ctx.OnMouseButton( tg::MouseButton::Back, true ); // side button
+    Ctx.OnMouseButton( tg::MouseButton::Back, false );
+    CHECK( App.AimKey == tg::Key::Mouse4 );
+    Click( Ctx, Kb );
+    Ctx.OnMouseButton( tg::MouseButton::Left, true );  // even M1 is bindable, like tgui
+    Ctx.OnMouseButton( tg::MouseButton::Left, false );
+    CHECK( App.AimKey == tg::Key::Mouse1 );
+    Click( Ctx, Kb );
+    Ctx.OnKey( tg::Key::Escape, true, 0 );            // Escape = unbind
+    CHECK( App.AimKey == tg::Key::None && !Kb.IsListening() );
+    // hold mode
+    Click( Ctx, Kb );
+    Ctx.OnKey( tg::Key::G, true, 0 );
+    Ctx.OnKey( tg::Key::G, false, 0 );
+    CHECK( App.AimKey == tg::Key::G && Kb.GetMode() == tg::BindMode::Hold && !Kb.IsActive() );
+    Ctx.OnKey( tg::Key::G, true, 0 );
+    CHECK( Kb.IsActive() );
+    Ctx.OnKey( tg::Key::G, false, 0 );
+    CHECK( !Kb.IsActive() );
+    // right-click -> mode menu -> toggle
+    Ctx.OnMouseMove( Kb.Bounds.Center() );
+    Ctx.OnMouseButton( tg::MouseButton::Right, true );
+    Ctx.OnMouseButton( tg::MouseButton::Right, false );
+    Ctx.Frame();
+    P = OpenPopup( Ctx );
+    CHECK( P );
+    Settle( Ctx );
+    Shot( Ctx, "keybind_modes" );
+    tg::ListItem* ToggleItem = Find<tg::ListItem>( *P, 1 );
+    CHECK( ToggleItem && ToggleItem->Text == "toggle" );
+    Click( Ctx, *ToggleItem );
+    CHECK( Kb.GetMode() == tg::BindMode::Toggle && OpenPopup( Ctx ) == nullptr );
+    CHECK( !Kb.IsActive() );
+    Ctx.OnKey( tg::Key::G, true, 0 ); Ctx.OnKey( tg::Key::G, false, 0 );
+    CHECK( Kb.IsActive() );
+    Ctx.OnKey( tg::Key::G, true, 0 ); Ctx.OnKey( tg::Key::G, false, 0 );
+    CHECK( !Kb.IsActive() );
+    // global menu key (Insert) hides/shows the window, but not while a keybind is listening
+    Ctx.OnKey( tg::Key::Insert, true, 0 ); Ctx.OnKey( tg::Key::Insert, false, 0 );
+    Ctx.Frame();
+    CHECK( !App.SettingsWin->Visible );
+    Ctx.OnKey( tg::Key::Insert, true, 0 ); Ctx.OnKey( tg::Key::Insert, false, 0 );
+    Settle( Ctx );
+    CHECK( App.SettingsWin->Visible );
+    Click( Ctx, Kb );
+    Ctx.OnKey( tg::Key::Insert, true, 0 ); Ctx.OnKey( tg::Key::Insert, false, 0 );
+    CHECK( App.SettingsWin->Visible && App.AimKey == tg::Key::Insert );
+    App.AimKey = tg::Key::Mouse5;
+    Kb.SetMode( tg::BindMode::Hold );
+    Settle( Ctx );
+
     // clicking the other window raises it above
     Click( Ctx, *Find<tg::TextInput>( *App.PlayersWin ) );
     CHECK( App.Pages[ 4 ]->Children().back().get() == App.PlayersWin );

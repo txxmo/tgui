@@ -16,6 +16,7 @@
 #include "widgets/groupbox.h"
 #include "widgets/container.h"
 #include "widgets/image.h"
+#include "widgets/keybind.h"
 #include "widgets/label.h"
 #include "widgets/listbox.h"
 #include "widgets/listitem.h"
