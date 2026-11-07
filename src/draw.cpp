@@ -413,11 +413,11 @@ namespace tg
         PrimQuadUV( r.Pos(), r.Max(), UV0, UV1, Tint.Pack() );
     }
 
-    void DrawList::Glyph( const Font& F, uint32_t Cp, Vec2 Pos, Color c )
+    void DrawList::Glyph( const Font& F, uint32_t Cp, Vec2 Pos, Color c ) { Glyph( F, F.Find( Cp ), Pos, c ); }
+
+    void DrawList::Glyph( const Font& F, const tg::Glyph& G, Vec2 Pos, Color c )
     {
-        if ( c.a == 0 ) return;
-        const tg::Glyph& G = F.Find( Cp );
-        if ( G.X1 <= G.X0 ) return;
+        if ( c.a == 0 || G.X1 <= G.X0 ) return;
         SetTexture( AtlasTexture );
         float Steps = Scale * F.SubpixelSteps;
         float X0 = std::round( ( Pos.x + G.X0 ) * Steps ) / Steps;
@@ -448,10 +448,10 @@ namespace tg
             uint32_t Prev = 0;
             for ( size_t i = 0; i < Line.size(); )
             {
-                uint32_t Cp = DecodeUtf8( Line, i );
-                X += F.Kern( Prev, Cp );
+                uint32_t Cp;
+                const tg::Glyph& G = F.Next( Line, i, Cp ); // an emoji sequence (flag, ZWJ...) comes back as one glyph
+                if ( Cp ) X += F.Kern( Prev, Cp );
                 Prev = Cp;
-                const tg::Glyph& G = F.Find( Cp );
                 if ( Visible && G.X1 > G.X0 && X <= Clip.Right() )
                 {
                     float X0 = std::round( ( X + G.X0 ) * Steps ) / Steps, Y0 = Baseline + G.Y0;

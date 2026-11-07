@@ -196,7 +196,7 @@ static void BuildChat( DemoApp& App, Container& Page )
         if ( *Mb.Status ) AddText( C, Mb.Status, T.Small, Tok::TextDim );
     }
 
-    App.AddMessage( "mo", "deploying v2.3 to fra-01, should be quick", "10:41" );
+    App.AddMessage( "mo", "deploying v2.3 to fra-01 \xF0\x9F\x87\xA9\xF0\x9F\x87\xAA then tyo-02 \xF0\x9F\x87\xAF\xF0\x9F\x87\xB5, should be quick", "10:41" );
     App.AddMessage( "rika", "nice \xF0\x9F\x9A\x80 is the websocket reconnect fix in there? the chat kept dropping for me on wifi yesterday", "10:42" );
     App.AddMessage( "mo", "yep, plus the backoff change. ping me if you still see drops \xF0\x9F\x91\x8D", "10:42" );
     App.AddMessage( "alex", "sharing my screen \xE2\x80\x94 check the latency graph on the right, p99 went from 180ms to 40ms after the redis change", "10:44" );
@@ -656,6 +656,7 @@ static void BuildTerminal( DemoApp& App, Container& Page )
         "\x1b[2m10:41:08\x1b[22m \x1b[32m\xE2\x9C\x93\x1b[0m health checks \x1b[38;5;48m\xE2\x96\x88\xE2\x96\x88\xE2\x96\x88\xE2\x96\x88\xE2\x96\x88\xE2\x96\x88\xE2\x96\x88\x1b[38;5;240m\xE2\x96\x91\xE2\x96\x91\xE2\x96\x91\x1b[0m 7/10\r\n"
         "\x1b[2m10:41:09\x1b[22m \x1b[41;97m FAIL \x1b[0m \x1b[31mfra-01-c: timeout\x1b[0m\r\n"
         "\x1b[2m10:41:12\x1b[22m \x1b[32m\xE2\x9C\x93\x1b[0m retried, healthy \xF0\x9F\x8E\x89\r\n"
+        "\x1b[2m10:41:13\x1b[22m regions \xF0\x9F\x87\xA9\xF0\x9F\x87\xAA \xF0\x9F\x87\xAF\xF0\x9F\x87\xB5 \xF0\x9F\x87\xBA\xF0\x9F\x87\xB8 \xF0\x9F\x8F\xB4\xE2\x80\x8D\xE2\x98\xA0\xEF\xB8\x8F\r\n"
         "\r\n\x1b[1mcpu\x1b[0m  \x1b[38;2;110;183;212m\xE2\xA3\x80\xE2\xA3\xA0\xE2\xA3\xB4\xE2\xA3\xBE\xE2\xA3\xBF\xE2\xA3\xB7\xE2\xA3\xA6\xE2\xA3\x84\xE2\xA3\x80\xE2\xA3\xA0\xE2\xA3\xB6\xE2\xA3\xBF\x1b[0m  42%\r\n"
         "\x1b[1mmem\x1b[0m  \x1b[48;5;236m\x1b[38;5;214m\xE2\x96\x88\xE2\x96\x88\xE2\x96\x88\xE2\x96\x88\xE2\x96\x88\xE2\x96\x88\xE2\x96\x88\xE2\x96\x88\xE2\x96\x8C     \x1b[0m  74%\r\n"
         "\r\n\x1b[7m inverse \x1b[0m \x1b[4munderline\x1b[0m \x1b[9mstrike\x1b[0m \x1b[3mitalic\x1b[0m \x1b[1;35mbold\x1b[0m\r\n"

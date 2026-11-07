@@ -11,6 +11,7 @@
 namespace tg
 {
     class Font;
+    struct Glyph;
 
     struct Vertex
     {
@@ -76,6 +77,7 @@ namespace tg
         Vec2 Text( const Font& F, Vec2 Pos, std::string_view Str, Color c, float WrapWidth = 0 );
         // One glyph with its pen at Pos.x and the top of its line at Pos.y (grids: terminals, editors).
         void Glyph( const Font& F, uint32_t Codepoint, Vec2 Pos, Color c );
+        void Glyph( const Font& F, const tg::Glyph& G, Vec2 Pos, Color c ); // e.g. from Font::FindSequence
 
         // ---- path helpers (used by the shape functions; public so custom widgets can use them) ----
         std::vector<Vec2> Path;

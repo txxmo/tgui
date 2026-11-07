@@ -14,6 +14,9 @@
 #include <ft2build.h>
 #include FT_FREETYPE_H
 #endif
+#ifdef TG_HAS_HARFBUZZ
+#include <hb.h>
+#endif
 
 namespace tg
 {
@@ -41,6 +44,71 @@ namespace tg
                ( Cp >= 0x1F3FB && Cp <= 0x1F3FF ) || ( Cp >= 0xE0020 && Cp <= 0xE007F );
     }
 
+    // ------------------------------------------------------------ emoji sequences
+
+    static bool IsRegional( uint32_t C ) { return C >= 0x1F1E6 && C <= 0x1F1FF; }
+    static bool IsEmojiModifier( uint32_t C ) { return C == 0xFE0F || ( C >= 0x1F3FB && C <= 0x1F3FF ) || ( C >= 0xE0020 && C <= 0xE007F ); }
+    static bool IsEmojiBase( uint32_t C )
+    {
+        return C >= 0x1F000 || ( C >= 0x2300 && C <= 0x2BFF ) || C == 0xA9 || C == 0xAE || C == 0x203C || C == 0x2049 ||
+               C == 0x2122 || C == 0x2139 || ( C >= 0x2194 && C <= 0x21AA ) || C == 0x3030 || C == 0x303D || C == 0x3297 || C == 0x3299;
+    }
+
+    size_t EmojiSequenceLength( std::string_view S, size_t i )
+    {
+        if ( i >= S.size() ) return 0;
+        size_t j = i;
+        uint32_t C = DecodeUtf8( S, j );
+        auto Peek = [ & ]( size_t At, size_t& After ) -> uint32_t { if ( At >= S.size() ) return 0; After = At; return DecodeUtf8( S, After ); };
+        size_t N = 0;
+        if ( IsRegional( C ) ) // flag: exactly two regional indicators
+            return IsRegional( Peek( j, N ) ) ? N - i : 0;
+        if ( ( C >= '0' && C <= '9' ) || C == '#' || C == '*' ) // keycap: base [FE0F] 20E3
+        {
+            uint32_t D = Peek( j, N );
+            if ( D == 0xFE0F ) { j = N; D = Peek( j, N ); }
+            return D == 0x20E3 ? N - i : 0;
+        }
+        if ( !IsEmojiBase( C ) ) return 0;
+        int Count = 1;
+        for ( ;; )
+        {
+            uint32_t D = Peek( j, N );
+            if ( IsEmojiModifier( D ) ) { j = N; Count++; continue; }
+            if ( D == 0x200D ) // ZWJ: joins only if another emoji follows
+            {
+                size_t M = 0;
+                uint32_t E = Peek( N, M );
+                if ( IsEmojiBase( E ) ) { j = M; Count += 2; continue; }
+            }
+            break;
+        }
+        return Count > 1 ? j - i : 0;
+    }
+
+    size_t NextGrapheme( std::string_view S, size_t i )
+    {
+        if ( i >= S.size() ) return S.size();
+        if ( size_t L = EmojiSequenceLength( S, i ) ) return i + L;
+        DecodeUtf8( S, i );
+        while ( i < S.size() ) // combining marks, selectors, modifiers stay with their base
+        {
+            size_t j = i;
+            uint32_t C = DecodeUtf8( S, j );
+            if ( !( IsEmojiModifier( C ) || ( C >= 0x300 && C <= 0x36F ) || C == 0x20E3 ) ) break;
+            i = j;
+        }
+        return i;
+    }
+
+    size_t PrevGrapheme( std::string_view S, size_t i )
+    {
+        size_t Line = i >= 2 ? S.rfind( '\n', i - 2 ) : std::string_view::npos; // walk from the line start, not the text start
+        size_t At = Line == std::string_view::npos ? 0 : Line + 1, Last = At;
+        while ( At < i && At < S.size() ) { Last = At; At = NextGrapheme( S, At ); }
+        return Last;
+    }
+
     // ------------------------------------------------------------ internals
 
 #ifdef TG_HAS_FREETYPE
@@ -61,8 +129,31 @@ namespace tg
         std::string LazyPath;                 // big fallbacks (CJK, ~20 MB) are read on first use
 #ifdef TG_HAS_FREETYPE
         FT_Face Face = nullptr;
-        ~Source() { if ( Face ) FT_Done_Face( Face ); }
 #endif
+#ifdef TG_HAS_HARFBUZZ
+        hb_font_t* Hb = nullptr; // created on first use, reads the same bytes as FreeType
+        hb_font_t* Shaper()
+        {
+            if ( !Hb && Data )
+            {
+                hb_blob_t* Blob = hb_blob_create( (const char*)Data->data(), unsigned( Data->size() ), HB_MEMORY_MODE_READONLY, nullptr, nullptr );
+                hb_face_t* F = hb_face_create( Blob, 0 );
+                Hb = hb_font_create( F );
+                hb_face_destroy( F );
+                hb_blob_destroy( Blob );
+            }
+            return Hb;
+        }
+#endif
+        ~Source()
+        {
+#ifdef TG_HAS_HARFBUZZ
+            if ( Hb ) hb_font_destroy( Hb );
+#endif
+#ifdef TG_HAS_FREETYPE
+            if ( Face ) FT_Done_Face( Face );
+#endif
+        }
         bool Open()
         {
             const unsigned char* D = Data->data();
@@ -99,7 +190,7 @@ namespace tg
     static constexpr int Reserved = 4; // top rows: a 2x2 white block for solid shapes
 
     // A rasterized glyph before packing: bitmap in pixels, offsets in pixels from the pen on the baseline.
-    struct Bitmap
+    struct GlyphBitmap
     {
         int W = 0, H = 0;
         std::vector<uint32_t> Px; // RGBA (straight alpha)
@@ -110,7 +201,7 @@ namespace tg
     // ------------------------------------------------------------ rasterizers
 
     // stb_truetype, with horizontal oversampling (same math as stbtt_PackFontRanges).
-    static bool RasterStb( const stbtt_fontinfo* I, int G, float PxHeight, int Oh, int Ov, const uint8_t* Curve, Bitmap& B )
+    static bool RasterStb( const stbtt_fontinfo* I, int G, float PxHeight, int Oh, int Ov, const uint8_t* Curve, GlyphBitmap& B )
     {
         float Sc = stbtt_ScaleForPixelHeight( I, PxHeight );
         int Adv, Lsb;
@@ -135,7 +226,7 @@ namespace tg
 
 #ifdef TG_HAS_FREETYPE
     // Area-average downscale of a premultiplied BGRA bitmap (emoji strikes are ~109-160 px).
-    static void Downscale( const unsigned char* Src, int Sw, int Sh, int Pitch, float K, Bitmap& B )
+    static void Downscale( const unsigned char* Src, int Sw, int Sh, int Pitch, float K, GlyphBitmap& B )
     {
         B.W = std::max( 1, int( std::lround( Sw * K ) ) );
         B.H = std::max( 1, int( std::lround( Sh * K ) ) );
@@ -163,9 +254,8 @@ namespace tg
     }
 
     // FreeType: hinted grayscale text, or color glyphs (CBDT/sbix bitmaps, COLR layers) for emoji.
-    static bool RasterFt( FT_Face F, uint32_t Cp, float EmPx, bool Hinting, const uint8_t* Curve, Bitmap& B )
+    static bool RasterFtIndex( FT_Face F, FT_UInt Gi, float EmPx, bool Hinting, const uint8_t* Curve, GlyphBitmap& B )
     {
-        FT_UInt Gi = FT_Get_Char_Index( F, Cp );
         if ( !Gi ) return false;
         float K = 1;
         if ( !FT_IS_SCALABLE( F ) && F->num_fixed_sizes > 0 )
@@ -209,6 +299,11 @@ namespace tg
         B.Y1 = B.Y0 + B.H;
         return true;
     }
+
+    static bool RasterFt( FT_Face F, uint32_t Cp, float EmPx, bool Hinting, const uint8_t* Curve, GlyphBitmap& B )
+    {
+        return RasterFtIndex( F, FT_Get_Char_Index( F, Cp ), EmPx, Hinting, Curve, B );
+    }
 #endif
 
     // ------------------------------------------------------------ Font
@@ -225,6 +320,37 @@ namespace tg
             if ( Owner->WantGrow ) return Fallback; // out of room this frame: retried after the atlas grows
         }
         return Glyphs.emplace( Cp, Fallback ).first->second; // nobody has it: remember, don't retry
+    }
+
+    const Glyph* Font::FindSequence( std::string_view Utf8 ) const
+    {
+        if ( !Owner || !FontAtlas::HasHarfBuzz() ) return nullptr;
+        std::string Key( Utf8 );
+        auto It = Sequences.find( Key );
+        if ( It != Sequences.end() ) return It->second.Index < 0 ? nullptr : &It->second;
+        if ( !Owner->Built ) return nullptr;
+        Glyph G{};
+        if ( Owner->LoadSequence( *this, Utf8, G ) ) return &Sequences.emplace( std::move( Key ), G ).first->second;
+        if ( Owner->WantGrow ) return nullptr; // retried after the atlas grows
+        G.Index = -1;
+        Sequences.emplace( std::move( Key ), G );
+        return nullptr;
+    }
+
+    const Glyph& Font::Next( std::string_view Str, size_t& i, uint32_t& Cp ) const
+    {
+        // cheap filter first: sequences start with a digit/#/* (keycaps) or a codepoint >= U+00A9
+        unsigned char B0 = (unsigned char)Str[ i ];
+        if ( FontAtlas::HasHarfBuzz() && ( B0 >= 0xC2 || ( B0 >= '0' && B0 <= '9' ) || B0 == '#' || B0 == '*' ) )
+            if ( size_t L = EmojiSequenceLength( Str, i ) )
+                if ( const Glyph* G = FindSequence( Str.substr( i, L ) ) )
+                {
+                    i += L;
+                    Cp = 0;
+                    return *G;
+                }
+        Cp = DecodeUtf8( Str, i );
+        return Find( Cp );
     }
 
     float Font::Kern( uint32_t A, uint32_t B ) const
@@ -251,8 +377,9 @@ namespace tg
             uint32_t Prev = 0;
             for ( size_t i = 0; i < Line.size(); )
             {
-                uint32_t Cp = DecodeUtf8( Line, i );
-                X += Kern( Prev, Cp ) + Find( Cp ).Advance;
+                uint32_t Cp;
+                const Glyph& G = Next( Line, i, Cp );
+                X += ( Cp ? Kern( Prev, Cp ) : 0 ) + G.Advance;
                 Prev = Cp;
             }
             Out.x = std::max( Out.x, X );
@@ -268,10 +395,10 @@ namespace tg
         for ( size_t i = 0; i < Str.size(); )
         {
             size_t Start = i;
-            uint32_t Cp = DecodeUtf8( Str, i );
-            Pen += Kern( Prev, Cp );
+            uint32_t Cp;
+            float Adv = Next( Str, i, Cp ).Advance; // a caret never lands inside an emoji sequence
+            if ( Cp ) Pen += Kern( Prev, Cp );
             Prev = Cp;
-            float Adv = Find( Cp ).Advance;
             if ( X < Pen + Adv * 0.5f ) return Start;
             Pen += Adv;
         }
@@ -282,6 +409,15 @@ namespace tg
 
     FontAtlas::FontAtlas() = default;
     FontAtlas::~FontAtlas() = default;
+
+    bool FontAtlas::HasHarfBuzz()
+    {
+#ifdef TG_HAS_HARFBUZZ
+        return true;
+#else
+        return false;
+#endif
+    }
 
     bool FontAtlas::HasFreeType()
     {
@@ -363,7 +499,20 @@ namespace tg
             "/usr/local/share/fonts/NotoColorEmoji.ttf",
         };
         for ( const char* P : Paths )
-            if ( AddFallbackFile( P ) ) return true;
+        {
+            if ( !AddFallbackFile( P ) ) continue;
+#ifdef TG_HAS_FREETYPE
+            // a bitmap (PNG) emoji font needs FreeType built with libpng; if this one can't draw, try the next
+            FT_Face F = Fallbacks.back()->Face;
+            bool Ok = F && FT_Get_Char_Index( F, 0x1F600 );
+            if ( Ok && !FT_IS_SCALABLE( F ) && F->num_fixed_sizes > 0 ) FT_Select_Size( F, 0 );
+            else if ( Ok ) FT_Set_Char_Size( F, 0, 32 * 64, 72, 72 );
+            if ( Ok && FT_Load_Glyph( F, FT_Get_Char_Index( F, 0x1F600 ), FT_LOAD_COLOR ) == 0 ) return true;
+            Fallbacks.pop_back();
+#else
+            return true;
+#endif
+        }
         return false;
     }
 
@@ -406,6 +555,7 @@ namespace tg
         for ( auto& F : Fonts )
         {
             for ( auto& [ Cp, G ] : F->Glyphs ) { G.V0 *= K; G.V1 *= K; }
+            for ( auto& [ Seq, G ] : F->Sequences ) { G.V0 *= K; G.V1 *= K; }
             F->Fallback.V0 *= K;
             F->Fallback.V1 *= K;
         }
@@ -419,7 +569,7 @@ namespace tg
         Source& Own = *Sources[ size_t( F.Source ) ];
         const float PxHeight = F.Size * Scale;
         const int Oh = std::clamp( Quality.OversampleH, 1, 8 ), Ov = std::clamp( Quality.OversampleV, 1, 8 );
-        Bitmap B;
+        GlyphBitmap B;
         bool FromOwn = false;
 
         auto TrySource = [ & ]( Source& S ) -> bool {
@@ -448,19 +598,71 @@ namespace tg
         if ( TrySource( Own ) ) Got = FromOwn = true;
         else
             for ( auto& Fb : Fallbacks )
-            {
-                if ( !Fb->LazyPath.empty() )
-                {
-                    std::string P = std::move( Fb->LazyPath );
-                    Fb->LazyPath.clear();
-                    auto D = std::make_shared<std::vector<unsigned char>>();
-                    if ( !ReadFile( P, *D ) ) continue;
-                    Fb->Data = std::move( D );
-                    Fb->Open();
-                }
-                if ( TrySource( *Fb ) ) { Got = true; break; }
-            }
+                if ( Ready( *Fb ) && TrySource( *Fb ) ) { Got = true; break; }
         if ( !Got ) return false;
+        if ( !PackBitmap( B, Out ) ) return false;
+        Out.Index = FromOwn && Own.Info ? stbtt_FindGlyphIndex( Own.Info.get(), int( Cp ) ) : 0;
+        return true;
+    }
+
+    FontAtlas::Source* FontAtlas::Ready( Source& S )
+    {
+        if ( !S.LazyPath.empty() )
+        {
+            std::string P = std::move( S.LazyPath );
+            S.LazyPath.clear();
+            auto D = std::make_shared<std::vector<unsigned char>>();
+            if ( !ReadFile( P, *D ) ) return nullptr;
+            S.Data = std::move( D );
+            S.Open();
+        }
+        return S.Data ? &S : nullptr;
+    }
+
+    // Shape an emoji sequence with the color fallback fonts; succeed only if it becomes one glyph.
+    bool FontAtlas::LoadSequence( const Font& F, std::string_view Utf8, Glyph& Out )
+    {
+#if defined( TG_HAS_HARFBUZZ ) && defined( TG_HAS_FREETYPE )
+        const float PxHeight = F.Size * Scale;
+        for ( auto& Fb : Fallbacks )
+        {
+            if ( !Ready( *Fb ) || !Fb->Color || !Fb->Face ) continue;
+            hb_font_t* Hf = Fb->Shaper();
+            if ( !Hf ) continue;
+            hb_buffer_t* Buf = hb_buffer_create();
+            hb_buffer_add_utf8( Buf, Utf8.data(), int( Utf8.size() ), 0, int( Utf8.size() ) );
+            hb_buffer_guess_segment_properties( Buf );
+            hb_shape( Hf, Buf, nullptr, 0 );
+            unsigned N = 0;
+            hb_glyph_info_t* Info = hb_buffer_get_glyph_infos( Buf, &N );
+            hb_glyph_position_t* Pos = hb_buffer_get_glyph_positions( Buf, &N );
+            // one visible glyph (leftover joiners/selectors may remain as zero-advance glyphs)
+            unsigned Gid = 0, Visible = 0;
+            bool Missing = false;
+            for ( unsigned k = 0; k < N; k++ )
+            {
+                if ( Info[ k ].codepoint == 0 ) Missing = true;
+                else if ( Pos[ k ].x_advance != 0 ) { Gid = Info[ k ].codepoint; Visible++; }
+            }
+            hb_buffer_destroy( Buf );
+            if ( Missing || Visible != 1 ) continue;
+            GlyphBitmap B;
+            if ( !RasterFtIndex( Fb->Face, Gid, PxHeight * 0.82f * Quality.EmojiScale, Quality.Hinting, Curve, B ) ) continue;
+            if ( !PackBitmap( B, Out ) ) return false;
+            Out.Index = 0;
+            return true;
+        }
+#else
+        (void)F;
+        (void)Utf8;
+        (void)Out;
+#endif
+        return false;
+    }
+
+    // Pack a rasterized glyph into the atlas and fill in its quad + UVs.
+    bool FontAtlas::PackBitmap( const GlyphBitmap& B, Glyph& Out )
+    {
 
         // pack (1px padding around every glyph so bilinear sampling never bleeds into a neighbour)
         stbrp_rect R{};
@@ -489,7 +691,6 @@ namespace tg
         G.V1 = ( R.y + Reserved + 1 + B.H ) / float( Height );
         G.Advance = B.Advance / Scale;
         G.Colored = B.Colored;
-        G.Index = FromOwn && Own.Info ? stbtt_FindGlyphIndex( Own.Info.get(), int( Cp ) ) : 0;
         Loaded++;
         return true;
     }

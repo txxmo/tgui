@@ -4,6 +4,9 @@
 // TG_FREETYPE=ON (hinting; also required for color emoji). Glyphs that aren't baked up front are
 // rasterized on demand the first time they're drawn — from the font itself or from fallback fonts
 // (emoji, CJK...) — and packed into the atlas, which grows as needed.
+//
+// With TG_HARFBUZZ=ON, emoji sequences (flags 🇯🇵, ZWJ families 👨‍👩‍👧, skin tones 👋🏽, keycaps 1️⃣,
+// tag flags 🏴󠁧󠁢󠁳󠁣󠁴󠁿) are shaped with HarfBuzz and drawn as the single glyph the emoji font has for them.
 #pragma once
 #include "core.h"
 #include <functional>
@@ -17,6 +20,7 @@ namespace tg
 {
     class Renderer;
     class FontAtlas;
+    struct GlyphBitmap; // internal: a rasterized glyph before packing
 
     struct Glyph
     {
@@ -50,6 +54,12 @@ namespace tg
 
         // Looks the glyph up, rasterizing it (or pulling it from a fallback font) on first use.
         const Glyph& Find( uint32_t Codepoint ) const;
+        // The glyph an emoji sequence (UTF-8, see EmojiSequenceLength) shapes to, or nullptr when there's no
+        // shaper or the font has no single glyph for it (then draw its codepoints one by one).
+        const Glyph* FindSequence( std::string_view Utf8 ) const;
+        // Next glyph of Str at byte i: a whole emoji sequence when it shapes to one glyph, else one codepoint.
+        // Advances i. Cp = the codepoint, or 0 for a sequence (no kerning around it).
+        const Glyph& Next( std::string_view Str, size_t& i, uint32_t& Cp ) const;
         // Extra advance between two codepoints from the font's kerning (0 if none / disabled).
         float Kern( uint32_t A, uint32_t B ) const;
         float SubpixelSteps = 1;   // glyphs are positioned on 1/SubpixelSteps of a pixel
@@ -69,6 +79,7 @@ namespace tg
         FontAtlas* Owner = nullptr;
         int Source = -1;
         mutable std::unordered_map<uint32_t, Glyph> Glyphs;
+        mutable std::unordered_map<std::string, Glyph> Sequences; // Index = -1: no single glyph
         Glyph Fallback{};
         std::shared_ptr<void> Info;   // stbtt_fontinfo (+ the font bytes it points into), for kerning
         float KernScale = 0;          // font units -> UI units
@@ -96,6 +107,7 @@ namespace tg
         // until a Chinese/Japanese/Korean character is actually drawn. Works with or without FreeType.
         bool AddCjkFont();
         static bool HasFreeType();
+        static bool HasHarfBuzz(); // built with TG_HARFBUZZ: emoji sequences shape to single glyphs
 
         // Rasterize the base glyph set into Pixels and upload. Scale = DPI scale: glyphs are rasterized
         // at Size*Scale pixels but measured in UI units. Calling it again (DPI change) rebuilds everything.
@@ -129,11 +141,20 @@ namespace tg
         uint8_t Curve[ 256 ] = {};
 
         bool LoadGlyph( const Font& F, uint32_t Codepoint, Glyph& Out ); // rasterize + pack
+        bool LoadSequence( const Font& F, std::string_view Utf8, Glyph& Out ); // shape (HarfBuzz) + rasterize + pack
+        bool PackBitmap( const GlyphBitmap& B, Glyph& Out );
+        Source* Ready( Source& S ); // reads a lazily-added fallback on first use
         bool Grow( int NewHeight );
     };
 
     // ---------- inline: line walking ----------
     uint32_t DecodeUtf8( std::string_view s, size_t& i );
+    // Byte length of the emoji sequence starting at s[i] (regional-indicator pair, keycap, emoji with
+    // VS16 / skin tone / tags, ZWJ chains), or 0 if no multi-codepoint sequence starts there.
+    size_t EmojiSequenceLength( std::string_view s, size_t i );
+    // Caret steps that keep emoji sequences and trailing modifiers together (text fields: arrows, Backspace).
+    size_t NextGrapheme( std::string_view s, size_t i );
+    size_t PrevGrapheme( std::string_view s, size_t i );
 
     template<typename F>
     void Font::ForEachLine( std::string_view Str, float WrapWidth, F&& Fn ) const
@@ -150,10 +171,11 @@ namespace tg
             while ( i < Str.size() )
             {
                 size_t Prev = i;
-                uint32_t Cp = DecodeUtf8( Str, i );
+                uint32_t Cp;
+                const Glyph& G = this->Next( Str, i, Cp );
                 if ( Cp == '\n' ) { LineEnd = Prev; Next = i; break; }
                 if ( Cp == ' ' ) LastBreak = Prev;
-                X += Kern( PrevCp, Cp ) + Find( Cp ).Advance;
+                X += ( Cp ? Kern( PrevCp, Cp ) : 0 ) + G.Advance;
                 PrevCp = Cp;
                 if ( WrapWidth > 0 && X > WrapWidth && Prev > LineStart )
                 {

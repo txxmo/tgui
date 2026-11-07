@@ -718,6 +718,37 @@ int main( int Argc, char** Argv )
         CHECK( T.Cell( 3, 0 ).Cp == 0x2713 );
     }
     App.ShellStarted = true; // the test starts its own command below
+    {
+        // emoji sequences: segmentation works in every build; shaping to one glyph needs TG_HARFBUZZ
+        const std::string Flag = "\xF0\x9F\x87\xAF\xF0\x9F\x87\xB5";                                  // 🇯🇵
+        const std::string Family = "\xF0\x9F\x91\xA8\xE2\x80\x8D\xF0\x9F\x91\xA9\xE2\x80\x8D\xF0\x9F\x91\xA7"; // 👨‍👩‍👧
+        const std::string Wave = "\xF0\x9F\x91\x8B\xF0\x9F\x8F\xBD";                                  // 👋🏽
+        const std::string Keycap = "1\xEF\xB8\x8F\xE2\x83\xA3";                                           // 1️⃣
+        CHECK( tg::EmojiSequenceLength( Flag + "x", 0 ) == Flag.size() );
+        CHECK( tg::EmojiSequenceLength( Family + " ", 0 ) == Family.size() );
+        CHECK( tg::EmojiSequenceLength( Wave, 0 ) == Wave.size() );
+        CHECK( tg::EmojiSequenceLength( Keycap, 0 ) == Keycap.size() );
+        CHECK( tg::EmojiSequenceLength( "\xF0\x9F\x9A\x80", 0 ) == 0 && tg::EmojiSequenceLength( "12", 0 ) == 0 );
+        std::string S = "a" + Family + "b";
+        CHECK( tg::NextGrapheme( S, 1 ) == 1 + Family.size() && tg::PrevGrapheme( S, 1 + Family.size() ) == 1 );
+
+        tg::Terminal T;
+        T.Write( Flag + Family + "!" );
+        CHECK( T.RowText( 0 ) == Flag + Family + "!" );
+        CHECK( T.Cell( 0, 0 ).Width == 2 && T.Cell( 2, 0 ).Width == 2 && T.Cell( 4, 0 ).Cp == '!' && T.CursorCol() == 5 );
+        CHECK( tg::Terminal::CellText( T.Cell( 2, 0 ) ) == Family );
+
+        const tg::Font& F = *tg::GetTheme().Body;
+        if ( tg::FontAtlas::HasHarfBuzz() && F.Find( 0x1F680 ).Colored ) // an emoji font that can actually draw here
+        {
+            const tg::Glyph* G = F.FindSequence( Flag );
+            CHECK( G && G->Colored );
+            float One = F.Width( "\xF0\x9F\x9A\x80" );
+            CHECK( F.Width( Flag ) < One * 1.5f && F.Width( Family ) < One * 1.5f && F.Width( Wave ) < One * 1.5f );
+            CHECK( F.HitTest( Family + "x", 0.9f * F.Width( Family ) ) == Family.size() ); // caret never inside
+            std::printf( "harfbuzz: emoji sequences shape to single glyphs\n" );
+        }
+    }
     ClickTab( Ctx, App, 8 );
     {
         tg::Terminal& L = *App.Log;

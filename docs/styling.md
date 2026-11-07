@@ -73,7 +73,20 @@ Ctx.Fonts.AddFallbackFile( "C:/Windows/Fonts/seguisym.ttf" );  // symbols
 Ctx.Fonts.AddFallbackFile( "fonts/NotoSansArabic-Regular.ttf" );
 ```
 
-Limits: there is no text shaper (HarfBuzz). Flags (🇯🇵), ZWJ families (👨‍👩‍👧) and keycaps draw as their separate parts. Skin-tone modifiers and variation selectors are dropped, so you get the base emoji. Right-to-left scripts and complex scripts (Arabic joining, Devanagari) aren't laid out correctly.
+### Emoji sequences (HarfBuzz)
+
+Many emoji are several codepoints that the emoji font draws as one picture: flags are two regional-indicator letters (🇯🇵 = J + P), families and professions are emoji joined with U+200D (👨‍👩‍👧, 🧑‍🚀), and skin tones (👋🏽) and keycaps (1️⃣) add modifiers. Configure with **`-DTG_HARFBUZZ=ON`**, which also turns on `TG_FREETYPE`. tg then finds these sequences in text, shapes them with HarfBuzz against the emoji font, and draws the single glyph the font has for each one:
+
+![before / after HarfBuzz](emoji_sequences.png)
+
+*Top: FreeType only. Bottom: `TG_HARFBUZZ=ON`.*
+
+This works everywhere text is drawn (labels, buttons, text fields, chat, the terminal). Text fields move the caret and Backspace over a whole sequence. CMake uses an installed HarfBuzz (`libharfbuzz-dev`, `brew install harfbuzz`, vcpkg) or downloads and builds it.
+
+- **Windows:** Segoe UI Emoji has no flag glyphs, so flags show as two letters there, as they do in other Windows apps. Families, professions, skin tones and keycaps work.
+- **Without HarfBuzz:** a sequence draws as its parts (a flag shows as two letters, a family as its separate people), and skin tones and selectors are dropped, so you get the base emoji.
+
+HarfBuzz is only used for emoji sequences, not for laying out all text. Right-to-left scripts (Arabic, Hebrew) and complex scripts (Devanagari, Thai) are still laid out one character at a time.
 
 **Monospace.** `Theme().Mono` / `MonoBold` are JetBrains Mono 14 (compiled in, including box drawing and Powerline symbols), used by the terminal. Use them for code and logs too: `Label.Style.TextFont = tg::GetTheme().Mono;`.
 

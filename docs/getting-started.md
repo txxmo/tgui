@@ -83,6 +83,7 @@ When tg is a subproject, its examples and tests are off by default, so you only 
 | `TG_BUILD_EXAMPLES` | `ON` when top-level | hello, showcase, Win32 examples |
 | `TG_BUILD_HEADLESS` | `ON` when top-level | The headless test + `ctest` entry |
 | `TG_FREETYPE` | `OFF` | Rasterize with FreeType (hinting) and enable color emoji. Uses the system FreeType, or downloads it. See [Fonts](styling.md#freetype-emoji-and-other-scripts) |
+| `TG_HARFBUZZ` | `OFF` | Shape emoji sequences (flags, ZWJ families, skin tones, keycaps) with HarfBuzz. Implies `TG_FREETYPE`. Uses the system HarfBuzz, or downloads it. See [Emoji sequences](styling.md#emoji-sequences-harfbuzz) |
 
 ## Your first window
 

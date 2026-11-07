@@ -7,9 +7,8 @@
 
 namespace tg
 {
-    static bool IsCont( char c ) { return ( static_cast<unsigned char>( c ) & 0xC0 ) == 0x80; }
-    static size_t PrevCp( const std::string& s, size_t i ) { if ( i == 0 ) return 0; do i--; while ( i > 0 && IsCont( s[ i ] ) ); return i; }
-    static size_t NextCp( const std::string& s, size_t i ) { if ( i >= s.size() ) return s.size(); do i++; while ( i < s.size() && IsCont( s[ i ] ) ); return i; }
+    static size_t PrevCp( const std::string& s, size_t i ) { return PrevGrapheme( s, i ); } // whole emoji sequences
+    static size_t NextCp( const std::string& s, size_t i ) { return NextGrapheme( s, i ); }
     static void AppendUtf8( std::string& s, uint32_t c )
     {
         if ( c < 0x80 ) s += char( c );

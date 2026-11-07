@@ -29,7 +29,7 @@ namespace tg
 
     struct TermCell
     {
-        uint32_t Cp = ' ';
+        uint32_t Cp = ' ';       // bit 31 set: an emoji sequence (flag, ZWJ...), text via Terminal::SequenceText
         uint32_t Fg = 0, Bg = 0; // packed: 0 = default; 0x1000000 | index (0..255); 0x2000000 | 0xRRGGBB
         uint8_t Attr = 0;        // TermAttr bits
         uint8_t Width = 1;       // 2 = wide char, 0 = the right half of a wide char
@@ -94,6 +94,9 @@ namespace tg
         void ScrollView( int Lines );                     // + = back into history
         int ViewOffset() const { return View; }
 
+        static const std::string& SequenceText( uint32_t Cp ); // UTF-8 of a TermCell::Cp with bit 31 set
+        static std::string CellText( const TermCell& C );     // UTF-8 of any cell
+
         Vec2 Measure( float AvailWidth ) override;
         void Arrange( Rect R ) override;
         void Draw( DrawList& D ) override;
@@ -112,6 +115,7 @@ namespace tg
         bool G0Lines = false, G1Lines = false, UseG1 = false, SavedG0 = false;
         std::vector<bool> Tabs;
         int View = 0; // lines scrolled back
+        int LastX = 0, LastY = -1; // cell the last character went into (emoji modifiers / ZWJ join it)
 
         // parser
         enum class St : uint8_t { Ground, Esc, Csi, Osc, OscEsc, Charset, Ignore } State = St::Ground;

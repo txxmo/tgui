@@ -8,6 +8,7 @@
 #include <cmath>
 #include <cstdio>
 #include <cstdlib>
+#include <unordered_map>
 
 namespace tg
 {
@@ -17,6 +18,7 @@ namespace tg
     static int CellWidth( uint32_t C )
     {
         if ( C < 0x300 ) return 1;
+        if ( C >= 0x1F1E6 && C <= 0x1F1FF ) return 2; // regional indicator: the flag's two letters share 2 cells
         if ( ( C >= 0x300 && C <= 0x36F ) || ( C >= 0x200B && C <= 0x200F ) || ( C >= 0xFE00 && C <= 0xFE0F ) || C == 0x20E3 ||
              ( C >= 0x1F3FB && C <= 0x1F3FF ) || ( C >= 0xE0020 && C <= 0xE007F ) )
             return 0;
@@ -46,7 +48,51 @@ namespace tg
         else { S += char( 0xF0 | C >> 18 ); S += char( 0x80 | ( ( C >> 12 ) & 0x3F ) ); S += char( 0x80 | ( ( C >> 6 ) & 0x3F ) ); S += char( 0x80 | ( C & 0x3F ) ); }
     }
 
-    static constexpr uint32_t ColIndex = 0x1000000, ColRgb = 0x2000000;
+    static constexpr uint32_t ColIndex = 0x1000000, ColRgb = 0x2000000, SeqBit = 0x80000000u;
+
+    // Emoji sequences are interned process-wide: a cell stays 16 bytes, the table only grows with
+    // distinct sequences (a few hundred at most in practice).
+    static std::vector<std::string>& SeqTable() { static std::vector<std::string> T; return T; }
+    static uint32_t Intern( const std::string& S )
+    {
+        static std::unordered_map<std::string, uint32_t> Ids;
+        auto It = Ids.find( S );
+        if ( It != Ids.end() ) return It->second;
+        SeqTable().push_back( S );
+        uint32_t Id = SeqBit | uint32_t( SeqTable().size() - 1 );
+        Ids.emplace( S, Id );
+        return Id;
+    }
+
+    const std::string& Terminal::SequenceText( uint32_t Cp )
+    {
+        static const std::string Empty;
+        size_t I = Cp & ~SeqBit;
+        return ( Cp & SeqBit ) && I < SeqTable().size() ? SeqTable()[ I ] : Empty;
+    }
+
+    std::string Terminal::CellText( const TermCell& C )
+    {
+        if ( C.Cp & SeqBit ) return SequenceText( C.Cp );
+        std::string S;
+        AppendUtf8( S, C.Cp ? C.Cp : ' ' );
+        return S;
+    }
+
+    static bool IsJoiner( uint32_t C ) // continues the previous character
+    {
+        return C == 0x200D || C == 0xFE0F || C == 0x20E3 || ( C >= 0x1F3FB && C <= 0x1F3FF ) || ( C >= 0xE0020 && C <= 0xE007F );
+    }
+
+    // Glyph for a cell: a shaped emoji sequence (HarfBuzz builds), else its first codepoint.
+    static const Glyph& CellGlyph( const Font& F, uint32_t Cp )
+    {
+        if ( !( Cp & SeqBit ) ) return F.Find( Cp );
+        const std::string& S = Terminal::SequenceText( Cp );
+        if ( const Glyph* G = F.FindSequence( S ) ) return *G;
+        size_t i = 0;
+        return F.Find( S.empty() ? uint32_t( '?' ) : DecodeUtf8( S, i ) );
+    }
 
     // ------------------------------------------------------------ setup
 
@@ -174,7 +220,7 @@ namespace tg
         std::string S;
         if ( R < 0 || R >= H ) return S;
         for ( auto& C : Screen[ size_t( R ) ] )
-            if ( C.Width ) AppendUtf8( S, C.Cp ? C.Cp : ' ' );
+            if ( C.Width ) S += CellText( C );
         while ( !S.empty() && S.back() == ' ' ) S.pop_back();
         return S;
     }
@@ -248,8 +294,24 @@ namespace tg
     void Terminal::Put( uint32_t Cp )
     {
         if ( UseG1 ? G1Lines : G0Lines ) Cp = DecGraphics( Cp );
+        // emoji sequences: selectors, skin tones, keycaps, ZWJ + emoji, the 2nd flag letter join the previous cell
+        if ( LastY >= 0 && LastY < H && LastX < W )
+        {
+            TermCell& P = Screen[ size_t( LastY ) ][ size_t( LastX ) ];
+            bool PrevRegional = !( P.Cp & SeqBit ) && P.Cp >= 0x1F1E6 && P.Cp <= 0x1F1FF;
+            const std::string Prev = CellText( P );
+            bool AfterZwj = Prev.size() >= 3 && Prev.compare( Prev.size() - 3, 3, "\xE2\x80\x8D" ) == 0;
+            if ( P.Width && ( IsJoiner( Cp ) || AfterZwj || ( PrevRegional && Cp >= 0x1F1E6 && Cp <= 0x1F1FF ) ) )
+            {
+                std::string S = Prev;
+                AppendUtf8( S, Cp );
+                P.Cp = Intern( S );
+                if ( PrevRegional && !IsJoiner( Cp ) ) LastY = -1; // a flag is exactly two letters
+                return;
+            }
+        }
         int Wd = CellWidth( Cp );
-        if ( Wd == 0 ) return; // combining marks / joiners: dropped (no shaping)
+        if ( Wd == 0 ) return; // combining marks / stray joiners: dropped
         if ( WrapPending && AutoWrap ) { Cx = 0; LineFeed(); }
         WrapPending = false;
         if ( Wd == 2 && Cx == W - 1 )
@@ -270,6 +332,8 @@ namespace tg
         C.Cp = Cp;
         C.Width = uint8_t( Wd );
         L[ size_t( Cx ) ] = C;
+        LastX = Cx;
+        LastY = Cy;
         if ( Wd == 2 )
         {
             Unhalf( Cx + 1 );
@@ -284,6 +348,7 @@ namespace tg
 
     void Terminal::Control( uint8_t C )
     {
+        LastY = -1;
         switch ( C )
         {
         case 0x07: if ( OnBell ) OnBell(); break;
@@ -341,6 +406,7 @@ namespace tg
 
     void Terminal::EscDispatch( char C )
     {
+        LastY = -1;
         switch ( C )
         {
         case '7': SavedX = Cx; SavedY = Cy; SavedPen = Pen; SavedG0 = G0Lines; break;
@@ -362,6 +428,7 @@ namespace tg
 
     void Terminal::CsiDispatch( char F )
     {
+        LastY = -1;
         char Priv = 0;
         std::string_view S = Seq;
         if ( !S.empty() && ( S[ 0 ] == '?' || S[ 0 ] == '>' || S[ 0 ] == '=' || S[ 0 ] == '<' ) ) { Priv = S[ 0 ]; S.remove_prefix( 1 ); }
@@ -668,7 +735,7 @@ namespace tg
             std::string Row;
             int From = L == AL ? AC : 0, To = L == BL ? BC : int( Ln.size() );
             for ( int c = From; c < To && c < int( Ln.size() ); c++ )
-                if ( Ln[ size_t( c ) ].Width ) AppendUtf8( Row, Ln[ size_t( c ) ].Cp ? Ln[ size_t( c ) ].Cp : ' ' );
+                if ( Ln[ size_t( c ) ].Width ) Row += CellText( Ln[ size_t( c ) ] );
             while ( !Row.empty() && Row.back() == ' ' ) Row.pop_back();
             Out += Row;
             if ( L != BL ) Out += '\n';
@@ -989,8 +1056,9 @@ namespace tg
                 if ( Ce.Cp > ' ' && !DrawSpecial( D, Ce.Cp, R, Fg ) )
                 {
                     const Font& F = Ce.Attr & AttrBold ? Bold : Reg;
-                    float Off = Ce.Width == 2 ? ( R.w - F.Find( Ce.Cp ).Advance ) * 0.5f : 0; // centre wide glyphs in their 2 cells
-                    D.Glyph( F, Ce.Cp, { R.x + Off, Y }, Fg );
+                    const Glyph& G = CellGlyph( F, Ce.Cp );
+                    float Off = Ce.Width == 2 ? ( R.w - G.Advance ) * 0.5f : 0; // centre wide glyphs in their 2 cells
+                    D.Glyph( F, G, { R.x + Off, Y }, Fg );
                 }
                 if ( Ce.Attr & AttrUnderline ) D.RectFilled( { R.x, Y + Reg.Ascent + 2, R.w, 1 }, Fg );
                 if ( Ce.Attr & AttrStrike ) D.RectFilled( { R.x, Y + CellH * 0.55f, R.w, 1 }, Fg );
@@ -1008,7 +1076,11 @@ namespace tg
             if ( Focused )
             {
                 D.RectFilled( Cr, S.Cursor );
-                if ( Ce.Cp > ' ' && Ce.Width ) D.Glyph( Ce.Attr & AttrBold ? Bold : Reg, Ce.Cp, { Cr.x, Cr.y }, S.Background );
+                if ( Ce.Cp > ' ' && Ce.Width )
+                {
+                    const Font& F = Ce.Attr & AttrBold ? Bold : Reg;
+                    D.Glyph( F, CellGlyph( F, Ce.Cp ), { Cr.x, Cr.y }, S.Background );
+                }
             }
             else D.RectStroke( Cr, S.Cursor, 0, 1 );
         }

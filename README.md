@@ -84,7 +84,7 @@ You can also copy the repo in and use `add_subdirectory( tg )`. When tg is pulle
 
 | target | what | deps |
 |---|---|---|
-| `tg::tg` | widgets, layout, text, DrawList, terminal + pty | none (stb is vendored); FreeType with `-DTG_FREETYPE=ON` (color emoji) |
+| `tg::tg` | widgets, layout, text, DrawList, terminal + pty | none (stb is vendored); FreeType with `-DTG_FREETYPE=ON` (color emoji); HarfBuzz with `-DTG_HARFBUZZ=ON` (flags, ZWJ sequences, skin tones) |
 | `tg::app` | `tg::App`: window + renderer + event loop | Windows: Win32 + Direct3D 11 (default). Elsewhere: GLFW + OpenGL 3.3 |
 | `tg::win32` | Win32 messages → tg input, DPI, cursor, clipboard | Windows |
 | `tg::d3d11` | Direct3D 11 renderer | Windows |
