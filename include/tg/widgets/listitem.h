@@ -29,6 +29,7 @@ namespace tg
         bool ShowCheck = false;   // checkbox-style tick on the left (multi-select)
         bool ShowMark = false;    // small tick on the right when selected (single-select dropdowns)
         std::function<void()> OnClick;
+        bool BubbleRelease = false; // let MouseUp reach the parent too (ListBox drag-to-reorder)
         ListItemStyle Style;
 
         static ListItemStyle& Defaults();

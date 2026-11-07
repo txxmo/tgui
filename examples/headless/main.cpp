@@ -3,6 +3,7 @@
 #include "../common/demo_ui.h"
 #include "soft_renderer.h"
 #include <cstdio>
+#include <cmath>
 #include <cstdlib>
 #include <string>
 
@@ -514,6 +515,144 @@ int main( int Argc, char** Argv )
     }
     Settle( Ctx );
     Shot( Ctx, "more_after" );
+
+    // ---------------- "Forms" tab
+    ClickTab( Ctx, App, 6 );
+    Shot( Ctx, "forms" );
+    {
+        // text area: type, newlines, wrap, Up/Down, selection + cut
+        tg::TextArea& N = *App.NotesBox;
+        size_t Lines0 = N.LineCount();
+        CHECK( Lines0 >= 3 ); // the long sentence wraps
+        Click( Ctx, N );
+        CHECK( Ctx.Focused() == &N );
+        Ctx.OnKey( tg::Key::End, true, tg::ModCtrl );                 // end of document
+        Ctx.OnKey( tg::Key::Enter, true, 0 );
+        for ( const char* p = "line two"; *p; p++ ) Ctx.OnText( uint32_t( *p ) );
+        CHECK( App.Notes.size() >= 9 && App.Notes.substr( App.Notes.size() - 9 ) == "\nline two" ); // Bind kept in sync
+        CHECK( N.LineCount() == Lines0 + 1 );
+        Ctx.OnKey( tg::Key::Up, true, 0 );                             // caret moves to the line above...
+        Ctx.OnText( 'X' );                                             // ...and types there
+        CHECK( App.Notes.find( "X" ) != std::string::npos && App.Notes.substr( App.Notes.size() - 9 ) == "\nline two" );
+        Ctx.OnKey( tg::Key::A, true, tg::ModCtrl );
+        Ctx.OnKey( tg::Key::X, true, tg::ModCtrl );                    // no clipboard hook in headless: still deletes
+        CHECK( App.Notes.empty() && N.LineCount() == 1 );
+        for ( const char* p = "fresh"; *p; p++ ) Ctx.OnText( uint32_t( *p ) );
+        CHECK( App.Notes == "fresh" );
+
+        // chat composer: grows with content, Enter sends, Shift+Enter = newline
+        tg::TextArea& Cp = *App.Composer2;
+        Click( Ctx, Cp );
+        Settle( Ctx );
+        float H1 = Cp.Bounds.h;
+        for ( const char* p = "hello"; *p; p++ ) Ctx.OnText( uint32_t( *p ) );
+        Ctx.OnKey( tg::Key::Enter, true, tg::ModShift );
+        for ( const char* p = "second line"; *p; p++ ) Ctx.OnText( uint32_t( *p ) );
+        Settle( Ctx );
+        CHECK( Cp.Bounds.h > H1 + 10 );                                // grew to two lines
+        Ctx.OnKey( tg::Key::Enter, true, 0 );
+        CHECK( App.Sent.size() == 1 && App.Sent[ 0 ] == "hello\nsecond line" && Cp.GetText().empty() );
+        Settle( Ctx );
+        CHECK( std::fabs( Cp.Bounds.h - H1 ) < 1 );                     // shrank back
+    }
+    {
+        // menu bar: click File, slide to Edit, pick Find
+        tg::MenuBar& Bar = *App.Bar;
+        ClickAt( Ctx, Bar.ItemRect( 0 ).Center() );
+        CHECK( Bar.OpenIndexNow() == 0 );
+        Ctx.OnMouseMove( Bar.ItemRect( 1 ).Center() );                 // hover the next title while open
+        Ctx.Frame();
+        CHECK( Bar.OpenIndexNow() == 1 );
+        auto* M = dynamic_cast<tg::Menu*>( OpenPopup( Ctx ) );
+        CHECK( M );
+        Settle( Ctx );
+        Shot( Ctx, "forms_menubar" );
+        tg::MenuItem* FindItem = Find<tg::MenuItem>( *M, 2 );
+        CHECK( FindItem && FindItem->Text == "Find" );
+        Click( Ctx, *FindItem );
+        CHECK( App.LastMenu == "Find" && Bar.OpenIndexNow() == -1 );
+        // View > Word wrap is a checkable item
+        ClickAt( Ctx, Bar.ItemRect( 2 ).Center() );
+        M = dynamic_cast<tg::Menu*>( OpenPopup( Ctx ) );
+        Settle( Ctx );
+        Click( Ctx, *Find<tg::MenuItem>( *M, 0 ) );
+        CHECK( !App.WordWrap );
+        for ( int i = 0; i < 500; i++ ) Ctx.Frame();                   // toasts go away
+    }
+    {
+        // tags: Enter adds, comma adds, duplicate ignored, Backspace on empty removes, x removes
+        tg::TagInput& T = *App.TagBox;
+        Click( Ctx, T );
+        CHECK( Ctx.Focused() == &T.Field() );
+        for ( const char* p = "db"; *p; p++ ) Ctx.OnText( uint32_t( *p ) );
+        Ctx.OnKey( tg::Key::Enter, true, 0 );
+        CHECK( App.Tags.size() == 3 && App.Tags[ 2 ] == "db" );
+        for ( const char* p = "backup,"; *p; p++ ) Ctx.OnText( uint32_t( *p ) );
+        Ctx.Frame();
+        CHECK( App.Tags.size() == 4 && App.Tags[ 3 ] == "backup" && T.Field().GetText().empty() );
+        for ( const char* p = "prod"; *p; p++ ) Ctx.OnText( uint32_t( *p ) );
+        Ctx.OnKey( tg::Key::Enter, true, 0 );
+        CHECK( App.Tags.size() == 4 );                                 // duplicate
+        Ctx.OnKey( tg::Key::Backspace, true, 0 );
+        CHECK( App.Tags.size() == 3 );
+        Settle( Ctx );
+        // x on the first chip ("prod")
+        tg::Rect B = T.Bounds;
+        float Chip0W = tg::GetTheme().Small->Width( "prod" ) + 10 + 18;
+        ClickAt( Ctx, { B.x + T.Style.Padding.Left + Chip0W - 10, B.y + T.Style.Padding.Top + T.Style.ChipHeight * 0.5f } );
+        CHECK( App.Tags.size() == 2 && App.Tags[ 0 ] == "eu-west" );
+    }
+    {
+        // date picker: open, next month, pick the 15th
+        tg::DatePicker& Dp = *App.ExpiresPicker;
+        Click( Ctx, Dp );
+        CHECK( Dp.IsOpen() );
+        Settle( Ctx );
+        auto* Cal = Find<tg::Calendar>( *OpenPopup( Ctx ) );
+        CHECK( Cal && Cal->ViewMonth == 12 && Cal->ViewYear == 2026 );
+        Shot( Ctx, "forms_calendar" );
+        ClickAt( Ctx, { Cal->Bounds.Right() - 17, Cal->Bounds.y + 17 } ); // >
+        CHECK( Cal->ViewMonth == 1 && Cal->ViewYear == 2027 );
+        ClickAt( Ctx, Cal->DayRect( 15 ).Center() );
+        CHECK( App.Expires == ( tg::Date{ 2027, 1, 15 } ) && !Dp.IsOpen() );
+        CHECK( ( tg::Date{ 2026, 11, 7 } ).Weekday() == 5 );            // a Saturday
+        CHECK( tg::Date::DaysInMonth( 2028, 2 ) == 29 && tg::Date::DaysInMonth( 2100, 2 ) == 28 );
+    }
+    {
+        // drag-to-reorder: move row 0 below row 2
+        tg::ListBox& Q = *App.Queue;
+        auto Row = [ & ]( int i ) { return Find<tg::ListItem>( Q, i )->Bounds; };
+        tg::Rect R0 = Row( 0 ), R2 = Row( 2 );
+        Drag( Ctx, R0.Center(), { R2.Center().x, R2.Bottom() - 2 } );
+        CHECK( Q.GetItem( 0 ) == "migrate users table" && Q.GetItem( 2 ) == "deploy api v2.3" );
+        CHECK( App.QueueItems[ 2 ] == "deploy api v2.3" );
+        CHECK( Q.GetSelected() == -1 );                                // a drag is not a click
+        // search filters; Escape clears
+        Click( Ctx, App.SearchBoxW->Field() );
+        for ( const char* p = "CACHE"; *p; p++ ) Ctx.OnText( uint32_t( *p ) );
+        CHECK( Q.Count() == 1 && Q.GetItem( 0 ) == "warm redis cache" );
+        Settle( Ctx );
+        Shot( Ctx, "forms_search" );
+        Ctx.OnKey( tg::Key::Escape, true, 0 );
+        CHECK( App.Query.empty() && Q.Count() == 6 );
+    }
+
+    // ---------------- "Charts" tab
+    ClickTab( Ctx, App, 7 );
+    for ( int i = 0; i < 40; i++ ) App.TickStats( 100 + i );
+    Settle( Ctx );
+    Shot( Ctx, "charts" );
+    {
+        tg::BarChart& B = *App.Requests;
+        // hover Thursday -> tooltip text set
+        tg::Rect Bb = B.Bounds;
+        float SlotW = ( Bb.w - 36 ) / 7;
+        Ctx.OnMouseMove( { Bb.x + 36 + SlotW * 3.5f, Bb.Bottom() - 40 } );
+        CHECK( B.HoveredBar() == 3 && B.Tooltip == "Thu: 77k" );
+        for ( int i = 0; i < 40; i++ ) Ctx.Frame();
+        CHECK( Ctx.ShownTooltip() == &B );
+        CHECK( App.CpuGauge->GetValue() > 0 && App.SparkA->Data().size() == 40 );
+    }
 
     // ---------------- light theme
     tg::GetTheme().UseColors( tg::Theme::Light() );

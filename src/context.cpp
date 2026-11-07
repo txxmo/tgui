@@ -221,10 +221,10 @@ namespace tg
     {
         Mouse = P;
         UpdateHover();
-        UpdateTooltip();
         Event E; E.Type = EventType::MouseMove;
         E.Pos = P;
         Dispatch( PressW ? PressW : HoverW, E );
+        UpdateTooltip(); // after the move: widgets may set per-part tooltips (chart bars) while handling it
     }
 
     bool Context::TrackKey( Key K, bool Down )

@@ -55,6 +55,10 @@ These come from `tg_headless`, which renders with the built-in software rasteriz
 
 | | |
 |---|---|
+| <img src="docs/forms.png" width="400"> | <img src="docs/charts.png" width="400"> |
+
+| | |
+|---|---|
 | <img src="docs/chat.png" width="400"> | <img src="docs/windows.png" width="400"> |
 | <img src="docs/controls.png" width="400"> | <img src="docs/controls_light.png" width="400"> |
 | <img src="docs/combo_open.png" width="400"> | <img src="docs/multicombo_open.png" width="400"> |
@@ -135,6 +139,13 @@ Groups.Group( "Example Group 2" ).Button( "Print", [] { ... } );
 | TreeView | `W.Tree().Add( "Europe" ).Add( "vps-fra-01" )` | expand/collapse, select, keyboard, scrolls |
 | Collapsible | `W.Collapsible( "Advanced", &open )` | animated accordion section (a Container) |
 | Splitter | `W.Split( tg::Dir::Row, 0.3f )` | two resizable panes |
+| TextArea | `W.TextArea( "Notes", &str )` | multi-line, wrap, scroll; chat mode: Enter sends, grows to `MaxLines` |
+| MenuBar | `W.MenuBar().Add( "File", []( tg::Menu& M ) { ... } )` | File / Edit / View menus, hover to switch |
+| SearchBox | `W.Search( "Filter", &str )` | magnifier, clear button, Escape clears |
+| TagInput | `W.Tags( &vec, "Add tag" )` | chips; Enter / comma adds, x / Backspace removes |
+| DatePicker | `W.Date( "Expires", &date )` | calendar popup |
+| Charts | `W.BarChart()`, `W.Donut()`, `W.Gauge( "CPU", v )`, `W.Sparkline()` | animated, hover details |
+| Drag to reorder | `List.Reorderable = true` | ListBox rows |
 | Tooltip | `AnyWidget.Tooltip = "..."` | on every widget, labels too |
 | Context menu | `AnyWidget.ContextMenu = []( tg::Menu& M ) { ... }` | right-click; items, checks, shortcuts, separators |
 | Dialog | `tg::Confirm( Ctx, title, msg, { "Cancel", "Delete" }, fn )` | modal; Enter / Escape; custom bodies via `OpenDialog` |

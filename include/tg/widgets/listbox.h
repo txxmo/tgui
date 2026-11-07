@@ -30,6 +30,8 @@ namespace tg
         int* Bind;                      // Single mode: selected index (-1 = none)
         std::function<void()> OnChange; // selection changed
         std::function<void( int )> OnActivate; // row clicked (any mode except None)
+        bool Reorderable = false;              // drag rows to reorder them
+        std::function<void( int From, int To )> OnReorder;
         ListBoxStyle Style;
 
         // items
@@ -48,7 +50,10 @@ namespace tg
         void ClearSelection();
         std::vector<int> SelectedIndices() const;
 
+        void MoveItem( size_t From, size_t To ); // To = final index of the moved item
+
         void Draw( DrawList& D ) override;
+        bool OnEvent( const Event& E ) override;
 
     private:
         std::vector<std::string> Items;
@@ -56,6 +61,10 @@ namespace tg
         SelectMode Mode;
         ScrollView* List = nullptr;
         void Rebuild();
+        int DragFrom = -1, DropAt = -1; // drag-to-reorder state
+        float DragStartY = 0, DragY = 0;
+        bool DragMoved = false;
+        int RowAtY( float Y, bool Insertion ) const;
         void Click( size_t i );
     };
 }

@@ -508,6 +508,121 @@ static void BuildMore( DemoApp& App, Container& Page )
     Danger.Button( "Reinstall OS" ).Style = Button::Danger();
 }
 
+// Forms: menu bar, multi-line text, tags, search + drag-to-reorder list, date picker.
+static void BuildForms( DemoApp& App, Container& Page )
+{
+    Page.Layout.Gap = 12;
+    auto& Bar = Page.MenuBar();
+    App.Bar = &Bar;
+    auto Say = [ &App ]( std::string What ) { return [ &App, What ] { App.LastMenu = What; tg::Toast( *App.Ctx, What ); }; };
+    Bar.Add( "File", [ Say ]( Menu& M ) {
+        M.Item( "New note", Say( "New note" ), "Ctrl+N" );
+        M.Item( "Open\xE2\x80\xA6", Say( "Open" ), "Ctrl+O" );
+        M.Separator();
+        M.Item( "Export as Markdown", Say( "Exported" ) );
+    } );
+    Bar.Add( "Edit", [ Say ]( Menu& M ) {
+        M.Item( "Undo", Say( "Undo" ), "Ctrl+Z" );
+        M.Item( "Redo", Say( "Redo" ), "Ctrl+Y" );
+        M.Separator();
+        M.Item( "Find", Say( "Find" ), "Ctrl+F" );
+    } );
+    Bar.Add( "View", [ &App ]( Menu& M ) { M.Check( "Word wrap", &App.WordWrap ); M.Check( "Compact layout", &App.Compact ); } );
+    Bar.Add( "Help", [ Say ]( Menu& M ) { M.Item( "Documentation", Say( "Docs" ), "F1" ); M.Item( "About tg", Say( "tg v0.5" ) ); } );
+
+    auto& Cols = Page.Columns( 12 );
+
+    auto& Left = Cols.Group( "Notes" );
+    App.NotesBox = &Left.TextArea( "Write something\xE2\x80\xA6", &App.Notes );
+    App.NotesBox->Layout.Height = Grow();
+    Left.Caption( "Multi-line, word-wrapped, scrolls. Ctrl+A/C/X/V, Home/End, Up/Down keep the column." );
+    Left.Separator();
+    Left.Text( "Chat-style composer" ).Style.TextColor = Tok::TextDim;
+    App.Composer2 = &Left.TextArea( "Message (Enter sends, Shift+Enter = new line)" );
+    App.Composer2->SubmitOnEnter = true;
+    App.Composer2->ClearOnSubmit = true;
+    App.Composer2->MinLines = 1;
+    App.Composer2->MaxLines = 5; // grows as you type
+    App.Composer2->OnSubmit = [ &App ]( const std::string& T ) { if ( !T.empty() ) { App.Sent.push_back( T ); tg::Toast( *App.Ctx, "Sent: " + T ); } };
+
+    auto& Mid = Cols.Group( "Details" );
+    Mid.LabelWidth = 64;
+    Mid.Text( "Tags" ).Style.TextColor = Tok::TextDim;
+    App.TagBox = &Mid.Tags( &App.Tags, "Add tag, Enter or comma" );
+    App.ExpiresPicker = &Mid.Date( "Expires", &App.Expires );
+    Mid.Caption( "Tags: type and press Enter or comma; Backspace on empty removes the last; x removes one." );
+
+    auto& Right = Cols.Group( "Job queue" );
+    App.SearchBoxW = &Right.Search( "Filter jobs", &App.Query );
+    App.SearchBoxW->OnChange = [ &App ]( const std::string& ) { App.FilterQueue(); };
+    App.Queue = &Right.List( App.QueueItems, SelectMode::Single );
+    App.Queue->Layout.Height = Grow();
+    App.Queue->Reorderable = true;
+    App.Queue->OnReorder = [ &App ]( int, int ) {
+        if ( !App.Query.empty() ) return;
+        App.QueueItems.clear();
+        for ( size_t i = 0; i < App.Queue->Count(); i++ ) App.QueueItems.push_back( App.Queue->GetItem( i ) );
+    };
+    Right.Caption( "Drag rows to reorder. The search box filters; Escape or x clears it." );
+}
+
+void DemoApp::FilterQueue()
+{
+    std::vector<std::string> Shown;
+    auto Lower = []( std::string S ) { for ( auto& c : S ) c = char( std::tolower( (unsigned char)c ) ); return S; };
+    for ( auto& Q : QueueItems )
+        if ( Query.empty() || Lower( Q ).find( Lower( Query ) ) != std::string::npos ) Shown.push_back( Q );
+    Queue->SetItems( Shown );
+}
+
+// Charts: gauges, sparklines, bars, donut.
+static void BuildCharts( DemoApp& App, Container& Page )
+{
+    Page.Layout.Gap = 12;
+    auto& Top = Page.Columns( 12 );
+    Top.Layout.Height = Fit();
+
+    auto& Meters = Top.Group( "Usage" );
+    Meters.Layout.Width = Grow( 2 );
+    auto& GRow = Meters.Row( 24 );
+    GRow.Layout.MainAlign = Align::Center;
+    App.CpuGauge = &GRow.Gauge( "CPU", 0.42f );
+    App.MemGauge = &GRow.Gauge( "Memory", 0.74f );
+    App.DiskGauge = &GRow.Gauge( "Disk", 0.93f );
+
+    auto& Spark = Top.Group( "Last minute" );
+    Spark.Layout.Width = Grow( 1 );
+    struct { const char* Name; tg::Sparkline** Out; Paint C; } S[] = { { "requests/s", &App.SparkA, Tok::Accent }, { "p99 latency", &App.SparkB, Tok::Warning }, { "errors", &App.SparkC, Tok::Danger } };
+    for ( auto& X : S )
+    {
+        auto& R = Spark.Row( 10 );
+        R.Layout.CrossAlign = Align::Center;
+        auto& L = R.Text( X.Name );
+        L.Style.TextColor = Tok::TextDim;
+        L.Layout.Width = Grow();
+        auto& Sp = R.Sparkline( 40 );
+        Sp.LineColor = X.C;
+        Sp.Width = 140;
+        *X.Out = &Sp;
+    }
+
+    auto& Bottom = Page.Columns( 12 );
+    auto& Req = Bottom.Group( "Requests per day" );
+    Req.Layout.Width = Grow( 3 );
+    App.Requests = &Req.BarChart();
+    App.Requests->Layout.Height = Grow();
+    App.Requests->Format = "%.0fk";
+    App.Requests->SetBars( { { "Mon", 42 }, { "Tue", 58 }, { "Wed", 51 }, { "Thu", 77 }, { "Fri", 64 }, { "Sat", 23, Tok::TextDim }, { "Sun", 19, Tok::TextDim } } );
+
+    auto& Mix = Bottom.Group( "Traffic by service" );
+    Mix.Layout.Width = Grow( 2 );
+    App.Traffic = &Mix.Donut();
+    App.Traffic->Format = "%.0f%%";
+    App.Traffic->SetSlices( { { "api", 46, Tok::Accent }, { "chat", 27, Tok::Success }, { "web", 18, Tok::Warning }, { "other", 9, Tok::BorderStrong } } );
+    App.Traffic->CenterSub = "of traffic";
+    App.Traffic->Center = "100%";
+}
+
 // ---------------------------------------------------------------- app
 
 void DemoApp::Build( Context& C, Widget& Root )
@@ -535,7 +650,7 @@ void DemoApp::Build( Context& C, Widget& Root )
     // ---- tabs across the top, one page each
     auto& Body = Root.Add<Container>( Dir::Column, 0, Insets( 16, 14, 16, 16 ) );
     Body.Layout.Height = Grow();
-    const char* Names[] = { "Dashboard", "Chat", "Controls", "Tables", "Windows", "More" };
+    const char* Names[] = { "Dashboard", "Chat", "Controls", "Tables", "Windows", "More", "Forms", "Charts" };
     for ( const char* N : Names ) Pages.push_back( &Body.Tab( N ) );
     Tabs = Body.Tabs();
     Tabs->OnChange = [ this ]( int i ) { Page = i; };
@@ -546,6 +661,8 @@ void DemoApp::Build( Context& C, Widget& Root )
     BuildTables( *this, *Pages[ 3 ] );
     BuildWindows( *this, *Pages[ 4 ] );
     BuildMore( *this, *Pages[ 5 ] );
+    BuildForms( *this, *Pages[ 6 ] );
+    BuildCharts( *this, *Pages[ 7 ] );
 
     // Global hotkey, like the old tgui Insert key: show/hide the Test Window.
     C.OnKeyEvent = [ this ]( Key K, bool Down ) {
@@ -603,6 +720,14 @@ void DemoApp::TickStats( double T )
     NetBar->SetValue( Net / 50 );
     CpuChart->Push( Cpu );
     NetChart->Push( Net );
+    if ( CpuGauge )
+    {
+        CpuGauge->SetValue( Cpu / 100 );
+        MemGauge->SetValue( Ram );
+        SparkA->Push( 900 + 300 * float( std::sin( T * 0.7 ) ) + 80 * float( std::sin( T * 2.3 ) ) );
+        SparkB->Push( 40 + 12 * float( std::sin( T * 0.4 + 1 ) ) + 6 * float( std::sin( T * 3.1 ) ) );
+        SparkC->Push( std::max( 0.f, 2 + 3 * float( std::sin( T * 0.9 ) ) ) );
+    }
     if ( Procs )
         for ( size_t r = 0; r < 6 && r < Procs->RowCount(); r++ )
         {

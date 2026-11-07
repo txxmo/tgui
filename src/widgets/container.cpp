@@ -6,7 +6,13 @@
 #include "tg/widgets/combo.h"
 #include "tg/widgets/label.h"
 #include "tg/widgets/progress.h"
+#include "tg/widgets/charts.h"
 #include "tg/widgets/choice.h"
+#include "tg/widgets/datepicker.h"
+#include "tg/widgets/menubar.h"
+#include "tg/widgets/searchbox.h"
+#include "tg/widgets/taginput.h"
+#include "tg/widgets/textarea.h"
 #include "tg/widgets/collapsible.h"
 #include "tg/widgets/extras.h"
 #include "tg/widgets/groupbox.h"
@@ -180,6 +186,26 @@ namespace tg
     tg::Spinner& Container::Spinner( float Size ) { return Add<tg::Spinner>( Size ); }
     tg::Badge& Container::Badge( std::string Text, Paint Fill ) { return Add<tg::Badge>( std::move( Text ), Fill ); }
     tg::Link& Container::Link( std::string Text, std::function<void()> Fn ) { return Add<tg::Link>( std::move( Text ), std::move( Fn ) ); }
+
+    tg::TextArea& Container::TextArea( std::string Placeholder, std::string* V )
+    {
+        auto& T = Add<tg::TextArea>( std::move( Placeholder ) );
+        if ( V ) { T.SetText( *V ); T.Bind = V; }
+        return T;
+    }
+    tg::MenuBar& Container::MenuBar() { return Add<tg::MenuBar>(); }
+    tg::TagInput& Container::Tags( std::vector<std::string>* V, std::string Ph ) { return Add<tg::TagInput>( V, std::move( Ph ) ); }
+    tg::SearchBox& Container::Search( std::string Ph, std::string* V ) { return Add<tg::SearchBox>( std::move( Ph ), V ); }
+    tg::DatePicker& Container::Date( std::string Label, tg::Date* V )
+    {
+        auto& R = Labeled( std::move( Label ) );
+        if ( !R.Children().empty() ) R.Children()[ 0 ]->Layout.Width = Grow();
+        return R.Add<tg::DatePicker>( V );
+    }
+    tg::BarChart& Container::BarChart() { return Add<tg::BarChart>(); }
+    tg::DonutChart& Container::Donut() { return Add<tg::DonutChart>(); }
+    tg::Gauge& Container::Gauge( std::string Label, float V ) { return Add<tg::Gauge>( std::move( Label ), V ); }
+    tg::Sparkline& Container::Sparkline( size_t Cap ) { return Add<tg::Sparkline>( Cap ); }
 
     tg::Table& Container::Table( std::vector<std::string> Columns, SelectMode Mode, int* Sel )
     {

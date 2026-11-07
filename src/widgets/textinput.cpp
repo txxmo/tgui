@@ -176,6 +176,7 @@ namespace tg
         case Key::Home:  Move( 0 ); return true;
         case Key::End:   Move( Text.size() ); return true;
         case Key::Backspace:
+            if ( Text.empty() ) return false; // nothing to delete: let the parent react (TagInput)
             if ( !HasSel ) Anchor = PrevCp( Text, Caret );
             EraseSelection(); Changed(); return true;
         case Key::Delete:
@@ -187,6 +188,7 @@ namespace tg
             if ( ClearOnSubmit ) SetText( {} );
             return true;
         case Key::Escape:
+            if ( !Text.empty() && GetParent() && GetParent()->OnEvent( E ) ) return true; // e.g. SearchBox clears first
             if ( C ) C->SetFocus( nullptr );
             return true;
         case Key::A: if ( !Ctrl ) return false; Anchor = 0; Caret = Text.size(); Redraw(); return true;

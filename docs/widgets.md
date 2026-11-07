@@ -113,6 +113,54 @@ Pw.Password = true;
 | Keys | arrows, Home/End, Backspace/Delete, Shift-select, Ctrl+A/C/X/V, Enter submits, Escape unfocuses; mouse click + drag selects |
 | `Style`: `Fill`, `Stroke`, `StrokeFocused`, `TextColor`, `Placeholder`, `Selection`, `Radius`, `Padding` | |
 
+### TextArea
+
+```cpp
+W.TextArea( "Notes", &Notes );                        // multi-line, word-wrapped, two-way bound
+
+auto& Box = W.TextArea( "Message" );                  // chat composer
+Box.SubmitOnEnter = true;                             // Enter sends, Shift+Enter = newline
+Box.ClearOnSubmit = true;
+Box.MinLines = 1;  Box.MaxLines = 6;                  // grows with the text, then scrolls
+Box.OnSubmit = []( const std::string& T ) { Send( T ); };
+```
+
+- **Navigation:** arrows (Up/Down keep the column), Home/End (Ctrl = start/end of the text).
+- **Editing:** Backspace/Delete, Shift to select, Ctrl+A/C/X/V (pasting keeps newlines). Ctrl+Enter submits; Escape unfocuses.
+- **Mouse:** click and drag to select; the wheel scrolls.
+
+`GetText()`, `SetText()`, `Bind`, `OnChange`, `OnSubmit`, `ReadOnly`, `LineCount()`. `Style`: `Fill`, `Stroke`, `StrokeFocused`, `TextColor`, `Placeholder`, `Selection`, `Thumb`, `Radius`, `Padding`.
+
+### SearchBox
+
+```cpp
+W.Search( "Filter servers", &Query ).OnChange = []( const std::string& Q ) { Refilter( Q ); };
+```
+
+A pill-shaped field with a magnifier and an × that clears it; Escape also clears. `GetText()`, `SetText()`, `OnChange`, `OnSubmit`, `Field()`.
+
+### TagInput
+
+```cpp
+static std::vector<std::string> Tags = { "prod", "eu-west" };
+W.Tags( &Tags, "Add tag" );
+```
+
+- **Adding:** type and press Enter, or type a comma. Duplicates are ignored unless `AllowDuplicates`.
+- **Removing:** Backspace in the empty field removes the last chip; × removes any chip.
+- **Layout:** chips wrap onto new lines.
+
+`GetTags()`, `AddTag()`, `RemoveTag()`, `OnChange`.
+
+### DatePicker
+
+```cpp
+static tg::Date Expires = tg::Date::Today();
+W.Date( "Expires", &Expires );
+```
+
+The popup is a month calendar (Monday first): ‹ › or the wheel change the month, today is outlined, and a "Today" shortcut sits underneath. `tg::Date` has `Year`, `Month`, `Day`, `Today()`, `DaysInMonth()`, `Weekday()` and `ToString()` ("2026-11-07"). `Calendar` is the grid alone, for embedding.
+
 ### Keybind
 
 ```cpp
@@ -163,6 +211,20 @@ The dropdown stays open while you tick items. The field shows "a, b" when it fit
 |---|---|
 | `IsSelected( i )`, `SetSelected( i, bool )`, `SelectedIndices()`, `OnChange( const vector<bool>& )`, `Bind` | |
 
+### MenuBar
+
+```cpp
+auto& Bar = W.MenuBar();                    // or App.Main().MenuBar() for a window-wide bar
+Bar.Add( "File", [&]( tg::Menu& M ) {        // builder runs each time the menu opens
+    M.Item( "New", [] { ... }, "Ctrl+N" );
+    M.Separator();
+    M.Item( "Quit", [&] { App.Quit(); } );
+} );
+Bar.Add( "View", [&]( tg::Menu& M ) { M.Check( "Word wrap", &Wrap ); } );
+```
+
+Click a title to open its menu. While one is open, hovering another title switches to it, as in desktop apps. `OpenIndex()`, `CloseMenu()`, `OpenIndexNow()`.
+
 ### ListBox
 
 ```cpp
@@ -170,6 +232,8 @@ auto& L = W.List( { "alpha", "beta", "gamma" }, tg::SelectMode::Single, &Selecte
 L.Layout.Height = tg::Grow();          // default height is 180
 L.SetMode( tg::SelectMode::None );     // plain, read-only list
 L.SetMode( tg::SelectMode::Multi );    // checkboxes
+L.Reorderable = true;                  // drag rows to reorder (insertion line + floating row)
+L.OnReorder = []( int From, int To ) { ... };
 ```
 
 | API | |
@@ -357,6 +421,29 @@ T.ContextMenu = [&]( tg::Menu& M ) { M.Item( "Restart " + T.GetSelected()->Text,
 - **Drawing:** rows are painted directly, with indentation guides.
 
 `TreeNode`: `Text`, `Expanded`, `Id`, `Color`, `Children`, `Parent`, `Add()`, `Remove()`, `Depth()`. `TreeView`: `Root`, `Add()`, `Clear()`, `ExpandAll()`, `Select()`, `GetSelected()`, `Toggle()`, `OnSelect`, `OnActivate`, `OnToggle`.
+
+### BarChart, DonutChart, Gauge, Sparkline
+
+```cpp
+auto& B = W.BarChart();
+B.Format = "%.0fk";
+B.SetBars( { { "Mon", 42 }, { "Tue", 58 }, { "Sat", 23, tg::Tok::TextDim } } );   // label, value, color
+B.SetValue( 0, 45 );                                                              // bars animate to new values
+
+auto& P = W.Donut();
+P.SetSlices( { { "api", 46, tg::Tok::Accent }, { "chat", 27, tg::Tok::Success } } );
+P.Center = "100%";  P.CenterSub = "of traffic";                                   // "" = total / hovered slice
+
+auto& G = W.Gauge( "CPU", 0.42f );          // 0..1; turns WarnFill / HotFill past WarnAt / HotAt
+G.SetValue( Cpu / 100 );
+
+auto& S = W.Sparkline( 40 );                // tiny inline trend, newest on the right
+S.Push( Latency );
+```
+
+- **BarChart:** the axis is rounded to nice steps; hovering a bar highlights it and shows a tooltip with its value.
+- **DonutChart:** the hovered slice pops out and the center shows its value.
+- **Gauge:** a 270° arc with the value in the middle.
 
 ### LineChart
 

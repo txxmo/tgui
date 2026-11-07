@@ -79,7 +79,7 @@ namespace tg
         if ( E.Type == EventType::MouseUp )
         {
             if ( IsHovered() && OnClick ) { auto Fn = OnClick; Fn(); } // copy: the handler may delete us
-            return true;
+            return !BubbleRelease;
         }
         return false;
     }

@@ -42,6 +42,16 @@ namespace tg
     class Spinner;
     class Badge;
     class Link;
+    class TextArea;
+    class MenuBar;
+    class TagInput;
+    class SearchBox;
+    class DatePicker;
+    class BarChart;
+    class DonutChart;
+    class Gauge;
+    class Sparkline;
+    struct Date;
     class TabView;
     struct TableColumn;
 
@@ -82,6 +92,15 @@ namespace tg
         tg::Spinner& Spinner( float Size = 18 );
         tg::Badge& Badge( std::string Text, Paint Fill = Tok::Accent );
         tg::Link& Link( std::string Text, std::function<void()> OnClick = {} );
+        tg::TextArea& TextArea( std::string Placeholder = {}, std::string* Value = nullptr );
+        tg::MenuBar& MenuBar();
+        tg::TagInput& Tags( std::vector<std::string>* Value = nullptr, std::string Placeholder = "Add..." );
+        tg::SearchBox& Search( std::string Placeholder = "Search", std::string* Value = nullptr );
+        tg::DatePicker& Date( std::string Label, tg::Date* Value = nullptr );
+        tg::BarChart& BarChart();
+        tg::DonutChart& Donut();
+        tg::Gauge& Gauge( std::string Label, float Value01 = 0 );
+        tg::Sparkline& Sparkline( size_t Capacity = 40 );
         // W.Table( { "Name", "CPU", "Memory" } ) — Grow columns; tweak with T.Column( i ).Width = Px( 80 )
         tg::Table& Table( std::vector<std::string> Columns, SelectMode Mode = SelectMode::Single, int* Selected = nullptr );
 

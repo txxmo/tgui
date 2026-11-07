@@ -60,6 +60,30 @@ struct DemoApp
     tg::Button *ToastBtn = nullptr, *DeleteBtn = nullptr;
     tg::Label* ActionLabel = nullptr;
 
+    // "Forms" tab
+    std::string Notes = "Maintenance window: Sunday 02:00 UTC.\nRemember to rotate the API keys before the upgrade, and check that the backups from last night actually finished.";
+    std::string Query;
+    std::vector<std::string> Tags = { "prod", "eu-west" };
+    tg::Date Expires = { 2026, 12, 31 };
+    std::string LastMenu;
+    bool WordWrap = true;
+    std::vector<std::string> Sent;
+    tg::MenuBar* Bar = nullptr;
+    tg::TextArea* NotesBox = nullptr;
+    tg::TextArea* Composer2 = nullptr;
+    tg::TagInput* TagBox = nullptr;
+    tg::SearchBox* SearchBoxW = nullptr;
+    tg::ListBox* Queue = nullptr;
+    tg::DatePicker* ExpiresPicker = nullptr;
+    std::vector<std::string> QueueItems = { "deploy api v2.3", "migrate users table", "rotate TLS certs", "warm redis cache", "purge CDN", "notify #general" };
+
+    // "Charts" tab
+    tg::BarChart* Requests = nullptr;
+    tg::DonutChart* Traffic = nullptr;
+    tg::Gauge *CpuGauge = nullptr, *MemGauge = nullptr, *DiskGauge = nullptr;
+    tg::Sparkline *SparkA = nullptr, *SparkB = nullptr, *SparkC = nullptr;
+    void FilterQueue();
+
     // plain app state bound to controls, like the old tgui did with bool*
     bool AutoRestart = true, Notifications = false, Compact = false, LightTheme = false;
     float Volume = 65;

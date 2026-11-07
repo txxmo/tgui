@@ -24,12 +24,14 @@ add_library( tg STATIC
     src/widgets/box.cpp
     src/widgets/button.cpp
     src/widgets/chart.cpp
+    src/widgets/charts.cpp
     src/widgets/checkbox.cpp
     src/widgets/choice.cpp
     src/widgets/collapsible.cpp
     src/widgets/colorpicker.cpp
     src/widgets/combo.cpp
     src/widgets/container.cpp
+    src/widgets/datepicker.cpp
     src/widgets/dialog.cpp
     src/widgets/extras.cpp
     src/widgets/groupbox.cpp
@@ -39,15 +41,19 @@ add_library( tg STATIC
     src/widgets/listbox.cpp
     src/widgets/listitem.cpp
     src/widgets/menu.cpp
+    src/widgets/menubar.cpp
     src/widgets/number.cpp
     src/widgets/popup.cpp
     src/widgets/progress.cpp
     src/widgets/rangeslider.cpp
     src/widgets/scrollview.cpp
+    src/widgets/searchbox.cpp
     src/widgets/slider.cpp
     src/widgets/splitter.cpp
     src/widgets/table.cpp
     src/widgets/tabview.cpp
+    src/widgets/taginput.cpp
+    src/widgets/textarea.cpp
     src/widgets/textinput.cpp
     src/widgets/toast.cpp
     src/widgets/toggle.cpp
