@@ -140,7 +140,7 @@ namespace tg
         Wc.style = CS_HREDRAW | CS_VREDRAW;
         Wc.lpfnWndProc = Impl::WndProc;
         Wc.hInstance = GetModuleHandleW( nullptr );
-        Wc.hCursor = LoadCursorW( nullptr, IDC_ARROW );
+        Wc.hCursor = LoadCursorW( nullptr, MAKEINTRESOURCEW( 32512 ) ) /* IDC_ARROW */;
         Wc.lpszClassName = L"tg_app";
         RegisterClassExW( &Wc );
 

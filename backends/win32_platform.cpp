@@ -112,11 +112,11 @@ namespace tg::win32
         {
             switch ( C )
             {
-            case Cursor::Hand: return IDC_HAND;
-            case Cursor::IBeam: return IDC_IBEAM;
-            case Cursor::ResizeH: return IDC_SIZEWE;
-            case Cursor::ResizeV: return IDC_SIZENS;
-            default: return IDC_ARROW;
+            case Cursor::Hand: return MAKEINTRESOURCEW( 32649 ); // IDC_HAND (spelled out: IDC_* are narrow strings unless UNICODE is defined)
+            case Cursor::IBeam: return MAKEINTRESOURCEW( 32513 ); // IDC_IBEAM
+            case Cursor::ResizeH: return MAKEINTRESOURCEW( 32644 ); // IDC_SIZEWE
+            case Cursor::ResizeV: return MAKEINTRESOURCEW( 32645 ); // IDC_SIZENS
+            default: return MAKEINTRESOURCEW( 32512 ); // IDC_ARROW
             }
         }
 

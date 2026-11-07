@@ -52,7 +52,7 @@ static LRESULT CALLBACK WndProc( HWND H, UINT M, WPARAM W, LPARAM L )
 int main()
 {
     tg::win32::EnableDpiAwareness();
-    WNDCLASSEXW Wc = { sizeof( Wc ), CS_CLASSDC, WndProc, 0, 0, GetModuleHandleW( nullptr ), nullptr, LoadCursorW( nullptr, IDC_ARROW ), nullptr, nullptr, L"tg_d3d11", nullptr };
+    WNDCLASSEXW Wc = { sizeof( Wc ), CS_CLASSDC, WndProc, 0, 0, GetModuleHandleW( nullptr ), nullptr, LoadCursorW( nullptr, MAKEINTRESOURCEW( 32512 ) ) /* IDC_ARROW */, nullptr, nullptr, L"tg_d3d11", nullptr };
     RegisterClassExW( &Wc );
     HWND Wnd = CreateWindowW( Wc.lpszClassName, L"tg - Win32 + D3D11 (bring your own)", WS_OVERLAPPEDWINDOW, 100, 100, 1100, 720, nullptr, nullptr, Wc.hInstance, nullptr );
 
