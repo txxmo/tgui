@@ -297,3 +297,4 @@ __pycache__/
 
 # tg build output
 build*/
+dist/
