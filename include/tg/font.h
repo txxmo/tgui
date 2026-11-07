@@ -1,6 +1,12 @@
-// tg/font.h — TTF/OTF fonts baked into one RGBA atlas (via stb_truetype).
+// tg/font.h — TTF/OTF fonts in one RGBA atlas.
+//
+// Rasterizer: stb_truetype by default (no dependencies), or FreeType when tg is built with
+// TG_FREETYPE=ON (hinting; also required for color emoji). Glyphs that aren't baked up front are
+// rasterized on demand the first time they're drawn — from the font itself or from fallback fonts
+// (emoji, CJK...) — and packed into the atlas, which grows as needed.
 #pragma once
 #include "core.h"
+#include <functional>
 #include <memory>
 #include <string>
 #include <string_view>
@@ -10,22 +16,29 @@
 namespace tg
 {
     class Renderer;
+    class FontAtlas;
 
     struct Glyph
     {
         float X0, Y0, X1, Y1; // quad relative to pen position on the baseline
         float U0, V0, U1, V1;
         float Advance;
-        int Index = 0;        // glyph id in the font (for kerning)
+        int Index = 0;        // glyph id in the font (for kerning); 0 for glyphs from fallback fonts
+        bool Colored = false; // full-color glyph (emoji): drawn untinted, only faded by the text alpha
     };
+
+    enum class FontEngine : uint8_t { Stb, FreeType };
 
     // How glyphs are rasterized. Defaults are tuned for UI text; change before Build().
     struct FontQuality
     {
-        int OversampleH = 2;   // horizontal oversampling: glyphs can sit on 1/OversampleH pixel -> even letter spacing
+        int OversampleH = 2;   // stb: horizontal oversampling, glyphs sit on 1/OversampleH pixel -> even spacing
         int OversampleV = 1;
         float Gamma = 1.3f;    // >1 boosts partial coverage: crisper, less "washed out" strokes (1 = linear)
         bool Kerning = true;   // apply the font's pair kerning (AV, To, ...)
+        FontEngine Engine = FontEngine::Stb; // FreeType needs TG_FREETYPE=ON (FontAtlas::HasFreeType())
+        bool Hinting = true;   // FreeType: light (vertical-only) hinting = sharper text, same layout
+        float EmojiScale = 1.0f; // emoji size relative to the text size
     };
 
     class Font
@@ -35,6 +48,7 @@ namespace tg
         float Ascent = 0;     // baseline offset from the top of a line
         float LineHeight = 0; // distance between baselines
 
+        // Looks the glyph up, rasterizing it (or pulling it from a fallback font) on first use.
         const Glyph& Find( uint32_t Codepoint ) const;
         // Extra advance between two codepoints from the font's kerning (0 if none / disabled).
         float Kern( uint32_t A, uint32_t B ) const;
@@ -52,7 +66,9 @@ namespace tg
 
     private:
         friend class FontAtlas;
-        std::unordered_map<uint32_t, Glyph> Glyphs;
+        FontAtlas* Owner = nullptr;
+        int Source = -1;
+        mutable std::unordered_map<uint32_t, Glyph> Glyphs;
         Glyph Fallback{};
         std::shared_ptr<void> Info;   // stbtt_fontinfo (+ the font bytes it points into), for kerning
         float KernScale = 0;          // font units -> UI units
@@ -70,21 +86,50 @@ namespace tg
         Font* AddFromFile( const std::string& Path, float PixelSize );
         Font* AddFromMemory( std::vector<unsigned char> Data, float PixelSize );
 
-        // Rasterize everything into Pixels and upload to the renderer.
-        // Scale = DPI scale: glyphs are rasterized at Size*Scale pixels but measured in UI units.
+        // Fallback fonts: searched, in order, for any codepoint a font doesn't have (emoji, CJK, symbols).
+        // Color fonts (emoji) need FreeType; without it they're ignored.
+        bool AddFallbackFile( const std::string& Path );
+        bool AddFallbackMemory( std::vector<unsigned char> Data );
+        // Finds the system color emoji font (Segoe UI Emoji / Noto Color Emoji / Apple Color Emoji). Needs FreeType.
+        bool AddEmojiFont();
+        // Finds a system CJK font (YaHei / PingFang / Noto Sans CJK / WenQuanYi). Read lazily: costs nothing
+        // until a Chinese/Japanese/Korean character is actually drawn. Works with or without FreeType.
+        bool AddCjkFont();
+        static bool HasFreeType();
+
+        // Rasterize the base glyph set into Pixels and upload. Scale = DPI scale: glyphs are rasterized
+        // at Size*Scale pixels but measured in UI units. Calling it again (DPI change) rebuilds everything.
         bool Build( Renderer& R, float Scale = 1.f );
 
-        FontQuality Quality;
+        // Called by Context: grow the atlas if on-demand glyphs ran out of room (start of a frame),
+        // and push new glyphs to the GPU (before rendering).
+        void Maintain( Renderer& R );
+        void Upload( Renderer& R );
 
+        FontQuality Quality;
+        std::function<void()> RequestFrame; // set by Context: asks for another frame when the atlas must grow
         int Width = 0, Height = 0;
-        std::vector<uint32_t> Pixels; // RGBA, white with glyph coverage in alpha
+        std::vector<uint32_t> Pixels; // RGBA: white + coverage alpha for text, real colors for emoji
         TextureId Texture = 0;
         Vec2 WhiteUV;
+        size_t GlyphCount() const { return Loaded; }
+        bool HasColorFallback() const;
 
     private:
-        struct Source { std::shared_ptr<std::vector<unsigned char>> Data; float Size; Font* Out; };
-        std::vector<Source> Sources;
+        friend class Font;
+        struct Source;
+        struct Packer;
+        std::vector<std::unique_ptr<Source>> Sources;   // primary fonts, in AddFrom* order
+        std::vector<std::unique_ptr<Source>> Fallbacks;
         std::vector<std::unique_ptr<Font>> Fonts;
+        std::unique_ptr<Packer> Pack;
+        float Scale = 1;
+        bool Dirty = false, WantGrow = false, Built = false;
+        size_t Loaded = 0;
+        uint8_t Curve[ 256 ] = {};
+
+        bool LoadGlyph( const Font& F, uint32_t Codepoint, Glyph& Out ); // rasterize + pack
+        bool Grow( int NewHeight );
     };
 
     // ---------- inline: line walking ----------

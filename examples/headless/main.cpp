@@ -6,10 +6,31 @@
 #include <cmath>
 #include <cstdlib>
 #include <string>
+#include <chrono>
+#include <thread>
+#ifdef _WIN32
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#include <windows.h>
+#endif
 
 #define CHECK( x ) do { if ( !( x ) ) { std::fprintf( stderr, "CHECK failed: %s (line %d)\n", #x, __LINE__ ); return 1; } } while ( 0 )
 
 static tg::SoftRenderer Soft;
+
+static bool UnderWine()
+{
+#ifdef _WIN32
+    HMODULE N = GetModuleHandleA( "ntdll.dll" );
+    return N && GetProcAddress( N, "wine_get_version" );
+#else
+    return false;
+#endif
+}
 static const char* OutDir = ".";
 static float Scale = 1;
 
@@ -653,6 +674,99 @@ int main( int Argc, char** Argv )
         CHECK( Ctx.ShownTooltip() == &B );
         CHECK( App.CpuGauge->GetValue() > 0 && App.SparkA->Data().size() == 40 );
     }
+
+    // ---------------- "Terminal" tab: the emulator, then a real process in a pty
+    {
+        tg::Terminal T; // detached: pure parser checks
+        T.Write( "hello\r\nworld" );
+        CHECK( T.RowText( 0 ) == "hello" && T.RowText( 1 ) == "world" && T.CursorRow() == 1 && T.CursorCol() == 5 );
+        T.Write( "\x1b[2J\x1b[H\x1b[1;31mR\x1b[38;5;123mI\x1b[48;2;1;2;3mT\x1b[0mX" );
+        CHECK( T.RowText( 0 ) == "RITX" );
+        CHECK( T.Cell( 0, 0 ).Fg == ( 0x1000000u | 1 ) && ( T.Cell( 0, 0 ).Attr & tg::AttrBold ) );
+        CHECK( T.Cell( 1, 0 ).Fg == ( 0x1000000u | 123 ) );
+        CHECK( T.Cell( 2, 0 ).Bg == ( 0x2000000u | 0x010203 ) && T.Cell( 3, 0 ).Fg == 0 && T.Cell( 3, 0 ).Attr == 0 );
+        T.Write( "\x1b[5;10Hx\x1b[2;3H\x1b[K" );                         // CUP + erase line
+        CHECK( T.Cell( 9, 4 ).Cp == 'x' && T.CursorRow() == 1 && T.CursorCol() == 2 );
+        T.Write( "\x1b[1;1H\x1b[2Pz" );                                   // delete 2 chars
+        CHECK( T.RowText( 0 ) == "zX" );
+        T.Write( "\x1b[?1049h" );
+        CHECK( T.AltScreen() && T.RowText( 0 ).empty() );
+        T.Write( "vim" );
+        T.Write( "\x1b[?1049l" );
+        CHECK( !T.AltScreen() && T.RowText( 0 ) == "zX" && T.CursorRow() == 0 );
+        // wide chars + emoji take 2 cells; autowrap at the right margin
+        T.Write( "\x1b[2J\x1b[H\xE6\xBC\xA2\xF0\x9F\x9A\x80!" );
+        CHECK( T.Cell( 0, 0 ).Width == 2 && T.Cell( 1, 0 ).Width == 0 && T.Cell( 4, 0 ).Cp == '!' && T.CursorCol() == 5 );
+        T.Write( "\x1b[H" + std::string( 85, 'a' ) );
+        CHECK( T.CursorRow() == 1 && T.CursorCol() == 5 && T.RowText( 1 ) == "aaaaa" );
+        // scrolling pushes into the scrollback
+        T.Write( "\x1b[2J\x1b[H" );
+        for ( int i = 0; i < 30; i++ ) T.Write( "line " + std::to_string( i ) + "\r\n" );
+        CHECK( T.ScrollbackLines() == 7 && T.RowText( 0 ) == "line 7" );
+        // scroll region: only rows 2..4 move
+        T.Write( "\x1b[2;4r\x1b[4;1H\n" );
+        CHECK( T.RowText( 0 ) == "line 7" && T.RowText( 1 ) == "line 9" && T.RowText( 3 ).empty() && T.ScrollbackLines() == 7 );
+        // DEC line drawing, cursor report, title
+        std::string Reply;
+        T.OnInput = [ & ]( std::string_view S ) { Reply += S; };
+        T.Write( "\x1b[r\x1b[H\x1b(0lqk\x1b(B\x1b[6n\x1b]0;my title\x07" );
+        CHECK( T.Cell( 0, 0 ).Cp == 0x250C && T.Cell( 1, 0 ).Cp == 0x2500 && T.Cell( 2, 0 ).Cp == 0x2510 );
+        CHECK( Reply == "\x1b[1;4R" && T.Title == "my title" );
+        // split UTF-8 across writes
+        T.Write( "\xE2\x9C" );
+        T.Write( "\x93" );
+        CHECK( T.Cell( 3, 0 ).Cp == 0x2713 );
+    }
+    App.ShellStarted = true; // the test starts its own command below
+    ClickTab( Ctx, App, 8 );
+    {
+        tg::Terminal& L = *App.Log;
+        CHECK( L.RowText( 1 ).find( "pulled image" ) != std::string::npos );
+        // keys become bytes: arrows, Ctrl+C, typed text
+        std::string Got;
+        L.OnInput = [ & ]( std::string_view S ) { Got += S; };
+        Click( Ctx, L );
+        CHECK( Ctx.Focused() == &L );
+        Ctx.OnKey( tg::Key::Up, true, 0 );
+        Ctx.OnKey( tg::Key::C, true, tg::ModCtrl );
+        Ctx.OnText( 'l' );
+        Ctx.OnText( 's' );
+        CHECK( Got == "\x1b[A\x03ls" );
+        // drag-select the first word of row 1 and copy it
+        std::string Clip;
+        Ctx.SetClipboard = [ & ]( const std::string& S ) { Clip = S; };
+        tg::Rect In = L.Bounds.Shrink( L.Style.Padding );
+        float Cw = In.w / L.Cols(), Ch = In.h / L.Rows();
+        (void)Ch;
+        float RowY = In.y + 1.5f * ( tg::GetTheme().Mono->LineHeight );
+        Drag( Ctx, { In.x + 0.1f, RowY }, { In.x + 8 * Cw + 0.2f, RowY } );
+        Ctx.OnKey( tg::Key::C, true, tg::ModCtrl | tg::ModShift );
+        CHECK( Clip == "10:41:02" );
+        Settle( Ctx );
+    }
+    if ( tg::Pty::Supported() && !UnderWine() ) // Wine has the ConPTY API, but children never write into it
+    {
+        // a real process: output arrives on the pty thread and is posted to the UI thread
+        App.ShellCommand =
+#ifdef _WIN32
+            "echo hello from conpty";
+#else
+            "printf '\\033[1;32mhello\\033[0m from pty\\n'; exit 3";
+#endif
+        int Code = -1;
+        App.StartShell();
+        App.Shell->OnExit = [ & ]( int C ) { Code = C; };
+        auto Has = [ & ] { for ( int r = 0; r < App.Shell->Rows(); r++ ) if ( App.Shell->RowText( r ).find( "from" ) != std::string::npos ) return true; return false; };
+        for ( int i = 0; i < 400 && ( !Has() || Code < 0 ); i++ ) { Ctx.Frame(); std::this_thread::sleep_for( std::chrono::milliseconds( 10 ) ); }
+        if ( !Has() ) { std::fprintf( stderr, "pty: exit=%d running=%d\n", Code, int( App.Shell->IsRunning() ) ); for ( int r = 0; r < 4; r++ ) std::fprintf( stderr, "  [%s]\n", App.Shell->RowText( r ).c_str() ); }
+        CHECK( Has() );
+#ifndef _WIN32
+        CHECK( Code == 3 );
+        CHECK( App.Shell->Cell( 0, 0 ).Fg == ( 0x1000000u | 2 ) );
+#endif
+        App.ShellCommand.clear();
+    }
+    Shot( Ctx, "terminal" );
 
     // ---------------- light theme
     tg::GetTheme().UseColors( tg::Theme::Light() );

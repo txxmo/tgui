@@ -56,6 +56,7 @@ These come from `tg_headless`, which renders with the built-in software rasteriz
 | | |
 |---|---|
 | <img src="docs/forms.png" width="400"> | <img src="docs/charts.png" width="400"> |
+| <img src="docs/terminal.png" width="400"> | |
 
 | | |
 |---|---|
@@ -83,7 +84,7 @@ You can also copy the repo in and use `add_subdirectory( tg )`. When tg is pulle
 
 | target | what | deps |
 |---|---|---|
-| `tg::tg` | widgets, layout, text, DrawList | none (stb is vendored) |
+| `tg::tg` | widgets, layout, text, DrawList, terminal + pty | none (stb is vendored); FreeType with `-DTG_FREETYPE=ON` (color emoji) |
 | `tg::app` | `tg::App`: window + renderer + event loop | Windows: Win32 + Direct3D 11 (default). Elsewhere: GLFW + OpenGL 3.3 |
 | `tg::win32` | Win32 messages → tg input, DPI, cursor, clipboard | Windows |
 | `tg::d3d11` | Direct3D 11 renderer | Windows |
@@ -145,6 +146,7 @@ Groups.Group( "Example Group 2" ).Button( "Print", [] { ... } );
 | TagInput | `W.Tags( &vec, "Add tag" )` | chips; Enter / comma adds, x / Backspace removes |
 | DatePicker | `W.Date( "Expires", &date )` | calendar popup |
 | Charts | `W.BarChart()`, `W.Donut()`, `W.Gauge( "CPU", v )`, `W.Sparkline()` | animated, hover details |
+| Terminal | `W.Terminal().Spawn()` | VT/xterm emulator: your shell or any command in a pty (ConPTY on Windows), or `Write()` bytes from SSH / websockets; 256 + truecolor, alt screen, scrollback, selection, emoji + CJK |
 | Drag to reorder | `List.Reorderable = true` | ListBox rows |
 | Tooltip | `AnyWidget.Tooltip = "..."` | on every widget, labels too |
 | Context menu | `AnyWidget.ContextMenu = []( tg::Menu& M ) { ... }` | right-click; items, checks, shortcuts, separators |

@@ -467,6 +467,42 @@ Img.SetSource( Tex, NewW, NewH );
 
 See [live textures](concepts.md#live-textures-screen-share-video-camera).
 
+### Terminal
+
+A VT/xterm terminal emulator. Run a process in it, or feed it bytes yourself.
+
+```cpp
+auto& T = W.Terminal();
+T.Spawn();                                  // your shell in a pseudo-terminal ($SHELL, or cmd.exe on Windows)
+T.Spawn( "htop" );                          // or any command line
+T.OnTitle = []( const std::string& S ) { /* window title the program set */ };
+T.OnExit  = []( int Code ) { /* process ended */ };
+```
+
+Without a process (an SSH library, a websocket to your VPS agent, build logs):
+
+```cpp
+T.Write( "\x1b[32m✓\x1b[0m deployed\r\n" );          // anything a terminal understands
+T.OnInput = [&]( std::string_view Bytes ) { Sock.Send( Bytes ); }; // keys, paste, replies to queries
+T.OnResize = [&]( int Cols, int Rows ) { Ssh.ResizePty( Cols, Rows ); };
+```
+
+`Write` must run on the UI thread. From a network thread, wrap it in `Ctx.Post( [=] { T.Write( Data ); } )`. `Spawn` does that for you.
+
+What it understands: 16 / 256 / 24-bit color; bold, dim, italic (no italic face, so drawn upright), underline, inverse and strikethrough; cursor movement and erase; scroll regions; insert/delete of lines and characters; the alternate screen (vim, htop, less, tmux); autowrap; tabs; DEC line drawing; wide characters (CJK, emoji); bracketed paste; cursor-position and device-attribute reports; and the window title (OSC 0/2). Box drawing, block elements and braille are drawn as shapes, so lines join seamlessly and graphs from `btop` look right with any font. Mouse reporting isn't implemented yet, so the wheel scrolls tg's scrollback on the normal screen and sends arrow keys on the alternate screen.
+
+Keys: everything a terminal sends, including arrows (application cursor mode too), F1–F12, Home/End/PgUp/PgDn with modifiers, Ctrl+letter and Alt+letter. Clipboard keys: **Ctrl+Shift+C / V**; **Ctrl+C** copies when text is selected and otherwise sends `^C`, like Windows Terminal. Shift+PgUp/PgDn and the mouse wheel scroll back through history. Right-click opens Copy / Paste / Clear.
+
+| API | |
+|---|---|
+| `Spawn( Cmd = {}, Cwd = {} )`, `IsRunning()`, `Kill()`, `OnExit` | process in a pty (`forkpty` on Linux/macOS; ConPTY on Windows 10 1809+). `tg::Pty::Supported()` says whether it's available |
+| `Write( bytes )`, `OnInput`, `OnResize`, `OnTitle`, `OnBell` | drive it yourself |
+| `Cols()`, `Rows()`, `CursorCol()`, `CursorRow()`, `Cell( c, r )`, `RowText( r )`, `AltScreen()`, `Title` | read the screen (tests, scraping) |
+| `Clear()`, `Reset()`, `Paste( text )`, `SelectedText()`, `ScrollView( lines )`, `ScrollbackLimit` (5000) | |
+| `Style.TextFont` / `BoldFont` (`nullptr` = `Theme().Mono` / `MonoBold`, JetBrains Mono 14), `Background`, `Foreground`, `Cursor`, `Selection`, `Palette[16]`, `Padding`, `Radius`, `BoldIsBright` | |
+
+The grid size follows the widget size: the terminal fits as many cells as it can and tells the process (`SIGWINCH` / `ResizePseudoConsole`). `tg::Pty` is usable on its own too, if you only need a process with a terminal and no widget.
+
 ---
 
 ## Containers and structure

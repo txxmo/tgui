@@ -64,6 +64,7 @@ namespace tg
         void RequestFrameIn( double Seconds ); // timed redraw, e.g. caret blink
         void InvalidateLayout() { LayoutDirty = true; FrameRequested = true; }
         float DeltaTime() const { return Dt; }
+        float GetScale() const { return Scale; } // device pixels per UI unit
         // Tests/recording: advance time by a fixed step per Frame() instead of the wall clock. 0 = off.
         void SetFixedTimestep( float Seconds ) { FixedDt = Seconds; }
         double Time() const { return Now; }

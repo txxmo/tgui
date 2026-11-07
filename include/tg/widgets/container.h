@@ -43,6 +43,7 @@ namespace tg
     class Badge;
     class Link;
     class TextArea;
+    class Terminal;
     class MenuBar;
     class TagInput;
     class SearchBox;
@@ -93,6 +94,7 @@ namespace tg
         tg::Badge& Badge( std::string Text, Paint Fill = Tok::Accent );
         tg::Link& Link( std::string Text, std::function<void()> OnClick = {} );
         tg::TextArea& TextArea( std::string Placeholder = {}, std::string* Value = nullptr );
+        tg::Terminal& Terminal(); // VT terminal: .Spawn() a shell, or .Write() output yourself
         tg::MenuBar& MenuBar();
         tg::TagInput& Tags( std::vector<std::string>* Value = nullptr, std::string Placeholder = "Add..." );
         tg::SearchBox& Search( std::string Placeholder = "Search", std::string* Value = nullptr );

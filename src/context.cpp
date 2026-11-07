@@ -17,8 +17,8 @@ namespace tg
 
     namespace fonts
     {
-        extern const unsigned char InterRegular[], InterMedium[], InterSemiBold[];
-        extern const size_t InterRegularSize, InterMediumSize, InterSemiBoldSize;
+        extern const unsigned char InterRegular[], InterMedium[], InterSemiBold[], MonoRegular[], MonoBold[];
+        extern const size_t InterRegularSize, InterMediumSize, InterSemiBoldSize, MonoRegularSize, MonoBoldSize;
     }
 
     // Overlay layer: popups are placed under their anchor (or above when there's no room),
@@ -60,6 +60,7 @@ namespace tg
         Start = Clock();
         RootWidget->Ctx = this;
         OverlayWidget->Ctx = this;
+        Fonts.RequestFrame = [ this ] { FrameRequested = true; };
     }
 
     Context::~Context()
@@ -67,6 +68,17 @@ namespace tg
         OverlayWidget.reset(); // popups first: they notify their owners, which live in the root
         RootWidget.reset();
         if ( Fonts.Texture ) R.DestroyTexture( Fonts.Texture );
+    }
+
+    // Mono fonts (embedded) + the system emoji font (FreeType builds) for every font setup.
+    static void AddCommonFonts( FontAtlas& Fonts, Theme& T )
+    {
+        auto MonoR = [] { return std::vector<unsigned char>( fonts::MonoRegular, fonts::MonoRegular + fonts::MonoRegularSize ); };
+        auto MonoB = [] { return std::vector<unsigned char>( fonts::MonoBold, fonts::MonoBold + fonts::MonoBoldSize ); };
+        T.Mono = Fonts.AddFromMemory( MonoR(), 14 );
+        T.MonoBold = Fonts.AddFromMemory( MonoB(), 14 );
+        Fonts.AddEmojiFont(); // no-op without FreeType
+        Fonts.AddCjkFont();   // read on first use
     }
 
     bool Context::LoadDefaultFonts( float S )
@@ -80,6 +92,7 @@ namespace tg
         T.Small = Fonts.AddFromMemory( Med(), 12.5f ); // Medium: small text thins out without hinting
         T.Bold = Fonts.AddFromMemory( Semi(), 15 );
         T.Title = Fonts.AddFromMemory( Semi(), 20 );
+        AddCommonFonts( Fonts, T );
         Scale = S;
         return Fonts.Build( R, S );
     }
@@ -94,6 +107,7 @@ namespace tg
         T.Bold = Fonts.AddFromFile( Bold, 15 );
         T.Title = Fonts.AddFromFile( Bold, 20 );
         if ( !T.Body || !T.Medium || !T.Small || !T.Bold || !T.Title ) return false;
+        AddCommonFonts( Fonts, T );
         Scale = S;
         return Fonts.Build( R, S );
     }
@@ -107,6 +121,7 @@ namespace tg
         T.Bold = Fonts.AddFromFile( Dir + "/Inter-SemiBold.otf", 15 );
         T.Title = Fonts.AddFromFile( Dir + "/Inter-SemiBold.otf", 20 );
         if ( !T.Body || !T.Medium || !T.Small || !T.Bold || !T.Title ) return false;
+        AddCommonFonts( Fonts, T );
         Scale = S;
         return Fonts.Build( R, S );
     }
@@ -444,6 +459,7 @@ namespace tg
             FrameRequested = false;
         }
 
+        Fonts.Maintain( R ); // grow the glyph atlas now if on-demand glyphs ran out of room last frame
         List.Reset( { 0, 0, Viewport.x, Viewport.y }, Scale, Fonts.Texture, Fonts.WhiteUV );
         List.RectFilled( { 0, 0, Viewport.x, Viewport.y }, GetTheme()[ Tok::Background ] );
         RootWidget->Draw( List );
@@ -454,6 +470,7 @@ namespace tg
 
     void Context::Render( Vec2 Fb )
     {
+        Fonts.Upload( R ); // glyphs rasterized on demand this frame (emoji, CJK...)
         R.Render( List, Fb, Scale );
     }
 }

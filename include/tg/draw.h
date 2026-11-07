@@ -74,6 +74,8 @@ namespace tg
         void Image( TextureId Tex, Rect r, Vec2 UV0 = { 0, 0 }, Vec2 UV1 = { 1, 1 }, Color Tint = { 255, 255, 255 }, float Radius = 0 );
         // Draws UTF-8 text. WrapWidth > 0 wraps on word boundaries. Returns the size it covered.
         Vec2 Text( const Font& F, Vec2 Pos, std::string_view Str, Color c, float WrapWidth = 0 );
+        // One glyph with its pen at Pos.x and the top of its line at Pos.y (grids: terminals, editors).
+        void Glyph( const Font& F, uint32_t Codepoint, Vec2 Pos, Color c );
 
         // ---- path helpers (used by the shape functions; public so custom widgets can use them) ----
         std::vector<Vec2> Path;

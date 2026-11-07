@@ -82,6 +82,7 @@ When tg is a subproject, its examples and tests are off by default, so you only 
 | `TG_APP_BACKEND` | `win32` on Windows, else `glfw` | Which platform `tg::App` uses (`win32` or `glfw`) |
 | `TG_BUILD_EXAMPLES` | `ON` when top-level | hello, showcase, Win32 examples |
 | `TG_BUILD_HEADLESS` | `ON` when top-level | The headless test + `ctest` entry |
+| `TG_FREETYPE` | `OFF` | Rasterize with FreeType (hinting) and enable color emoji. Uses the system FreeType, or downloads it. See [Fonts](styling.md#freetype-emoji-and-other-scripts) |
 
 ## Your first window
 

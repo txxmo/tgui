@@ -53,7 +53,33 @@ Ctx.Fonts.Quality.Kerning = false;
 Ctx.LoadDefaultFonts( Scale );
 ```
 
-Your own font, for example the Windows system font:
+### FreeType, emoji and other scripts
+
+By default glyphs are rasterized with stb_truetype (vendored, no dependencies). Configure with **`-DTG_FREETYPE=ON`** to use FreeType instead. CMake uses the system FreeType if it finds one, and otherwise downloads and builds it (typical on Windows). The downloaded build has no libpng, which is fine for Segoe UI Emoji (vector COLR). Bitmap emoji fonts (Noto Color Emoji, Apple Color Emoji) need a FreeType built with PNG, which system packages are. You get:
+
+- **Light hinting**: stems snap to the pixel grid vertically, so small text is sharper. Glyph widths stay the same as with stb, so layout doesn't move.
+- **Color emoji** 😀🚀🎉. tg finds the system emoji font (Segoe UI Emoji, Apple Color Emoji or Noto Color Emoji) and uses it for any codepoint the text font lacks. Without FreeType, emoji show as the missing-glyph box.
+
+```cpp
+Ctx.Fonts.Quality.Engine = tg::FontEngine::FreeType;  // FreeType for everything (emoji use it either way)
+Ctx.Fonts.Quality.EmojiScale = 1.1f;                  // emoji a bit larger than the text
+Ctx.LoadDefaultFonts( Scale );
+```
+
+**Fallback fonts.** Glyphs are rasterized on demand into an atlas that grows as needed, so any codepoint can show up at runtime (chat messages, terminal output). When the font doesn't have a character, tg searches the fallback list in order. `LoadDefaultFonts` adds the emoji font and a system CJK font (Microsoft YaHei, PingFang, Noto Sans CJK or WenQuanYi). The CJK font is only read from disk the first time a Chinese, Japanese or Korean character is drawn. To add your own:
+
+```cpp
+Ctx.Fonts.AddFallbackFile( "C:/Windows/Fonts/seguisym.ttf" );  // symbols
+Ctx.Fonts.AddFallbackFile( "fonts/NotoSansArabic-Regular.ttf" );
+```
+
+Limits: there is no text shaper (HarfBuzz). Flags (🇯🇵), ZWJ families (👨‍👩‍👧) and keycaps draw as their separate parts. Skin-tone modifiers and variation selectors are dropped, so you get the base emoji. Right-to-left scripts and complex scripts (Arabic joining, Devanagari) aren't laid out correctly.
+
+**Monospace.** `Theme().Mono` / `MonoBold` are JetBrains Mono 14 (compiled in, including box drawing and Powerline symbols), used by the terminal. Use them for code and logs too: `Label.Style.TextFont = tg::GetTheme().Mono;`.
+
+### Your own fonts
+
+For example, the Windows system font:
 
 ```cpp
 Ctx.LoadFonts( "C:/Windows/Fonts/segoeui.ttf", "C:/Windows/Fonts/segoeuib.ttf", Scale,

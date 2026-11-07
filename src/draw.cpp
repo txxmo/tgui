@@ -413,6 +413,19 @@ namespace tg
         PrimQuadUV( r.Pos(), r.Max(), UV0, UV1, Tint.Pack() );
     }
 
+    void DrawList::Glyph( const Font& F, uint32_t Cp, Vec2 Pos, Color c )
+    {
+        if ( c.a == 0 ) return;
+        const tg::Glyph& G = F.Find( Cp );
+        if ( G.X1 <= G.X0 ) return;
+        SetTexture( AtlasTexture );
+        float Steps = Scale * F.SubpixelSteps;
+        float X0 = std::round( ( Pos.x + G.X0 ) * Steps ) / Steps;
+        float Y0 = std::round( ( Pos.y + F.Ascent ) * Scale ) / Scale + G.Y0;
+        uint32_t C = G.Colored ? Color( 255, 255, 255, c.a ).Pack() : c.Pack();
+        PrimQuadUV( { X0, Y0 }, { X0 + ( G.X1 - G.X0 ), Y0 + ( G.Y1 - G.Y0 ) }, { G.U0, G.V0 }, { G.U1, G.V1 }, C );
+    }
+
     Vec2 DrawList::Text( const Font& F, Vec2 Pos, std::string_view Str, Color c, float WrapWidth )
     {
         Vec2 Covered;
@@ -438,11 +451,13 @@ namespace tg
                 uint32_t Cp = DecodeUtf8( Line, i );
                 X += F.Kern( Prev, Cp );
                 Prev = Cp;
-                const Glyph& G = F.Find( Cp );
+                const tg::Glyph& G = F.Find( Cp );
                 if ( Visible && G.X1 > G.X0 && X <= Clip.Right() )
                 {
                     float X0 = std::round( ( X + G.X0 ) * Steps ) / Steps, Y0 = Baseline + G.Y0;
-                    PrimQuadUV( { X0, Y0 }, { X0 + ( G.X1 - G.X0 ), Y0 + ( G.Y1 - G.Y0 ) }, { G.U0, G.V0 }, { G.U1, G.V1 }, Col );
+                    // color glyphs (emoji) keep their own colors; the text color only contributes its alpha
+                    uint32_t C = G.Colored ? Color( 255, 255, 255, c.a ).Pack() : Col;
+                    PrimQuadUV( { X0, Y0 }, { X0 + ( G.X1 - G.X0 ), Y0 + ( G.Y1 - G.Y0 ) }, { G.U0, G.V0 }, { G.U1, G.V1 }, C );
                 }
                 X += G.Advance;
             }

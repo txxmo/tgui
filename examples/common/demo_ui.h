@@ -77,6 +77,14 @@ struct DemoApp
     tg::DatePicker* ExpiresPicker = nullptr;
     std::vector<std::string> QueueItems = { "deploy api v2.3", "migrate users table", "rotate TLS certs", "warm redis cache", "purge CDN", "notify #general" };
 
+    // "Terminal" tab
+    tg::Terminal* Shell = nullptr;
+    tg::Terminal* Log = nullptr;
+    tg::Label* ShellStatus = nullptr;
+    std::string ShellCommand; // empty = the user's shell
+    bool ShellStarted = false;
+    void StartShell();
+
     // "Charts" tab
     tg::BarChart* Requests = nullptr;
     tg::DonutChart* Traffic = nullptr;

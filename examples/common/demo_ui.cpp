@@ -197,8 +197,8 @@ static void BuildChat( DemoApp& App, Container& Page )
     }
 
     App.AddMessage( "mo", "deploying v2.3 to fra-01, should be quick", "10:41" );
-    App.AddMessage( "rika", "nice. is the websocket reconnect fix in there? the chat kept dropping for me on wifi yesterday", "10:42" );
-    App.AddMessage( "mo", "yep, plus the backoff change. ping me if you still see drops", "10:42" );
+    App.AddMessage( "rika", "nice \xF0\x9F\x9A\x80 is the websocket reconnect fix in there? the chat kept dropping for me on wifi yesterday", "10:42" );
+    App.AddMessage( "mo", "yep, plus the backoff change. ping me if you still see drops \xF0\x9F\x91\x8D", "10:42" );
     App.AddMessage( "alex", "sharing my screen \xE2\x80\x94 check the latency graph on the right, p99 went from 180ms to 40ms after the redis change", "10:44" );
 }
 
@@ -623,6 +623,55 @@ static void BuildCharts( DemoApp& App, Container& Page )
     App.Traffic->Center = "100%";
 }
 
+// Terminal: a real shell in a pseudo-terminal, and a log view you feed with Write().
+static void BuildTerminal( DemoApp& App, Container& Page )
+{
+    Page.Layout.Gap = 12;
+    auto& Cols = Page.Columns( 12 );
+
+    auto& ShellG = Cols.Group( "Shell" );
+    ShellG.Layout.Width = Grow( 3 );
+    auto& Tools = ShellG.Row( 8 );
+    Tools.Layout.CrossAlign = Align::Center;
+    App.ShellStatus = &Tools.Text( "not started" );
+    App.ShellStatus->Style.TextColor = Tok::TextDim;
+    App.ShellStatus->Layout.Width = Grow();
+    DemoApp* A = &App;
+    Tools.Button( "Restart", [ A ] { A->StartShell(); } );
+    Tools.Button( "Clear", [ A ] { A->Shell->Clear(); } );
+    App.Shell = &ShellG.Terminal();
+    App.Shell->OnTitle = [ A ]( const std::string& T ) { A->ShellStatus->SetText( T ); };
+    App.Shell->OnExit = [ A ]( int Code ) { A->ShellStatus->SetText( "exited (" + std::to_string( Code ) + ")" ); };
+
+    auto& LogG = Cols.Group( "Deploy log" );
+    LogG.Layout.Width = Grow( 2 );
+    App.Log = &LogG.Terminal();
+    App.Log->Style.Background = Color::Hex( 0x0E1116 );
+    App.Log->OnInput = [ A ]( std::string_view K ) { if ( K == "\r" ) A->Log->Write( "\r\n" ); }; // no process: just echo Enter
+    App.Log->Write(
+        "\x1b[1m\xE2\x94\x8C\xE2\x94\x80 deploy \x1b[36mapi v2.3\x1b[39m \xE2\x86\x92 fra-01 \xE2\x94\x80\xE2\x94\x80\xE2\x94\x80\xE2\x94\x80\xE2\x94\x90\x1b[0m\r\n"
+        "\x1b[2m10:41:02\x1b[22m \x1b[32m\xE2\x9C\x93\x1b[0m pulled image          \x1b[2m1.2s\x1b[0m\r\n"
+        "\x1b[2m10:41:04\x1b[22m \x1b[32m\xE2\x9C\x93\x1b[0m migrations (3)        \x1b[2m0.8s\x1b[0m\r\n"
+        "\x1b[2m10:41:05\x1b[22m \x1b[33m!\x1b[0m redis warmup slow     \x1b[33m2.4s\x1b[0m\r\n"
+        "\x1b[2m10:41:08\x1b[22m \x1b[32m\xE2\x9C\x93\x1b[0m health checks \x1b[38;5;48m\xE2\x96\x88\xE2\x96\x88\xE2\x96\x88\xE2\x96\x88\xE2\x96\x88\xE2\x96\x88\xE2\x96\x88\x1b[38;5;240m\xE2\x96\x91\xE2\x96\x91\xE2\x96\x91\x1b[0m 7/10\r\n"
+        "\x1b[2m10:41:09\x1b[22m \x1b[41;97m FAIL \x1b[0m \x1b[31mfra-01-c: timeout\x1b[0m\r\n"
+        "\x1b[2m10:41:12\x1b[22m \x1b[32m\xE2\x9C\x93\x1b[0m retried, healthy \xF0\x9F\x8E\x89\r\n"
+        "\r\n\x1b[1mcpu\x1b[0m  \x1b[38;2;110;183;212m\xE2\xA3\x80\xE2\xA3\xA0\xE2\xA3\xB4\xE2\xA3\xBE\xE2\xA3\xBF\xE2\xA3\xB7\xE2\xA3\xA6\xE2\xA3\x84\xE2\xA3\x80\xE2\xA3\xA0\xE2\xA3\xB6\xE2\xA3\xBF\x1b[0m  42%\r\n"
+        "\x1b[1mmem\x1b[0m  \x1b[48;5;236m\x1b[38;5;214m\xE2\x96\x88\xE2\x96\x88\xE2\x96\x88\xE2\x96\x88\xE2\x96\x88\xE2\x96\x88\xE2\x96\x88\xE2\x96\x88\xE2\x96\x8C     \x1b[0m  74%\r\n"
+        "\r\n\x1b[7m inverse \x1b[0m \x1b[4munderline\x1b[0m \x1b[9mstrike\x1b[0m \x1b[3mitalic\x1b[0m \x1b[1;35mbold\x1b[0m\r\n"
+        "\xE2\x95\x94\xE2\x95\x90\xE2\x95\x90\xE2\x95\xA6\xE2\x95\x90\xE2\x95\x90\xE2\x95\x97 \xE2\x95\xAD\xE2\x94\x80\xE2\x94\x80\xE2\x95\xAE \xE6\xBC\xA2\xE5\xAD\x97 \xF0\x9F\x90\xA7\r\n"
+        "\xE2\x95\x9A\xE2\x95\x90\xE2\x95\x90\xE2\x95\xA9\xE2\x95\x90\xE2\x95\x90\xE2\x95\x9D \xE2\x95\xB0\xE2\x94\x80\xE2\x94\x80\xE2\x95\xAF\r\n" );
+}
+
+void DemoApp::StartShell()
+{
+    if ( !Shell ) return;
+    Shell->Reset();
+    if ( !tg::Pty::Supported() ) { Shell->Write( "pseudo-terminals aren't available here (Windows 10 1809+ needed)\r\n" ); return; }
+    bool Ok = Shell->Spawn( ShellCommand );
+    ShellStatus->SetText( Ok ? ( ShellCommand.empty() ? "shell" : ShellCommand ) : "failed to start" );
+}
+
 // ---------------------------------------------------------------- app
 
 void DemoApp::Build( Context& C, Widget& Root )
@@ -650,10 +699,13 @@ void DemoApp::Build( Context& C, Widget& Root )
     // ---- tabs across the top, one page each
     auto& Body = Root.Add<Container>( Dir::Column, 0, Insets( 16, 14, 16, 16 ) );
     Body.Layout.Height = Grow();
-    const char* Names[] = { "Dashboard", "Chat", "Controls", "Tables", "Windows", "More", "Forms", "Charts" };
+    const char* Names[] = { "Dashboard", "Chat", "Controls", "Tables", "Windows", "More", "Forms", "Charts", "Terminal" };
     for ( const char* N : Names ) Pages.push_back( &Body.Tab( N ) );
     Tabs = Body.Tabs();
-    Tabs->OnChange = [ this ]( int i ) { Page = i; };
+    Tabs->OnChange = [ this ]( int i ) {
+        Page = i;
+        if ( i == 8 && !ShellStarted ) { ShellStarted = true; StartShell(); } // only start a shell once you look at it
+    };
 
     BuildDashboard( *this, *Pages[ 0 ] );
     BuildChat( *this, *Pages[ 1 ] );
@@ -663,6 +715,7 @@ void DemoApp::Build( Context& C, Widget& Root )
     BuildMore( *this, *Pages[ 5 ] );
     BuildForms( *this, *Pages[ 6 ] );
     BuildCharts( *this, *Pages[ 7 ] );
+    BuildTerminal( *this, *Pages[ 8 ] );
 
     // Global hotkey, like the old tgui Insert key: show/hide the Test Window.
     C.OnKeyEvent = [ this ]( Key K, bool Down ) {

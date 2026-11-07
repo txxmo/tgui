@@ -13,6 +13,7 @@
 #include "tg/widgets/searchbox.h"
 #include "tg/widgets/taginput.h"
 #include "tg/widgets/textarea.h"
+#include "tg/widgets/terminal.h"
 #include "tg/widgets/collapsible.h"
 #include "tg/widgets/extras.h"
 #include "tg/widgets/groupbox.h"
@@ -193,6 +194,7 @@ namespace tg
         if ( V ) { T.SetText( *V ); T.Bind = V; }
         return T;
     }
+    tg::Terminal& Container::Terminal() { return Add<tg::Terminal>(); }
     tg::MenuBar& Container::MenuBar() { return Add<tg::MenuBar>(); }
     tg::TagInput& Container::Tags( std::vector<std::string>* V, std::string Ph ) { return Add<tg::TagInput>( V, std::move( Ph ) ); }
     tg::SearchBox& Container::Search( std::string Ph, std::string* V ) { return Add<tg::SearchBox>( std::move( Ph ), V ); }

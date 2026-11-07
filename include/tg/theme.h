@@ -53,6 +53,8 @@ namespace tg
         Font* Bold = nullptr;  // headings / emphasis
         Font* Small = nullptr; // captions, axis labels
         Font* Title = nullptr; // big headings
+        Font* Mono = nullptr;     // monospace: terminals, code, logs (JetBrains Mono)
+        Font* MonoBold = nullptr;
 
         Color& operator[]( Tok t ) { return Colors[ size_t( t ) ]; }
         Color operator[]( Tok t ) const { return Colors[ size_t( t ) ]; }

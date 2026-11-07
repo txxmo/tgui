@@ -9,6 +9,7 @@ else()
 endif()
 
 option( TG_BUILD_APP      "Build tg::app (GLFW + OpenGL 3 window/loop)" ON )
+option( TG_FREETYPE       "Rasterize with FreeType (hinting) and enable color emoji" OFF )
 option( TG_BUILD_EXAMPLES "Build hello + showcase (needs TG_BUILD_APP)" ${TG_TOP_LEVEL} )
 option( TG_BUILD_HEADLESS "Build the headless software-rendered test"   ${TG_TOP_LEVEL} )
 
@@ -19,6 +20,7 @@ add_library( tg STATIC
     src/draw.cpp
     src/font.cpp
     src/input.cpp
+    src/pty.cpp
     src/theme.cpp
     src/widget.cpp
     src/widgets/box.cpp
@@ -53,6 +55,7 @@ add_library( tg STATIC
     src/widgets/table.cpp
     src/widgets/tabview.cpp
     src/widgets/taginput.cpp
+    src/widgets/terminal.cpp
     src/widgets/textarea.cpp
     src/widgets/textinput.cpp
     src/widgets/toast.cpp
@@ -62,6 +65,27 @@ add_library( tg STATIC
 )
 add_library( tg::tg ALIAS tg )
 target_compile_features( tg PUBLIC cxx_std_20 )
+find_package( Threads REQUIRED )
+target_link_libraries( tg PUBLIC Threads::Threads )          # Pty reader threads
+if( UNIX AND NOT APPLE )
+    target_link_libraries( tg PUBLIC util )                  # forkpty
+endif()
+
+if( TG_FREETYPE )
+    find_package( Freetype QUIET )
+    if( NOT FREETYPE_FOUND )
+        # No system FreeType (typical on Windows): build it. PNG support is needed for color emoji bitmaps (CBDT/sbix).
+        include( FetchContent )
+        set( FT_DISABLE_HARFBUZZ ON CACHE BOOL "" FORCE )
+        set( FT_DISABLE_BROTLI ON CACHE BOOL "" FORCE )
+        set( FT_DISABLE_BZIP2 ON CACHE BOOL "" FORCE )
+        FetchContent_Declare( freetype GIT_REPOSITORY https://github.com/freetype/freetype.git GIT_TAG VER-2-13-3 GIT_SHALLOW TRUE )
+        FetchContent_MakeAvailable( freetype )
+        add_library( Freetype::Freetype ALIAS freetype )
+    endif()
+    target_link_libraries( tg PUBLIC Freetype::Freetype )
+    target_compile_definitions( tg PUBLIC TG_HAS_FREETYPE=1 )
+endif()
 target_include_directories( tg PUBLIC include PRIVATE third_party/stb )
 if( MSVC )
     target_compile_options( tg PRIVATE /W4 /utf-8 )
