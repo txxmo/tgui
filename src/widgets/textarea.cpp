@@ -2,6 +2,7 @@
 #include "tg/context.h"
 #include "tg/draw.h"
 #include "tg/font.h"
+#include "tg/widgets/menu.h"
 #include <algorithm>
 #include <cmath>
 
@@ -22,6 +23,15 @@ namespace tg
         Interactive = true;
         Focusable = true;
         Lines.push_back( { 0, 0 } );
+        ContextMenu = [ this ]( Menu& M ) {
+            bool Sel = Caret != Anchor;
+            auto K = [ this ]( Key Kc ) { return [ this, Kc ] { Event E; E.Type = EventType::KeyDown; E.KeyCode = Kc; E.Mods = ModCtrl; OnEvent( E ); }; };
+            M.Item( "Cut", K( Key::X ), "Ctrl+X" ).Enabled = Sel && !ReadOnly;
+            M.Item( "Copy", K( Key::C ), "Ctrl+C" ).Enabled = Sel;
+            M.Item( "Paste", K( Key::V ), "Ctrl+V" ).Enabled = !ReadOnly;
+            M.Separator();
+            M.Item( "Select All", K( Key::A ), "Ctrl+A" ).Enabled = !Text.empty();
+        };
     }
 
     void TextArea::SetText( std::string T )
@@ -223,6 +233,19 @@ namespace tg
             if ( E.Button != MouseButton::Left ) return false;
             Caret = ByteAt( Local );
             if ( !Shift ) Anchor = Caret;
+            if ( E.Clicks >= 2 ) // double: word, triple: the (logical) line
+            {
+                if ( E.Clicks >= 3 )
+                {
+                    size_t A = Text.rfind( '\n', Caret ? Caret - 1 : 0 ), B = Text.find( '\n', Caret );
+                    Anchor = ( A == std::string::npos || Caret == 0 ) ? 0 : A + 1;
+                    Caret = B == std::string::npos ? Text.size() : B;
+                }
+                else WordAt( Text, Caret, Anchor, Caret );
+                WantX = -1;
+                Redraw();
+                return true;
+            }
             Dragging = true;
             WantX = -1;
             if ( C ) BlinkStart = C->Time();

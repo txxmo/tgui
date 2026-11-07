@@ -90,6 +90,9 @@ namespace tg
         void SetSelected( size_t Row, bool On );
         void ClearSelection();
         std::vector<int> SelectedRows() const;
+        // Selected rows as tab-separated text (pastes into Excel / Sheets as cells). Ctrl+C and the
+        // right-click menu copy it. WithHeader adds the column titles as the first line.
+        std::string SelectedText( bool WithHeader = false ) const;
 
         // ---- scrolling
         void ScrollToRow( size_t Row );

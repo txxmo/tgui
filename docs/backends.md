@@ -161,6 +161,7 @@ Call these on the context:
 Optionally:
 - set `Ctx.SetClipboard`, `GetClipboard` and `WakeUp`
 - apply `Ctx.GetCursor()`
-- sleep for `Ctx.SecondsUntilNextFrame()` when `!Ctx.NeedsFrame()`
+- sleep for `Ctx.SecondsUntilNextFrame()` when `!Ctx.NeedsFrame()`, then call `Ctx.RunPumps()` (it caps the sleep at 10 ms while a pump is registered: the WebView on Linux uses one for GTK)
+- set `Ctx.NativeWindow` (HWND / X11 Window / NSWindow*) so `WebView` can attach to your window
 
 `backends/glfw_platform.cpp` is about 150 lines.

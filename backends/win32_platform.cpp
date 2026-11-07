@@ -143,6 +143,7 @@ namespace tg::win32
     {
         Wnd = (HWND)H;
         Ctx = &C;
+        C.NativeWindow = H;
         C.WakeUp = [] { if ( Wnd ) PostMessageW( Wnd, WM_NULL, 0, 0 ); };
         C.SetClipboard = []( const std::string& S ) {
             if ( !OpenClipboard( Wnd ) ) return;
@@ -282,8 +283,11 @@ namespace tg::win32
     void WaitForWork( Context& C )
     {
         double T = C.SecondsUntilNextFrame();
-        if ( T <= 0 ) return;
-        DWORD Ms = T > 0.5 ? 500 : DWORD( T * 1000 );
-        MsgWaitForMultipleObjectsEx( 0, nullptr, Ms, QS_ALLINPUT, MWMO_INPUTAVAILABLE );
+        if ( T > 0 )
+        {
+            DWORD Ms = T > 0.5 ? 500 : DWORD( T * 1000 );
+            MsgWaitForMultipleObjectsEx( 0, nullptr, Ms, QS_ALLINPUT, MWMO_INPUTAVAILABLE );
+        }
+        C.RunPumps();
     }
 }

@@ -775,6 +775,71 @@ int main( int Argc, char** Argv )
         CHECK( Clip == "10:41:02" );
         Settle( Ctx );
     }
+    {
+        // mouse reporting: what vim (set mouse=a), htop, tmux and mc ask for
+        tg::Terminal& L = *App.Log;
+        std::string Got;
+        L.OnInput = [ & ]( std::string_view S ) { Got += S; };
+        const tg::Font& Mf = *tg::GetTheme().Mono;
+        float Cw = std::round( Mf.Find( 'M' ).Advance * Scale ) / Scale, Chh = std::round( Mf.LineHeight * Scale ) / Scale;
+        tg::Rect In = L.Bounds.Shrink( L.Style.Padding );
+        auto CellPos = [ & ]( int C, int R ) { return tg::Vec2{ In.x + ( C - 0.5f ) * Cw, In.y + ( R - 0.5f ) * Chh }; }; // 1-based
+        L.Write( "\x1b[?1000h\x1b[?1006h" );
+        CHECK( L.MouseReporting() );
+        ClickAt( Ctx, CellPos( 3, 2 ) );
+        CHECK( Got == "\x1b[<0;3;2M\x1b[<0;3;2m" );                       // SGR press + release
+        Got.clear();
+        Ctx.OnMouseWheel( { 0, 1 } );
+        CHECK( Got == "\x1b[<64;3;2M" );
+        Got.clear();
+        Ctx.OnMouseButton( tg::MouseButton::Right, true );
+        Ctx.OnMouseButton( tg::MouseButton::Right, false );
+        Ctx.Frame();
+        CHECK( Got == "\x1b[<2;3;2M\x1b[<2;3;2m" && OpenPopup( Ctx ) == nullptr ); // the app gets it, no menu
+        L.Write( "\x1b[?1006l" );                                          // legacy X10 bytes
+        Got.clear();
+        ClickAt( Ctx, CellPos( 3, 2 ) );
+        CHECK( Got == std::string( "\x1b[M" ) + char( 32 ) + char( 35 ) + char( 34 ) + "\x1b[M" + char( 35 ) + char( 35 ) + char( 34 ) );
+        L.Write( "\x1b[?1002h\x1b[?1006h" );                              // button-motion tracking
+        Got.clear();
+        Ctx.OnMouseMove( CellPos( 3, 2 ) );
+        Ctx.OnMouseButton( tg::MouseButton::Left, true );
+        Ctx.OnMouseMove( CellPos( 5, 2 ) );
+        Ctx.OnMouseButton( tg::MouseButton::Left, false );
+        CHECK( Got == "\x1b[<0;3;2M\x1b[<32;5;2M\x1b[<0;5;2m" );
+        Ctx.OnKey( tg::Key::LeftShift, true, tg::ModShift );               // Shift: select instead of reporting
+        Got.clear();
+        Drag( Ctx, { In.x + 1, CellPos( 1, 2 ).y }, { CellPos( 8, 2 ).x + Cw * 0.5f, CellPos( 8, 2 ).y } );
+        Ctx.OnKey( tg::Key::LeftShift, false, 0 );
+        CHECK( Got.empty() && L.SelectedText() == "10:41:02" );
+        L.Write( "\x1b[?1002l\x1b[?1006l" );
+        CHECK( !L.MouseReporting() );
+
+        // double-click a word, triple-click the line, copy-on-select, middle-click and Ctrl+V paste
+        std::string Clip;
+        Ctx.SetClipboard = [ & ]( const std::string& S ) { Clip = S; };
+        Ctx.GetClipboard = [] { return std::string( "pasted" ); };
+        ClickAt( Ctx, CellPos( 14, 2 ) );
+        ClickAt( Ctx, CellPos( 14, 2 ) );
+        CHECK( L.SelectedText() == "pulled" );
+        ClickAt( Ctx, CellPos( 14, 2 ) );
+        CHECK( L.SelectedText().rfind( "10:41:02", 0 ) == 0 && L.SelectedText().find( "1.2s" ) != std::string::npos );
+        Ctx.OnKey( tg::Key::C, true, tg::ModCtrl | tg::ModShift );
+        CHECK( Clip == L.SelectedText() );
+        L.CopyOnSelect = true;
+        for ( int i = 0; i < 30; i++ ) Ctx.Frame(); // let the triple-click window pass
+        ClickAt( Ctx, CellPos( 22, 2 ) );
+        ClickAt( Ctx, CellPos( 22, 2 ) );
+        CHECK( Clip == "image" );
+        Got.clear();
+        Ctx.OnMouseButton( tg::MouseButton::Middle, true );
+        Ctx.OnMouseButton( tg::MouseButton::Middle, false );
+        L.CtrlVPastes = true;
+        Ctx.OnKey( tg::Key::V, true, tg::ModCtrl );
+        CHECK( Got == "pastedpasted" );
+        L.CopyOnSelect = false;
+        Settle( Ctx );
+    }
     if ( tg::Pty::Supported() && !UnderWine() ) // Wine has the ConPTY API, but children never write into it
     {
         // a real process: output arrives on the pty thread and is posted to the UI thread
@@ -798,6 +863,48 @@ int main( int Argc, char** Argv )
         App.ShellCommand.clear();
     }
     Shot( Ctx, "terminal" );
+
+    // ---------------- copy & paste outside the terminal
+    {
+        std::string Clip;
+        Ctx.SetClipboard = [ & ]( const std::string& S ) { Clip = S; };
+        // selectable chat message: double-click a word, Ctrl+C; drag to select
+        ClickTab( Ctx, App, 1 );
+        App.AddMessage( "you", "copy 10.0.4.21 please", "now" );
+        Settle( Ctx );
+        tg::Label* Msg = nullptr;
+        for ( int i = 0; auto* L = Find<tg::Label>( App.Messages->Content(), i ); i++ )
+            if ( L->GetText() == "copy 10.0.4.21 please" ) Msg = L;
+        CHECK( Msg && Msg->IsSelectable() );
+        const tg::Font& F = *tg::GetTheme().Body;
+        float X0 = Msg->Bounds.x + Msg->Layout.Padding.Left, Y = Msg->Bounds.y + Msg->Layout.Padding.Top + F.LineHeight * 0.5f;
+        for ( int i = 0; i < 30; i++ ) Ctx.Frame();
+        ClickAt( Ctx, { X0 + F.Width( "copy 10.0.4.21 " ) + 6, Y } );
+        ClickAt( Ctx, { X0 + F.Width( "copy 10.0.4.21 " ) + 6, Y } );
+        CHECK( Msg->SelectedText() == "please" && Ctx.Focused() == Msg );
+        Ctx.OnKey( tg::Key::C, true, tg::ModCtrl );
+        CHECK( Clip == "please" );
+        for ( int i = 0; i < 30; i++ ) Ctx.Frame();
+        Drag( Ctx, { X0 + 1, Y }, { X0 + F.Width( "copy 10.0.4.21" ) + 1, Y } );
+        CHECK( Msg->SelectedText() == "copy 10.0.4.21" );
+        Settle( Ctx );
+        Shot( Ctx, "chat_select" );
+        // text fields: right-click menu
+        Ctx.OnMouseMove( App.Composer->Bounds.Center() );
+        Ctx.OnMouseButton( tg::MouseButton::Right, true );
+        Ctx.OnMouseButton( tg::MouseButton::Right, false );
+        Ctx.Frame();
+        CHECK( OpenPopup( Ctx ) != nullptr );
+        Ctx.ClosePopups();
+        Settle( Ctx );
+        // tables: Ctrl+C copies selected rows as tab-separated text
+        ClickTab( Ctx, App, 3 );
+        App.Procs->SetSelected( 0, true );
+        Ctx.SetFocus( App.Procs );
+        Ctx.OnKey( tg::Key::C, true, tg::ModCtrl );
+        CHECK( !Clip.empty() && Clip == App.Procs->SelectedText() && Clip.find( '\t' ) != std::string::npos );
+        App.Procs->SetSelected( 0, false );
+    }
 
     // ---------------- light theme
     tg::GetTheme().UseColors( tg::Theme::Light() );

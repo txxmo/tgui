@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdio>
+#include <cctype>
 #include <cstring>
 
 #define STB_RECT_PACK_IMPLEMENTATION
@@ -107,6 +108,20 @@ namespace tg
         size_t At = Line == std::string_view::npos ? 0 : Line + 1, Last = At;
         while ( At < i && At < S.size() ) { Last = At; At = NextGrapheme( S, At ); }
         return Last;
+    }
+
+    static bool IsWordByte( unsigned char C ) { return C >= 0x80 || std::isalnum( C ) || C == '_'; }
+
+    void WordAt( std::string_view S, size_t i, size_t& Begin, size_t& End )
+    {
+        i = std::min( i, S.size() );
+        if ( i == S.size() && i > 0 ) i = PrevGrapheme( S, i );
+        if ( i >= S.size() ) { Begin = End = S.size(); return; }
+        if ( !IsWordByte( (unsigned char)S[ i ] ) ) { Begin = i; End = NextGrapheme( S, i ); return; }
+        Begin = i;
+        End = i;
+        while ( Begin > 0 && IsWordByte( (unsigned char)S[ Begin - 1 ] ) ) Begin--;
+        while ( End < S.size() && IsWordByte( (unsigned char)S[ End ] ) ) End++;
     }
 
     // ------------------------------------------------------------ internals

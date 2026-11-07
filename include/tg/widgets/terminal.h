@@ -64,6 +64,21 @@ namespace tg
         TerminalStyle Style;
         size_t ScrollbackLimit = 5000;
 
+        // ---- copy / paste
+        bool CopyOnSelect = false;     // copy as soon as you finish selecting (PuTTY / X11 style)
+#ifdef _WIN32
+        bool CtrlVPastes = true;       // Ctrl+V pastes (Windows Terminal); off: it sends ^V to the app
+#else
+        bool CtrlVPastes = false;      // Linux/macOS: ^V is "insert next char literally" in shells, so off by default
+#endif
+        bool CopySelection();          // selection -> clipboard; false if nothing selected
+        void PasteClipboard();
+        void SelectAll();
+        bool HasSelection() const { return HasSel; }
+        // The app turned on mouse reporting (vim `set mouse=a`, htop, tmux, mc): clicks/wheel go to it.
+        // Hold Shift to select text anyway.
+        bool MouseReporting() const { return MouseMode != 0; }
+
         // ---- data in / out
         void Write( std::string_view Bytes );                        // UI thread (Post from other threads)
         std::function<void( std::string_view )> OnInput;             // keys / paste / replies, as bytes
@@ -115,7 +130,10 @@ namespace tg
         bool G0Lines = false, G1Lines = false, UseG1 = false, SavedG0 = false;
         std::vector<bool> Tabs;
         int View = 0; // lines scrolled back
-        int LastX = 0, LastY = -1; // cell the last character went into (emoji modifiers / ZWJ join it)
+        int LastX = 0, LastY = -1;
+        int MouseMode = 0, MouseEnc = 0; // 9 / 1000 / 1002 / 1003; 0 = X10 bytes, 1006 = SGR, 1015 = urxvt
+        int MouseHeld = -1, MouseX = -1, MouseY = -1;
+        bool FocusReports = false; // cell the last character went into (emoji modifiers / ZWJ join it)
 
         // parser
         enum class St : uint8_t { Ground, Esc, Csi, Osc, OscEsc, Charset, Ignore } State = St::Ground;
@@ -153,6 +171,10 @@ namespace tg
         bool InSel( long Line, int Col ) const;
         bool DrawSpecial( DrawList& D, uint32_t Cp, Rect R, Color C ) const; // box / blocks / braille
         void UpdateMetrics();
+        void SelectAt( long Line, int Col, bool WholeLine );
+        bool Reporting( const Event& E ) const;
+        int MouseCode( MouseButton B ) const;
+        void ReportMouse( int Code, const Event& E, bool Press );
         void Send( std::string_view Bytes );
         Rect Inner() const { return Bounds.Shrink( Style.Padding ); }
         long FirstVisible() const { return AbsCount() - H - View; }

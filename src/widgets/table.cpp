@@ -2,6 +2,7 @@
 #include "tg/context.h"
 #include "tg/draw.h"
 #include "tg/font.h"
+#include "tg/widgets/menu.h"
 #include <algorithm>
 #include <cctype>
 #include <cmath>
@@ -19,7 +20,28 @@ namespace tg
     Table::Table( std::vector<TableColumn> C ) : Style( Defaults() ), Cols( std::move( C ) )
     {
         Interactive = true;
+        Focusable = true; // for Ctrl+C / Ctrl+A
         Layout.Height = Grow();
+        ContextMenu = [ this ]( Menu& M ) {
+            auto Copy = [ this ]( bool Header ) { Context* C = GetContext(); if ( C && C->SetClipboard ) C->SetClipboard( SelectedText( Header ) ); };
+            bool Any = !SelectedRows().empty();
+            M.Item( "Copy", [ Copy ] { Copy( false ); }, "Ctrl+C" ).Enabled = Any;
+            M.Item( "Copy with headers", [ Copy ] { Copy( true ); } ).Enabled = Any;
+        };
+    }
+
+    std::string Table::SelectedText( bool WithHeader ) const
+    {
+        std::string Out;
+        auto Line = [ & ]( auto Cell ) {
+            for ( size_t c = 0; c < Cols.size(); c++ ) { if ( c ) Out += '\t'; Out += Cell( c ); }
+            Out += '\n';
+        };
+        if ( WithHeader ) Line( [ & ]( size_t c ) { return Cols[ c ].Title; } );
+        for ( int R : SelectedRows() )
+            Line( [ & ]( size_t c ) { return GetCell( size_t( R ), c ); } );
+        if ( !Out.empty() ) Out.pop_back();
+        return Out;
     }
 
     // ------------------------------------------------------------ data
@@ -395,6 +417,12 @@ namespace tg
 
     bool Table::OnEvent( const Event& E )
     {
+        if ( E.Type == EventType::KeyDown && ( E.Mods & ModCtrl ) && E.KeyCode == Key::C )
+        {
+            Context* C = GetContext();
+            if ( C && C->SetClipboard && !SelectedRows().empty() ) C->SetClipboard( SelectedText() );
+            return true;
+        }
         switch ( E.Type )
         {
         case EventType::MouseWheel:

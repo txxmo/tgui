@@ -22,7 +22,13 @@ Parent.Add<tg::Label>( "Hello", /*Wrap*/ false );
 |---|---|
 | `SetText( std::string )`, `GetText()` | updating with same-width text only redraws; otherwise it relayouts |
 | `Wrap` | word-wrap to the arranged width |
-| `Style.TextColor`, `Style.TextFont` (`nullptr` = `Theme().Body`), `Style.HAlign`, `Style.VAlign` | |
+| `SetSelectable( true )` | let people select and copy it: drag, double-click a word, triple-click all, Ctrl+C, right-click Copy / Select All. Use it for chat messages, logs, IDs and IPs |
+| `SelectedText()`, `SelectAll()`, `IsSelectable()` | |
+| `Style.TextColor`, `Style.TextFont` (`nullptr` = `Theme().Body`), `Style.HAlign`, `Style.VAlign`, `Style.SelectionFill` | |
+
+```cpp
+W.Text( Msg.Body, true ).SetSelectable( true ); // a chat message people can copy from
+```
 
 ---
 
@@ -110,7 +116,8 @@ Pw.Password = true;
 | API | |
 |---|---|
 | `GetText()`, `SetText()`, `Placeholder`, `OnChange`, `OnSubmit`, `ClearOnSubmit`, `Password` | |
-| Keys | arrows, Home/End, Backspace/Delete, Shift-select, Ctrl+A/C/X/V, Enter submits, Escape unfocuses; mouse click + drag selects |
+| Keys | arrows, Home/End, Backspace/Delete, Shift-select, Ctrl+A/C/X/V, Enter submits, Escape unfocuses |
+| Mouse | click + drag selects, double-click selects a word, triple-click selects everything; right-click: Cut / Copy / Paste / Select All (TextArea too; replace `ContextMenu` to change it) |
 | `Style`: `Fill`, `Stroke`, `StrokeFocused`, `TextColor`, `Placeholder`, `Selection`, `Radius`, `Padding` | |
 
 ### TextArea
@@ -378,6 +385,7 @@ What it does:
 - **Sorting:** click a header to sort, click again to reverse. Values like "37%" or "1.2 GB" sort as numbers. `TableColumn::Less` overrides the order for a column.
 - **Columns:** drag the edge between two headers to resize.
 - **Selection:** `Mode = SelectMode::None / Single / Multi`. Row numbers are stable, so sorting changes only the display order; `Bind`, `SetCell` and selection use your original row numbers.
+- **Copying:** **Ctrl+C** copies the selected rows as tab-separated text, which pastes into Excel or Sheets as cells. Right-click gives Copy / Copy with headers. `T.SelectedText( WithHeader )` returns the same text.
 - **Speed:** only the visible rows are drawn. With 100k rows a scroll frame takes about 0.04 ms.
 - **Custom cells:** `CellColor` recolors a cell's text and `DrawCell` paints a cell yourself:
 
@@ -489,19 +497,74 @@ T.OnResize = [&]( int Cols, int Rows ) { Ssh.ResizePty( Cols, Rows ); };
 
 `Write` must run on the UI thread. From a network thread, wrap it in `Ctx.Post( [=] { T.Write( Data ); } )`. `Spawn` does that for you.
 
-What it understands: 16 / 256 / 24-bit color; bold, dim, italic (no italic face, so drawn upright), underline, inverse and strikethrough; cursor movement and erase; scroll regions; insert/delete of lines and characters; the alternate screen (vim, htop, less, tmux); autowrap; tabs; DEC line drawing; wide characters (CJK, emoji), with emoji sequences (flags, ZWJ, skin tones) kept in one cell and drawn as one glyph in `TG_HARFBUZZ` builds; bracketed paste; cursor-position and device-attribute reports; and the window title (OSC 0/2). Box drawing, block elements and braille are drawn as shapes, so lines join seamlessly and graphs from `btop` look right with any font. Mouse reporting isn't implemented yet, so the wheel scrolls tg's scrollback on the normal screen and sends arrow keys on the alternate screen.
+What it understands: 16 / 256 / 24-bit color; bold, dim, italic (no italic face, so drawn upright), underline, inverse and strikethrough; cursor movement and erase; scroll regions; insert/delete of lines and characters; the alternate screen (vim, htop, less, tmux); autowrap; tabs; DEC line drawing; wide characters (CJK, emoji), with emoji sequences (flags, ZWJ, skin tones) kept in one cell and drawn as one glyph in `TG_HARFBUZZ` builds; bracketed paste; cursor-position and device-attribute reports; and the window title (OSC 0/2). Box drawing, block elements and braille are drawn as shapes, so lines join seamlessly and graphs from `btop` look right with any font.
 
-Keys: everything a terminal sends, including arrows (application cursor mode too), F1–F12, Home/End/PgUp/PgDn with modifiers, Ctrl+letter and Alt+letter. Clipboard keys: **Ctrl+Shift+C / V**; **Ctrl+C** copies when text is selected and otherwise sends `^C`, like Windows Terminal. Shift+PgUp/PgDn and the mouse wheel scroll back through history. Right-click opens Copy / Paste / Clear.
+**Mouse reporting.** When a program asks for the mouse (vim with `set mouse=a`, htop, tmux, mc, less with `--mouse`), clicks, drags, the wheel and right-clicks go to it. tg supports the xterm modes 9, 1000, 1002 and 1003 with the SGR (1006), urxvt (1015) and classic encodings, and focus reports (1004). **Hold Shift** to select text anyway, as in xterm and every terminal since. `MouseReporting()` tells you whether it's on. Without mouse mode, the wheel scrolls tg's scrollback, or sends arrow keys on the alternate screen (`less`, `man`).
+
+**Copy and paste:**
+
+| | |
+|---|---|
+| Select | drag; **double-click** a word (paths, URLs, IPs and emails count as one word); **triple-click** a line; right-click → Select All |
+| Copy | **Ctrl+Shift+C**, **Ctrl+Insert**, **Ctrl+C** when something is selected (otherwise it's `^C`), right-click → Copy. `CopyOnSelect = true` copies as soon as you let go (PuTTY / X11 style) |
+| Paste | **Ctrl+Shift+V**, **Shift+Insert**, **middle-click**, right-click → Paste. **Ctrl+V** too when `CtrlVPastes` is set (default on Windows; off elsewhere because shells use ^V). Pastes are bracketed when the program asks, so a pasted script doesn't run line by line |
+
+Keys: everything a terminal sends, including arrows (application cursor mode too), F1–F12, Home/End/PgUp/PgDn with modifiers, Ctrl+letter and Alt+letter. Shift+PgUp/PgDn and the mouse wheel scroll back through history.
 
 | API | |
 |---|---|
 | `Spawn( Cmd = {}, Cwd = {} )`, `IsRunning()`, `Kill()`, `OnExit` | process in a pty (`forkpty` on Linux/macOS; ConPTY on Windows 10 1809+). `tg::Pty::Supported()` says whether it's available |
 | `Write( bytes )`, `OnInput`, `OnResize`, `OnTitle`, `OnBell` | drive it yourself |
 | `Cols()`, `Rows()`, `CursorCol()`, `CursorRow()`, `Cell( c, r )`, `RowText( r )`, `AltScreen()`, `Title` | read the screen (tests, scraping) |
-| `Clear()`, `Reset()`, `Paste( text )`, `SelectedText()`, `ScrollView( lines )`, `ScrollbackLimit` (5000) | |
+| `Clear()`, `Reset()`, `Paste( text )`, `SelectedText()`, `SelectAll()`, `CopySelection()`, `PasteClipboard()`, `ScrollView( lines )`, `ScrollbackLimit` (5000) | |
+| `CopyOnSelect`, `CtrlVPastes`, `MouseReporting()` | see above |
 | `Style.TextFont` / `BoldFont` (`nullptr` = `Theme().Mono` / `MonoBold`, JetBrains Mono 14), `Background`, `Foreground`, `Cursor`, `Selection`, `Palette[16]`, `Padding`, `Radius`, `BoldIsBright` | |
 
 The grid size follows the widget size: the terminal fits as many cells as it can and tells the process (`SIGWINCH` / `ResizePseudoConsole`). `tg::Pty` is usable on its own too, if you only need a process with a terminal and no widget.
+
+### WebView
+
+A web page inside your tg window: a Grafana board in your VPS dashboard, docs, an OAuth login, an admin panel you already have. Build with **`-DTG_WEBVIEW=ON`** and link **`tg::webview`**:
+
+```cmake
+target_link_libraries( myapp PRIVATE tg::app tg::webview )
+tg_copy_webview_runtime( myapp )   # MinGW only: puts WebView2Loader.dll next to the exe (no-op elsewhere)
+```
+
+```cpp
+#include "tg/webview.h"
+
+auto& Web = Pane.Add<tg::WebView>( "https://grafana.example.com/d/vps" );
+Web.OnTitle = [&]( const std::string& T ) { Status.SetText( T ); };
+
+// or your own HTML, talking to C++ both ways
+Web.SetHtml( R"(<button onclick="tg.post('restart')">Restart</button>
+                <script>tg.on( m => document.body.append( m ) )</script>)" );
+Web.OnMessage = [&]( const std::string& M ) { if ( M == "restart" ) Restart(); };   // tg.post() in JS
+Web.Post( "{\"cpu\": 42}" );                                                         // tg.on() in JS
+```
+
+![WebView demo](webview.png)
+
+It uses the browser engine the OS already has, so nothing is bundled and your app stays small:
+
+| OS | Engine | Notes |
+|---|---|---|
+| Windows | Microsoft Edge **WebView2** | Part of Windows 11 and current Windows 10. CMake downloads the SDK from NuGet. MSVC links the loader statically; MinGW ships `WebView2Loader.dll` next to the exe. If the runtime is missing, the widget says so and links to the installer |
+| Linux | **WebKitGTK** (`libwebkit2gtk-4.1-dev`, or 4.0) | Embedded through X11. `tg::App` uses X11 for this, which also runs on Wayland desktops through XWayland |
+| macOS | **WKWebView** | Not compiled or tested yet |
+
+| API | |
+|---|---|
+| `Navigate( url )`, `SetHtml( html )`, `Back()`, `Forward()`, `Reload()` | calls made before the engine is up are queued |
+| `Eval( js )` | run JavaScript in the page; send results back with `tg.post()` |
+| `Post( text )` / `OnMessage` | C++ → `tg.on( fn )` in the page / `tg.post( text )` in the page → C++. `window.tg` exists in every page, local or remote |
+| `OnNavigate`, `OnTitle`, `OnError`, `Url()`, `Title()`, `Ready()`, `WebView::Supported()` | |
+| `DevTools` | right-click → Inspect |
+| `DataDir` | Windows: where cookies and cache live (default `%LOCALAPPDATA%\<exe>\WebView2`) |
+| `HideUnderPopups` (on) | hide the page while a tg menu or dropdown overlaps it |
+
+The page is a native child window placed over the widget's rectangle each frame. It follows layout, splitters, tabs (hidden when its tab isn't shown) and scrolling (cropped by scroll views). Because it's native, **tg can't draw on top of it**: menus and dropdowns that overlap it hide it while they're open, and floating `tg::Window`s dragged over it go underneath. Give it its own area (a tab, a splitter pane, a panel). Keyboard focus moves into the page when you click it and back to tg when you click tg. Try `tg_webview_demo`.
 
 ---
 

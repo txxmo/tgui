@@ -24,6 +24,10 @@ namespace tg
     App::App( const AppConfig& Cfg ) : P( std::make_unique<Impl>() )
     {
         P->Cfg = Cfg;
+#if defined( TG_GLFW_X11 ) && GLFW_VERSION_MAJOR * 100 + GLFW_VERSION_MINOR >= 304
+        // WebView on Linux embeds GTK through X11 (XWayland on a Wayland desktop)
+        if ( glfwPlatformSupported( GLFW_PLATFORM_X11 ) ) glfwInitHint( GLFW_PLATFORM, GLFW_PLATFORM_X11 );
+#endif
         if ( !glfwInit() ) { std::fprintf( stderr, "tg: glfwInit failed\n" ); return; }
         glfwWindowHint( GLFW_CONTEXT_VERSION_MAJOR, 3 );
         glfwWindowHint( GLFW_CONTEXT_VERSION_MINOR, 3 );

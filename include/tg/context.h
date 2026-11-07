@@ -12,6 +12,8 @@
 #include <functional>
 #include <memory>
 #include <string>
+#include <utility>
+#include <vector>
 
 namespace tg
 {
@@ -77,6 +79,8 @@ namespace tg
 
         // ---- keyboard / mouse-button state (for your app: poll binds, hotkeys) ----
         bool IsKeyDown( Key K ) const { return KeyState[ size_t( K ) ]; }
+        uint8_t Mods() const; // modifier keys held right now (ModShift | ModCtrl ...); also set on mouse events
+        float DoubleClickTime = 0.4f;
         uint32_t KeyPressCount( Key K ) const { return PressCount[ size_t( K ) ]; } // rising edges since start
         // Sees every key / mouse-button press before widgets do (not while a Keybind is listening,
         // and keyboard keys not while a text field has focus).
@@ -100,6 +104,17 @@ namespace tg
         // (network thread receiving chat messages, stats poller, decoder thread, ...).
         void Post( std::function<void()> Fn );
 
+        // ---- native integration (WebView and other native child windows)
+        void* NativeWindow = nullptr; // HWND / X11 Window / NSWindow* we draw into; set by the platform layer
+        uint64_t FrameIndex() const { return Frames; }
+        // Fn runs at the end of every Frame(): native children follow their widget's bounds here.
+        void AddFrameHook( const void* Key, std::function<void()> Fn );
+        void RemoveFrameHook( const void* Key );
+        // Fn runs every loop iteration, at least every 10 ms while registered (GTK's event loop for WebKit).
+        void AddPump( const void* Key, std::function<void()> Fn );
+        void RemovePump( const void* Key );
+        void RunPumps();
+
     private:
         Renderer& R;
         std::unique_ptr<Widget> RootWidget, OverlayWidget;
@@ -117,6 +132,12 @@ namespace tg
         uint32_t PressCount[ size_t( Key::Count ) ] = {};
         bool TrackKey( Key K, bool Down ); // updates state; returns true if OnKeyEvent swallowed it
 
+        // multi-click detection
+        double LastClickTime = -1;
+        Vec2 LastClickPos;
+        MouseButton LastClickButton = MouseButton::Left;
+        uint8_t ClickCount = 0;
+
         // tooltip state
         Widget* TipW = nullptr;
         double TipSince = 0;
@@ -124,6 +145,9 @@ namespace tg
         void UpdateTooltip();
         void DrawTooltip();
         bool OpenContextMenu();
+
+        uint64_t Frames = 0;
+        std::vector<std::pair<const void*, std::function<void()>>> FrameHooks, Pumps;
 
         struct PostQueue;
         std::unique_ptr<PostQueue> Posts;

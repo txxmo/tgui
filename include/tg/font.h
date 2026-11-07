@@ -155,6 +155,8 @@ namespace tg
     // Caret steps that keep emoji sequences and trailing modifiers together (text fields: arrows, Backspace).
     size_t NextGrapheme( std::string_view s, size_t i );
     size_t PrevGrapheme( std::string_view s, size_t i );
+    // The word around byte i (letters, digits, _, non-ASCII), or the single character there. Double-click selection.
+    void WordAt( std::string_view s, size_t i, size_t& Begin, size_t& End );
 
     template<typename F>
     void Font::ForEachLine( std::string_view Str, float WrapWidth, F&& Fn ) const

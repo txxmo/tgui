@@ -65,6 +65,7 @@ namespace tg
         uint8_t Mods = 0;
         bool Repeat = false;
         uint32_t Codepoint = 0;
+        uint8_t Clicks = 1; // MouseDown: 2 = double click, 3 = triple click (select word / line)
     };
 
     enum class Cursor : uint8_t { Arrow, Hand, IBeam, ResizeH, ResizeV };

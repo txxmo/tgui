@@ -2,6 +2,7 @@
 #include "tg/context.h"
 #include "tg/draw.h"
 #include "tg/font.h"
+#include "tg/widgets/menu.h"
 #include <algorithm>
 #include <cmath>
 
@@ -26,6 +27,16 @@ namespace tg
     {
         Interactive = true;
         Focusable = true;
+        // right-click: the usual edit menu (runs the same code as the shortcuts)
+        ContextMenu = [ this ]( Menu& M ) {
+            bool Sel = Caret != Anchor, Pw = Password;
+            auto K = [ this ]( Key Kc ) { return [ this, Kc ] { Event E; E.Type = EventType::KeyDown; E.KeyCode = Kc; E.Mods = ModCtrl; OnEvent( E ); }; };
+            M.Item( "Cut", K( Key::X ), "Ctrl+X" ).Enabled = Sel && !Pw;
+            M.Item( "Copy", K( Key::C ), "Ctrl+C" ).Enabled = Sel && !Pw;
+            M.Item( "Paste", K( Key::V ), "Ctrl+V" );
+            M.Separator();
+            M.Item( "Select All", K( Key::A ), "Ctrl+A" ).Enabled = !Text.empty();
+        };
     }
 
     void TextInput::SetText( std::string T )
@@ -138,6 +149,13 @@ namespace tg
             if ( E.Button != MouseButton::Left ) return false;
             Caret = ByteAt( LocalX );
             Anchor = Caret;
+            if ( E.Clicks >= 2 ) // double: word, triple: everything
+            {
+                if ( E.Clicks >= 3 || Password ) { Anchor = 0; Caret = Text.size(); }
+                else WordAt( Text, Caret, Anchor, Caret );
+                Redraw();
+                return true;
+            }
             Dragging = true;
             if ( C ) BlinkStart = C->Time();
             return true;

@@ -2,6 +2,18 @@
 #include "tg/context.h"
 #include <GLFW/glfw3.h>
 #include <algorithm>
+#include <cstdint>
+// Native handle for WebView & co. X11 only when asked for (TG_GLFW_X11): GLFW may be built without it.
+#if defined( _WIN32 )
+#define GLFW_EXPOSE_NATIVE_WIN32
+#include <GLFW/glfw3native.h>
+#elif defined( __APPLE__ )
+#define GLFW_EXPOSE_NATIVE_COCOA
+#include <GLFW/glfw3native.h>
+#elif defined( TG_GLFW_X11 )
+#define GLFW_EXPOSE_NATIVE_X11
+#include <GLFW/glfw3native.h>
+#endif
 
 namespace tg::glfw
 {
@@ -40,6 +52,13 @@ namespace tg::glfw
     {
         glfwSetWindowUserPointer( W, &C );
         ClipboardWindow = W;
+#if defined( _WIN32 )
+        C.NativeWindow = glfwGetWin32Window( W );
+#elif defined( __APPLE__ )
+        C.NativeWindow = (void*)glfwGetCocoaWindow( W );
+#elif defined( TG_GLFW_X11 )
+        C.NativeWindow = (void*)uintptr_t( glfwGetX11Window( W ) ); // 0 when GLFW runs on Wayland
+#endif
 
         glfwSetCursorPosCallback( W, []( GLFWwindow* W, double X, double Y ) { Ctx( W ).OnMouseMove( ToUI( W, X, Y ) ); } );
         glfwSetMouseButtonCallback( W, []( GLFWwindow* W, int B, int Action, int ) {
@@ -87,5 +106,6 @@ namespace tg::glfw
         double T = C.SecondsUntilNextFrame();
         if ( T <= 0 ) glfwPollEvents();
         else glfwWaitEventsTimeout( std::min( T, 0.5 ) );
+        C.RunPumps();
     }
 }

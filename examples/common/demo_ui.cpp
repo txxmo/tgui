@@ -752,7 +752,7 @@ void DemoApp::AddMessage( const std::string& Who, const std::string& Text, const
     Meta.Layout.CrossAlign = Align::End;
     AddText( Meta, Who, T.Bold );
     AddText( Meta, Time, T.Small, Tok::TextDim );
-    AddText( Col2, Text, nullptr, Tok::Text, true );
+    AddText( Col2, Text, nullptr, Tok::Text, true ).SetSelectable( true ); // drag / double-click to select, Ctrl+C or right-click to copy
 }
 
 void DemoApp::TickStats( double T )

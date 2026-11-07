@@ -8,6 +8,7 @@
 #include <cmath>
 #include <cstdio>
 #include <cstdlib>
+#include <cstring>
 #include <unordered_map>
 
 namespace tg
@@ -108,8 +109,9 @@ namespace tg
         for ( int i = 8; i < W; i += 8 ) Tabs[ size_t( i ) ] = true;
         Bottom = H - 1;
         ContextMenu = [ this ]( Menu& M ) {
-            M.Item( "Copy", [ this ] { Context* C = GetContext(); if ( C && C->SetClipboard && HasSel ) C->SetClipboard( SelectedText() ); }, "Ctrl+Shift+C" ).Enabled = HasSel;
-            M.Item( "Paste", [ this ] { Context* C = GetContext(); if ( C && C->GetClipboard ) Paste( C->GetClipboard() ); }, "Ctrl+Shift+V" );
+            M.Item( "Copy", [ this ] { CopySelection(); }, "Ctrl+Shift+C" ).Enabled = HasSel;
+            M.Item( "Paste", [ this ] { PasteClipboard(); }, CtrlVPastes ? "Ctrl+V" : "Ctrl+Shift+V" );
+            M.Item( "Select All", [ this ] { SelectAll(); } );
             M.Separator();
             M.Item( "Clear", [ this ] { Clear(); } );
         };
@@ -132,7 +134,9 @@ namespace tg
     {
         Pen = TermCell{};
         Cx = Cy = 0;
-        WrapPending = Alt = AppCursor = Bracketed = Origin = false;
+        WrapPending = Alt = AppCursor = Bracketed = Origin = FocusReports = false;
+        MouseMode = MouseEnc = 0;
+        MouseHeld = -1;
         CursorVisible = AutoWrap = true;
         Top = 0;
         Bottom = H - 1;
@@ -521,6 +525,9 @@ namespace tg
                 case 7: AutoWrap = On; break;
                 case 25: CursorVisible = On; break;
                 case 2004: Bracketed = On; break;
+                case 9: case 1000: case 1002: case 1003: MouseMode = On ? M : 0; MouseHeld = -1; MouseX = MouseY = -1; break;
+                case 1006: case 1015: MouseEnc = On ? M : 0; break;
+                case 1004: FocusReports = On; break;
                 case 47: case 1047: case 1049:
                     if ( On == Alt ) break;
                     if ( M == 1049 && On ) { SavedX = Cx; SavedY = Cy; SavedPen = Pen; }
@@ -532,7 +539,7 @@ namespace tg
                     Bottom = H - 1;
                     View = 0;
                     break;
-                default: break; // mouse reporting (1000/1002/1006), focus events...: not supported
+                default: break;
                 }
             }
             break;
@@ -743,6 +750,100 @@ namespace tg
         return Out;
     }
 
+    // ------------------------------------------------------------ clipboard + mouse reporting
+
+    bool Terminal::CopySelection()
+    {
+        Context* C = GetContext();
+        if ( !HasSel || !C || !C->SetClipboard ) return false;
+        C->SetClipboard( SelectedText() );
+        return true;
+    }
+
+    void Terminal::PasteClipboard()
+    {
+        Context* C = GetContext();
+        if ( C && C->GetClipboard ) Paste( C->GetClipboard() );
+    }
+
+    void Terminal::SelectAll()
+    {
+        SelA_Line = 0;
+        SelA_Col = 0;
+        SelB_Line = AbsCount() - 1;
+        SelB_Col = W;
+        HasSel = true;
+        Redraw();
+    }
+
+    static bool IsWordChar( uint32_t C )
+    {
+        // words for double-click: identifiers, paths, URLs, IPs, emails
+        return C > 127 || ( C >= '0' && C <= '9' ) || ( C >= 'a' && C <= 'z' ) || ( C >= 'A' && C <= 'Z' ) ||
+               std::strchr( "_-./~:@%+=?&#", int( C ) ) != nullptr;
+    }
+
+    void Terminal::SelectAt( long Ln, int Col, bool WholeLine )
+    {
+        const Line& L = AbsLine( Ln );
+        SelA_Line = SelB_Line = Ln;
+        if ( WholeLine || L.empty() ) { SelA_Col = 0; SelB_Col = W; HasSel = true; return; }
+        Col = std::clamp( Col, 0, int( L.size() ) - 1 );
+        if ( L[ size_t( Col ) ].Width == 0 && Col > 0 ) Col--; // right half of a wide char
+        auto Word = [ & ]( int X ) { const TermCell& Ce = L[ size_t( X ) ]; return ( Ce.Cp & SeqBit ) || IsWordChar( Ce.Cp ) || Ce.Width == 0; };
+        if ( !Word( Col ) ) { SelA_Col = Col; SelB_Col = Col + std::max<int>( 1, L[ size_t( Col ) ].Width ); HasSel = true; return; }
+        int A = Col, B = Col;
+        while ( A > 0 && Word( A - 1 ) ) A--;
+        while ( B + 1 < int( L.size() ) && Word( B + 1 ) ) B++;
+        // trailing punctuation usually isn't part of a path/URL ("see /var/log.")
+        while ( B > A && std::strchr( ".:,?", int( L[ size_t( B ) ].Cp ) ) && L[ size_t( B ) ].Cp ) B--;
+        SelA_Col = A;
+        SelB_Col = B + 1;
+        HasSel = true;
+    }
+
+    bool Terminal::Reporting( const Event& E ) const
+    {
+        // Shift bypasses the app so you can always select / copy, like xterm and every terminal since
+        return MouseMode && !( E.Mods & ModShift ) && View == 0;
+    }
+
+    int Terminal::MouseCode( MouseButton B ) const
+    {
+        switch ( B )
+        {
+        case MouseButton::Left: return 0;
+        case MouseButton::Middle: return 1;
+        case MouseButton::Right: return 2;
+        default: return -1;
+        }
+    }
+
+    void Terminal::ReportMouse( int Code, const Event& E, bool Press )
+    {
+        Rect In = Inner();
+        int X = std::clamp( int( std::floor( ( E.Pos.x - In.x ) / CellW ) ), 0, W - 1 ) + 1;
+        int Y = std::clamp( int( std::floor( ( E.Pos.y - In.y ) / CellH ) ), 0, H - 1 ) + 1;
+        bool Motion = Code & 32;
+        if ( Motion && X == MouseX && Y == MouseY ) return; // only when the cell changes
+        MouseX = X;
+        MouseY = Y;
+        if ( MouseMode != 9 ) Code |= ( E.Mods & ModAlt ? 8 : 0 ) | ( E.Mods & ModCtrl ? 16 : 0 );
+        char B[ 48 ];
+        if ( MouseEnc == 1006 ) std::snprintf( B, sizeof( B ), "\x1b[<%d;%d;%d%c", Code, X, Y, Press ? 'M' : 'm' );
+        else
+        {
+            int Cb = Press ? Code : ( 3 | ( Code & ~3 & ~64 ) ); // legacy encodings: release = button 3
+            if ( MouseEnc == 1015 ) std::snprintf( B, sizeof( B ), "\x1b[%d;%d;%dM", Cb + 32, X, Y );
+            else
+            {
+                if ( X > 223 || Y > 223 ) return; // doesn't fit in a byte
+                std::snprintf( B, sizeof( B ), "\x1b[M%c%c%c", char( Cb + 32 ), char( X + 32 ), char( Y + 32 ) );
+            }
+        }
+        Send( B );
+    }
+
     // ------------------------------------------------------------ keys -> bytes
 
     bool Terminal::OnEvent( const Event& E )
@@ -751,7 +852,29 @@ namespace tg
         switch ( E.Type )
         {
         case EventType::MouseDown:
-            if ( E.Button != MouseButton::Left ) return false;
+        {
+            if ( Reporting( E ) )
+            {
+                int B = MouseCode( E.Button );
+                if ( B < 0 ) return false;
+                MouseHeld = B;
+                ReportMouse( B, E, true );
+                return true;
+            }
+            if ( E.Button == MouseButton::Middle ) { PasteClipboard(); return true; } // X11-style middle-click paste
+            if ( E.Button != MouseButton::Left ) return false;                  // right: Copy / Paste menu
+            if ( E.Clicks >= 2 ) // double: word, triple: line
+            {
+                long Ln;
+                int Col;
+                CellAt( E.Pos, Ln, Col );
+                Col = std::clamp( int( std::floor( ( E.Pos.x - Inner().x ) / CellW ) ), 0, W - 1 );
+                SelectAt( Ln, Col, E.Clicks >= 3 );
+                if ( CopyOnSelect ) CopySelection();
+                Selecting = false;
+                Redraw();
+                return true;
+            }
             CellAt( E.Pos, SelA_Line, SelA_Col );
             SelB_Line = SelA_Line;
             SelB_Col = SelA_Col;
@@ -759,18 +882,39 @@ namespace tg
             HasSel = false;
             Redraw();
             return true;
+        }
         case EventType::MouseMove:
+            if ( Reporting( E ) )
+            {
+                if ( MouseMode == 1003 || ( MouseMode == 1002 && MouseHeld >= 0 ) )
+                    ReportMouse( ( MouseHeld >= 0 ? MouseHeld : 3 ) + 32, E, true );
+                return MouseMode >= 1002;
+            }
             if ( !Selecting || !IsPressed() ) return false;
             CellAt( E.Pos, SelB_Line, SelB_Col );
             HasSel = SelA_Line != SelB_Line || SelA_Col != SelB_Col;
             Redraw();
             return true;
         case EventType::MouseUp:
+            if ( MouseHeld >= 0 && MouseCode( E.Button ) == MouseHeld )
+            {
+                if ( MouseMode != 9 ) ReportMouse( MouseHeld, E, false ); // X10 mode: presses only
+                MouseHeld = -1;
+                return true;
+            }
+            if ( Reporting( E ) ) return true; // right-button release went to the app: no context menu
             if ( E.Button != MouseButton::Left ) return false;
             Selecting = false;
+            if ( HasSel && CopyOnSelect ) CopySelection();
             return true;
         case EventType::MouseWheel:
-            if ( Alt ) // full-screen apps (less, man, vim): the wheel scrolls them, like other terminals
+            if ( Reporting( E ) )
+            {
+                int N = std::max( 1, int( std::fabs( E.Wheel.y ) + 0.5f ) );
+                for ( int i = 0; i < N; i++ ) ReportMouse( E.Wheel.y > 0 ? 64 : 65, E, true );
+                return true;
+            }
+            if ( Alt ) // full-screen apps without mouse mode (less, man): the wheel sends arrows, like other terminals
             {
                 std::string K;
                 for ( int i = 0; i < 3; i++ ) K += E.Wheel.y > 0 ? ( AppCursor ? "\x1bOA" : "\x1b[A" ) : ( AppCursor ? "\x1bOB" : "\x1b[B" );
@@ -779,6 +923,11 @@ namespace tg
             }
             ScrollView( int( E.Wheel.y * 3 ) );
             return true;
+        case EventType::FocusIn:
+        case EventType::FocusOut:
+            if ( FocusReports ) Send( E.Type == EventType::FocusIn ? "\x1b[I" : "\x1b[O" );
+            Redraw();
+            return false;
         case EventType::Text:
         {
             std::string S;
@@ -795,12 +944,14 @@ namespace tg
         }
 
         const bool Shift = E.Mods & ModShift, Ctrl = E.Mods & ModCtrl, AltK = E.Mods & ModAlt;
-        // terminal-standard clipboard keys
-        if ( Ctrl && Shift && E.KeyCode == Key::C ) { if ( C && C->SetClipboard && HasSel ) C->SetClipboard( SelectedText() ); return true; }
-        if ( Ctrl && Shift && E.KeyCode == Key::V ) { if ( C && C->GetClipboard ) Paste( C->GetClipboard() ); return true; }
+        // clipboard: Ctrl+Shift+C/V, Ctrl/Shift+Insert, Ctrl+C with a selection, Ctrl+V (CtrlVPastes)
+        (void)C;
+        if ( ( Ctrl && Shift && E.KeyCode == Key::C ) || ( Ctrl && !Shift && E.KeyCode == Key::Insert ) ) { CopySelection(); return true; }
+        if ( ( Ctrl && Shift && E.KeyCode == Key::V ) || ( Shift && !Ctrl && E.KeyCode == Key::Insert ) ) { PasteClipboard(); return true; }
+        if ( Ctrl && !Shift && E.KeyCode == Key::V && CtrlVPastes ) { PasteClipboard(); return true; }
         if ( Ctrl && !Shift && E.KeyCode == Key::C && HasSel ) // like Windows Terminal: copy if there's a selection, else ^C
         {
-            if ( C && C->SetClipboard ) C->SetClipboard( SelectedText() );
+            CopySelection();
             HasSel = false;
             Redraw();
             return true;

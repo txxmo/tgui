@@ -249,12 +249,20 @@ namespace tg
         RequestFrame();
     }
 
+    uint8_t Context::Mods() const
+    {
+        auto K = [ this ]( Key A, Key B ) { return IsKeyDown( A ) || IsKeyDown( B ); };
+        return uint8_t( ( K( Key::LeftShift, Key::RightShift ) ? ModShift : 0 ) | ( K( Key::LeftCtrl, Key::RightCtrl ) ? ModCtrl : 0 ) |
+                        ( K( Key::LeftAlt, Key::RightAlt ) ? ModAlt : 0 ) | ( K( Key::LeftSuper, Key::RightSuper ) ? ModSuper : 0 ) );
+    }
+
     void Context::OnMouseMove( Vec2 P )
     {
         Mouse = P;
         UpdateHover();
         Event E; E.Type = EventType::MouseMove;
         E.Pos = P;
+        E.Mods = Mods();
         Dispatch( PressW ? PressW : HoverW, E );
         UpdateTooltip(); // after the move: widgets may set per-part tooltips (chart bars) while handling it
     }
@@ -277,6 +285,18 @@ namespace tg
         Event E; E.Type = Down ? EventType::MouseDown : EventType::MouseUp;
         E.Pos = Mouse;
         E.Button = B;
+        E.Mods = Mods();
+        if ( Down )
+        {
+            double T = FixedDt > 0 ? Now : Clock(); // fixed timestep (tests): frame time, deterministic
+            Vec2 D = Mouse - LastClickPos;
+            bool Again = B == LastClickButton && T - LastClickTime <= DoubleClickTime && D.x * D.x + D.y * D.y <= 16;
+            ClickCount = Again ? uint8_t( ClickCount % 3 + 1 ) : 1; // 1, 2, 3, then back to 1
+            LastClickTime = T;
+            LastClickPos = Mouse;
+            LastClickButton = B;
+            E.Clicks = ClickCount;
+        }
         bool Swallowed = TrackKey( MouseKey( B ), Down );
         if ( CaptureW ) // a widget is listening for "any button": it gets this one, nothing else does
         {
@@ -324,6 +344,7 @@ namespace tg
     {
         Event E; E.Type = EventType::MouseWheel;
         E.Pos = Mouse;
+        E.Mods = Mods();
         E.Wheel = Delta;
         Dispatch( HoverW, E );
         // Content moved under the cursor: re-evaluate hover.
@@ -421,8 +442,28 @@ namespace tg
     double Context::SecondsUntilNextFrame() const
     {
         if ( NeedsFrame() ) return 0;
-        if ( NextTimedFrame >= 0 ) return std::max( 0.0, NextTimedFrame - Clock() );
-        return 1e9;
+        double T = NextTimedFrame >= 0 ? std::max( 0.0, NextTimedFrame - Clock() ) : 1e9;
+        return Pumps.empty() ? T : std::min( T, 0.01 ); // pumps need regular turns
+    }
+
+    static void SetHook( std::vector<std::pair<const void*, std::function<void()>>>& V, const void* K, std::function<void()> Fn )
+    {
+        for ( auto& [ Key, F ] : V )
+            if ( Key == K ) { F = std::move( Fn ); return; }
+        V.emplace_back( K, std::move( Fn ) );
+    }
+    static void DropHook( std::vector<std::pair<const void*, std::function<void()>>>& V, const void* K )
+    {
+        V.erase( std::remove_if( V.begin(), V.end(), [ K ]( auto& P ) { return P.first == K; } ), V.end() );
+    }
+    void Context::AddFrameHook( const void* K, std::function<void()> Fn ) { SetHook( FrameHooks, K, std::move( Fn ) ); }
+    void Context::RemoveFrameHook( const void* K ) { DropHook( FrameHooks, K ); }
+    void Context::AddPump( const void* K, std::function<void()> Fn ) { SetHook( Pumps, K, std::move( Fn ) ); }
+    void Context::RemovePump( const void* K ) { DropHook( Pumps, K ); }
+    void Context::RunPumps()
+    {
+        auto Copy = Pumps; // a pump may remove itself
+        for ( auto& [ K, Fn ] : Copy ) Fn();
     }
 
     const DrawList& Context::Frame()
@@ -465,6 +506,9 @@ namespace tg
         RootWidget->Draw( List );
         OverlayWidget->Draw( List );
         DrawTooltip();
+        auto Hooks = FrameHooks; // hooks may add/remove hooks; they see the same FrameIndex() as Draw did
+        for ( auto& [ K, Fn ] : Hooks ) Fn();
+        Frames++;
         return List;
     }
 
