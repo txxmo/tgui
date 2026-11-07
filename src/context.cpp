@@ -17,8 +17,8 @@ namespace tg
 
     namespace fonts
     {
-        extern const unsigned char InterRegular[], InterSemiBold[];
-        extern const size_t InterRegularSize, InterSemiBoldSize;
+        extern const unsigned char InterRegular[], InterMedium[], InterSemiBold[];
+        extern const size_t InterRegularSize, InterMediumSize, InterSemiBoldSize;
     }
 
     // Overlay layer: popups are placed under their anchor (or above when there's no room),
@@ -73,11 +73,27 @@ namespace tg
     {
         Theme& T = GetTheme();
         auto Reg = [] { return std::vector<unsigned char>( fonts::InterRegular, fonts::InterRegular + fonts::InterRegularSize ); };
+        auto Med = [] { return std::vector<unsigned char>( fonts::InterMedium, fonts::InterMedium + fonts::InterMediumSize ); };
         auto Semi = [] { return std::vector<unsigned char>( fonts::InterSemiBold, fonts::InterSemiBold + fonts::InterSemiBoldSize ); };
         T.Body = Fonts.AddFromMemory( Reg(), 15 );
-        T.Small = Fonts.AddFromMemory( Reg(), 12.5f );
+        T.Medium = Fonts.AddFromMemory( Med(), 15 );
+        T.Small = Fonts.AddFromMemory( Med(), 12.5f ); // Medium: small text thins out without hinting
         T.Bold = Fonts.AddFromMemory( Semi(), 15 );
         T.Title = Fonts.AddFromMemory( Semi(), 20 );
+        Scale = S;
+        return Fonts.Build( R, S );
+    }
+
+    bool Context::LoadFonts( const std::string& Regular, const std::string& Bold, float S, const std::string& Medium )
+    {
+        Theme& T = GetTheme();
+        const std::string& Mid = Medium.empty() ? Regular : Medium;
+        T.Body = Fonts.AddFromFile( Regular, 15 );
+        T.Medium = Fonts.AddFromFile( Mid, 15 );
+        T.Small = Fonts.AddFromFile( Mid, 12.5f );
+        T.Bold = Fonts.AddFromFile( Bold, 15 );
+        T.Title = Fonts.AddFromFile( Bold, 20 );
+        if ( !T.Body || !T.Medium || !T.Small || !T.Bold || !T.Title ) return false;
         Scale = S;
         return Fonts.Build( R, S );
     }
@@ -86,10 +102,11 @@ namespace tg
     {
         Theme& T = GetTheme();
         T.Body = Fonts.AddFromFile( Dir + "/Inter-Regular.otf", 15 );
-        T.Small = Fonts.AddFromFile( Dir + "/Inter-Regular.otf", 12.5f );
+        T.Medium = Fonts.AddFromFile( Dir + "/Inter-Medium.otf", 15 );
+        T.Small = Fonts.AddFromFile( Dir + "/Inter-Medium.otf", 12.5f );
         T.Bold = Fonts.AddFromFile( Dir + "/Inter-SemiBold.otf", 15 );
         T.Title = Fonts.AddFromFile( Dir + "/Inter-SemiBold.otf", 20 );
-        if ( !T.Body || !T.Small || !T.Bold || !T.Title ) return false;
+        if ( !T.Body || !T.Medium || !T.Small || !T.Bold || !T.Title ) return false;
         Scale = S;
         return Fonts.Build( R, S );
     }

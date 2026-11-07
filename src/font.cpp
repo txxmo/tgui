@@ -35,13 +35,34 @@ namespace tg
         return It != Glyphs.end() ? It->second : Fallback;
     }
 
+    float Font::Kern( uint32_t A, uint32_t B ) const
+    {
+        if ( !Kerning || !A || !Info ) return 0;
+        const Glyph& Ga = Find( A );
+        const Glyph& Gb = Find( B );
+        if ( !Ga.Index || !Gb.Index ) return 0;
+        uint64_t Key = ( uint64_t( uint32_t( Ga.Index ) ) << 32 ) | uint32_t( Gb.Index );
+        auto It = KernCache.find( Key );
+        if ( It != KernCache.end() ) return It->second;
+        auto* I = static_cast<const stbtt_fontinfo*>( Info.get() );
+        float K = stbtt_GetGlyphKernAdvance( I, Ga.Index, Gb.Index ) * KernScale;
+        KernCache.emplace( Key, K );
+        return K;
+    }
+
     Vec2 Font::Measure( std::string_view Str, float WrapWidth ) const
     {
         Vec2 Out;
         ForEachLine( Str, WrapWidth, [ & ]( std::string_view Line, float Y )
         {
             float X = 0;
-            for ( size_t i = 0; i < Line.size(); ) X += Find( DecodeUtf8( Line, i ) ).Advance;
+            uint32_t Prev = 0;
+            for ( size_t i = 0; i < Line.size(); )
+            {
+                uint32_t Cp = DecodeUtf8( Line, i );
+                X += Kern( Prev, Cp ) + Find( Cp ).Advance;
+                Prev = Cp;
+            }
             Out.x = std::max( Out.x, X );
             Out.y = Y + LineHeight;
         } );
@@ -51,10 +72,14 @@ namespace tg
     size_t Font::HitTest( std::string_view Str, float X ) const
     {
         float Pen = 0;
+        uint32_t Prev = 0;
         for ( size_t i = 0; i < Str.size(); )
         {
             size_t Start = i;
-            float Adv = Find( DecodeUtf8( Str, i ) ).Advance;
+            uint32_t Cp = DecodeUtf8( Str, i );
+            Pen += Kern( Prev, Cp );
+            Prev = Cp;
+            float Adv = Find( Cp ).Advance;
             if ( X < Pen + Adv * 0.5f ) return Start;
             Pen += Adv;
         }
@@ -114,19 +139,25 @@ namespace tg
             std::vector<unsigned char> Alpha( size_t( Width ) * ( H + Reserved ), 0 );
             stbtt_pack_context Pc;
             if ( !stbtt_PackBegin( &Pc, Alpha.data() + Width * Reserved, Width, H, Width, 1, nullptr ) ) return false;
+            const int Oh = std::clamp( Quality.OversampleH, 1, 8 ), Ov = std::clamp( Quality.OversampleV, 1, 8 );
+            stbtt_PackSetOversampling( &Pc, unsigned( Oh ), unsigned( Ov ) );
 
             bool Ok = true;
-            struct Baked { std::vector<int> Cps; std::vector<stbtt_packedchar> Chars; };
+            struct Baked { std::vector<int> Cps; std::vector<stbtt_packedchar> Chars; std::shared_ptr<stbtt_fontinfo> Info; float Px = 0; };
             std::vector<Baked> Results( Sources.size() );
 
             for ( size_t s = 0; s < Sources.size() && Ok; s++ )
             {
                 const auto& Src = Sources[ s ];
                 const unsigned char* Data = Src.Data->data();
-                stbtt_fontinfo Info;
+                // The fontinfo points into the font bytes; keep both alive together (kerning queries later).
+                auto Keep = Src.Data;
+                std::shared_ptr<stbtt_fontinfo> InfoP( new stbtt_fontinfo(), [ Keep ]( stbtt_fontinfo* P ) { delete P; } );
+                stbtt_fontinfo& Info = *InfoP;
                 if ( !stbtt_InitFont( &Info, Data, stbtt_GetFontOffsetForIndex( Data, 0 ) ) ) { Ok = false; break; }
 
                 Baked& B = Results[ s ];
+                B.Info = InfoP;
                 for ( int c : Cps )
                     if ( stbtt_FindGlyphIndex( &Info, c ) ) B.Cps.push_back( c );
                 B.Chars.resize( B.Cps.size() );
@@ -140,6 +171,7 @@ namespace tg
 
                 // Metrics (in UI units).
                 float Px = stbtt_ScaleForPixelHeight( &Info, Src.Size * Scale );
+                B.Px = Px;
                 int Asc, Desc, Gap;
                 stbtt_GetFontVMetrics( &Info, &Asc, &Desc, &Gap );
                 Font* F = Src.Out;
@@ -150,9 +182,14 @@ namespace tg
             if ( !Ok ) continue; // didn't fit: try a taller atlas
 
             Height = H + Reserved;
+            // Coverage curve: stb's coverage is linear, which makes small text look thin, especially
+            // light-on-dark. Gamma > 1 lifts partial coverage so strokes read solid without going bold.
+            uint8_t Curve[ 256 ];
+            for ( int a = 0; a < 256; a++ )
+                Curve[ a ] = uint8_t( std::lround( 255.0 * std::pow( a / 255.0, 1.0 / std::max( 0.1f, Quality.Gamma ) ) ) );
             Pixels.assign( size_t( Width ) * Height, 0 );
             for ( size_t i = 0; i < Pixels.size(); i++ )
-                Pixels[ i ] = Color( 255, 255, 255, Alpha[ i ] ).Pack();
+                Pixels[ i ] = Color( 255, 255, 255, Curve[ Alpha[ i ] ] ).Pack();
             for ( int y = 1; y <= 2; y++ )
                 for ( int x = 1; x <= 2; x++ )
                     Pixels[ size_t( y ) * Width + x ] = 0xFFFFFFFFu;
@@ -163,6 +200,11 @@ namespace tg
                 Font* F = Sources[ s ].Out;
                 F->Glyphs.clear();
                 const Baked& B = Results[ s ];
+                F->Info = B.Info;
+                F->KernScale = B.Px / Scale;
+                F->Kerning = Quality.Kerning;
+                F->KernCache.clear();
+                F->SubpixelSteps = float( Oh );
                 for ( size_t i = 0; i < B.Cps.size(); i++ )
                 {
                     const stbtt_packedchar& P = B.Chars[ i ];
@@ -174,6 +216,7 @@ namespace tg
                     G.U1 = P.x1 / float( Width );
                     G.V1 = ( P.y1 + Reserved ) / float( Height );
                     G.Advance = P.xadvance / Scale;
+                    G.Index = stbtt_FindGlyphIndex( B.Info.get(), B.Cps[ i ] );
                     F->Glyphs[ uint32_t( B.Cps[ i ] ) ] = G;
                 }
                 F->Fallback = F->Find( '?' );

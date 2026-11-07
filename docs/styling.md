@@ -32,7 +32,35 @@ T.UseColors( tg::Theme::Light() );          // swap the whole palette, keep the 
 Ctx.RequestFrame();                          // theme changes don't trigger a redraw by themselves
 ```
 
-Fonts: `T.Body`, `T.Bold`, `T.Small` and `T.Title` (`tg::Font*`). Set them to your own fonts after building the atlas.
+Fonts: `T.Body`, `T.Medium`, `T.Bold`, `T.Small` and `T.Title` (`tg::Font*`). See [Fonts](#fonts).
+
+## Fonts
+
+tg ships Inter (compiled in) and renders it for UI use:
+
+- **Kerning:** pairs like "AV", "To" and "Ty" are spaced the way the font designer intended. tg reads both the classic `kern` table and GPOS pair kerning, including the "extension" lookups that Inter, Roboto and Noto use.
+- **Subpixel positioning:** the atlas is oversampled horizontally (2×), so letters sit on half pixels and spacing stays even instead of every glyph snapping to a whole pixel.
+- **Coverage gamma:** stb_truetype's antialiasing is linear, which makes small text look thin, especially light-on-dark. A gamma of 1.3 lifts partial coverage so strokes read solid without looking bold.
+- **Weights:** body text is Inter Regular 15; small text (captions, axis labels) is Inter **Medium** 12.5, because unhinted small text thins out; headings and titles use SemiBold.
+- **DPI:** glyphs are rasterized at the real scale (150%, 200%...), never stretched.
+
+Tune or turn these off before the fonts load:
+
+```cpp
+Ctx.Fonts.Quality.OversampleH = 3;     // 1 = whole-pixel positioning
+Ctx.Fonts.Quality.Gamma = 1.0f;        // linear coverage
+Ctx.Fonts.Quality.Kerning = false;
+Ctx.LoadDefaultFonts( Scale );
+```
+
+Your own font, for example the Windows system font:
+
+```cpp
+Ctx.LoadFonts( "C:/Windows/Fonts/segoeui.ttf", "C:/Windows/Fonts/segoeuib.ttf", Scale,
+               "C:/Windows/Fonts/seguisb.ttf" );   // optional Medium/semibold for small text
+```
+
+That sets the theme slots `Body`, `Medium`, `Small`, `Bold` and `Title`. To add more sizes or faces yourself, call `Ctx.Fonts.AddFromFile( Path, Size )` before the atlas is built and assign the returned `tg::Font*` wherever you like (`Label.Style.TextFont = MyFont;`).
 
 ## Colors and `Paint`
 

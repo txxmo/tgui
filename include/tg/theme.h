@@ -49,6 +49,7 @@ namespace tg
         Color Colors[ size_t( Tok::Count ) ];
         float Radius = 6.f;
         Font* Body = nullptr;  // default text
+        Font* Medium = nullptr; // between Body and Bold: emphasis that shouldn't shout
         Font* Bold = nullptr;  // headings / emphasis
         Font* Small = nullptr; // captions, axis labels
         Font* Title = nullptr; // big headings

@@ -16,6 +16,16 @@ namespace tg
         float X0, Y0, X1, Y1; // quad relative to pen position on the baseline
         float U0, V0, U1, V1;
         float Advance;
+        int Index = 0;        // glyph id in the font (for kerning)
+    };
+
+    // How glyphs are rasterized. Defaults are tuned for UI text; change before Build().
+    struct FontQuality
+    {
+        int OversampleH = 2;   // horizontal oversampling: glyphs can sit on 1/OversampleH pixel -> even letter spacing
+        int OversampleV = 1;
+        float Gamma = 1.3f;    // >1 boosts partial coverage: crisper, less "washed out" strokes (1 = linear)
+        bool Kerning = true;   // apply the font's pair kerning (AV, To, ...)
     };
 
     class Font
@@ -26,6 +36,9 @@ namespace tg
         float LineHeight = 0; // distance between baselines
 
         const Glyph& Find( uint32_t Codepoint ) const;
+        // Extra advance between two codepoints from the font's kerning (0 if none / disabled).
+        float Kern( uint32_t A, uint32_t B ) const;
+        float SubpixelSteps = 1;   // glyphs are positioned on 1/SubpixelSteps of a pixel
 
         // Size of the text block. WrapWidth > 0 wraps on spaces like DrawList::Text does.
         Vec2 Measure( std::string_view Str, float WrapWidth = 0 ) const;
@@ -41,6 +54,10 @@ namespace tg
         friend class FontAtlas;
         std::unordered_map<uint32_t, Glyph> Glyphs;
         Glyph Fallback{};
+        std::shared_ptr<void> Info;   // stbtt_fontinfo (+ the font bytes it points into), for kerning
+        float KernScale = 0;          // font units -> UI units
+        bool Kerning = false;
+        mutable std::unordered_map<uint64_t, float> KernCache;
     };
 
     class FontAtlas
@@ -56,6 +73,8 @@ namespace tg
         // Rasterize everything into Pixels and upload to the renderer.
         // Scale = DPI scale: glyphs are rasterized at Size*Scale pixels but measured in UI units.
         bool Build( Renderer& R, float Scale = 1.f );
+
+        FontQuality Quality;
 
         int Width = 0, Height = 0;
         std::vector<uint32_t> Pixels; // RGBA, white with glyph coverage in alpha
@@ -80,6 +99,7 @@ namespace tg
         {
             size_t i = LineStart, LastBreak = std::string_view::npos;
             float X = 0;
+            uint32_t PrevCp = 0;
             size_t LineEnd = Str.size();
             size_t Next = Str.size() + 1;
             while ( i < Str.size() )
@@ -88,7 +108,8 @@ namespace tg
                 uint32_t Cp = DecodeUtf8( Str, i );
                 if ( Cp == '\n' ) { LineEnd = Prev; Next = i; break; }
                 if ( Cp == ' ' ) LastBreak = Prev;
-                X += Find( Cp ).Advance;
+                X += Kern( PrevCp, Cp ) + Find( Cp ).Advance;
+                PrevCp = Cp;
                 if ( WrapWidth > 0 && X > WrapWidth && Prev > LineStart )
                 {
                     if ( LastBreak != std::string_view::npos ) { LineEnd = LastBreak; Next = LastBreak + 1; }

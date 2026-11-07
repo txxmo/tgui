@@ -429,12 +429,19 @@ namespace tg
             bool Visible = Top <= Clip.Bottom() && Top + F.LineHeight >= Clip.y;
             float X = Pos.x;
             float Baseline = Snap( Top + F.Ascent );
+            // Glyphs land on 1/SubpixelSteps of a device pixel (the atlas is oversampled to match),
+            // so spacing stays even instead of every glyph jumping to a whole pixel.
+            const float Steps = Scale * F.SubpixelSteps;
+            uint32_t Prev = 0;
             for ( size_t i = 0; i < Line.size(); )
             {
-                const Glyph& G = F.Find( DecodeUtf8( Line, i ) );
+                uint32_t Cp = DecodeUtf8( Line, i );
+                X += F.Kern( Prev, Cp );
+                Prev = Cp;
+                const Glyph& G = F.Find( Cp );
                 if ( Visible && G.X1 > G.X0 && X <= Clip.Right() )
                 {
-                    float X0 = Snap( X + G.X0 ), Y0 = Baseline + G.Y0;
+                    float X0 = std::round( ( X + G.X0 ) * Steps ) / Steps, Y0 = Baseline + G.Y0;
                     PrimQuadUV( { X0, Y0 }, { X0 + ( G.X1 - G.X0 ), Y0 + ( G.Y1 - G.Y0 ) }, { G.U0, G.V0 }, { G.U1, G.V1 }, Col );
                 }
                 X += G.Advance;

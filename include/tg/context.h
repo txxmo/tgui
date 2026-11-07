@@ -31,6 +31,9 @@ namespace tg
         // Scale = DPI scale so text is rasterized crisply on hi-dpi screens.
         bool LoadDefaultFonts( float Scale = 1.f );
         bool LoadDefaultFonts( const std::string& FontDir, float Scale );
+        // Your own font files (TTF/OTF): Regular for body text, Bold for headings/titles, Medium optional
+        // (falls back to Regular). Example: LoadFonts( "C:/Windows/Fonts/segoeui.ttf", "C:/Windows/Fonts/segoeuib.ttf", Scale )
+        bool LoadFonts( const std::string& Regular, const std::string& Bold, float Scale = 1.f, const std::string& Medium = {} );
 
         Widget& Root() { return *RootWidget; }
         Widget& Overlay() { return *OverlayWidget; } // popups live here, above everything
