@@ -10,8 +10,8 @@
 ## Build and run the examples
 
 ```sh
-git clone https://github.com/txxmo/tgui.git
-cd tgui
+git clone https://github.com/thugexchange/tg.git
+cd tg
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
 cmake --build build --config Release
 ```
@@ -47,7 +47,7 @@ It prints `headless: all checks passed` and writes PNG screenshots of every page
 
 ```cmake
 include( FetchContent )
-FetchContent_Declare( tg GIT_REPOSITORY https://github.com/txxmo/tgui.git GIT_TAG <branch-or-commit> )
+FetchContent_Declare( tg GIT_REPOSITORY https://github.com/thugexchange/tg.git GIT_TAG main )
 FetchContent_MakeAvailable( tg )
 
 add_executable( myapp main.cpp )

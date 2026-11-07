@@ -64,7 +64,7 @@ These come from `tg_headless`, which renders with the built-in software rasteriz
 
 ```cmake
 include( FetchContent )
-FetchContent_Declare( tg GIT_REPOSITORY https://github.com/txxmo/tgui.git GIT_TAG <branch-or-commit> )
+FetchContent_Declare( tg GIT_REPOSITORY https://github.com/thugexchange/tg.git GIT_TAG main )
 FetchContent_MakeAvailable( tg )
 
 add_executable( myapp main.cpp )
