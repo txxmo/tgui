@@ -6,7 +6,14 @@
 #include "tg/widgets/combo.h"
 #include "tg/widgets/label.h"
 #include "tg/widgets/progress.h"
+#include "tg/widgets/choice.h"
+#include "tg/widgets/collapsible.h"
+#include "tg/widgets/extras.h"
 #include "tg/widgets/groupbox.h"
+#include "tg/widgets/number.h"
+#include "tg/widgets/rangeslider.h"
+#include "tg/widgets/splitter.h"
+#include "tg/widgets/treeview.h"
 #include "tg/widgets/keybind.h"
 #include "tg/widgets/slider.h"
 #include "tg/widgets/tabview.h"
@@ -120,6 +127,59 @@ namespace tg
     tg::ColorPanel& Container::ColorPanel( tg::Color* V, bool Alpha ) { return Add<tg::ColorPanel>( V, Alpha ); }
     tg::ProgressBar& Container::Progress( float V ) { return Add<tg::ProgressBar>( V ); }
     tg::Keybind& Container::Keybind( std::string Label, tg::Key* V ) { return Add<tg::Keybind>( std::move( Label ), V ); }
+
+    tg::RadioGroup& Container::Radio( std::vector<std::string> O, int* I, Dir D ) { return Add<tg::RadioGroup>( std::move( O ), I, D ); }
+    tg::Segmented& Container::Segmented( std::vector<std::string> O, int* I ) { return Add<tg::Segmented>( std::move( O ), I ); }
+
+    tg::NumberInput& Container::Number( std::string Label, float* V, float Min, float Max, float Step, const char* Fmt )
+    {
+        auto& R = Labeled( std::move( Label ) );
+        auto& N = R.Add<tg::NumberInput>( V, Min, Max, Step, Fmt );
+        N.Layout.Width = Grow();
+        return N;
+    }
+
+    tg::NumberInput& Container::NumberInt( std::string Label, int* V, int Min, int Max, int Step )
+    {
+        auto Mirror = std::make_shared<float>( V ? float( *V ) : float( Min ) );
+        auto& N = Number( std::move( Label ), Mirror.get(), float( Min ), float( Max ), float( Step ), "%.0f" );
+        N.OnChange = [ V, Mirror ]( float X ) { if ( V ) *V = int( X ); };
+        return N;
+    }
+
+    tg::RangeSlider& Container::Range( std::string Label, float* Lo, float* Hi, float Min, float Max, float Step, const char* Fmt )
+    {
+        // tgui layout like Slider: [label ...... lo - hi] with the bar underneath
+        auto& Col = Column( 2 );
+        auto& Top = Col.Row( 8 );
+        auto& L = Top.Add<tg::Label>( std::move( Label ) );
+        L.Style.TextColor = Tok::TextDim;
+        L.Layout.Width = Grow();
+        auto& Val = Top.Add<tg::Label>();
+        auto& S = Col.Add<tg::RangeSlider>( Lo, Hi, Min, Max, Step );
+        std::string F = Fmt ? Fmt : "%.0f";
+        auto Show = [ &Val, F ]( float A, float B ) {
+            char Ba[ 32 ], Bb[ 32 ];
+            std::snprintf( Ba, sizeof( Ba ), F.c_str(), A );
+            std::snprintf( Bb, sizeof( Bb ), F.c_str(), B );
+            Val.SetText( std::string( Ba ) + " \xE2\x80\x93 " + Bb );
+        };
+        Show( S.GetLow(), S.GetHigh() );
+        S.OnChange = Show;
+        return S;
+    }
+
+    tg::TreeView& Container::Tree() { return Add<tg::TreeView>(); }
+    tg::Collapsible& Container::Collapsible( std::string Title, bool* Open )
+    {
+        auto& C = Add<tg::Collapsible>( std::move( Title ), Open );
+        C.LabelWidth = LabelWidth;
+        return C;
+    }
+    tg::Splitter& Container::Split( Dir D, float Ratio ) { return Add<tg::Splitter>( D, Ratio ); }
+    tg::Spinner& Container::Spinner( float Size ) { return Add<tg::Spinner>( Size ); }
+    tg::Badge& Container::Badge( std::string Text, Paint Fill ) { return Add<tg::Badge>( std::move( Text ), Fill ); }
+    tg::Link& Container::Link( std::string Text, std::function<void()> Fn ) { return Add<tg::Link>( std::move( Text ), std::move( Fn ) ); }
 
     tg::Table& Container::Table( std::vector<std::string> Columns, SelectMode Mode, int* Sel )
     {

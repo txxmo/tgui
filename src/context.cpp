@@ -1,6 +1,7 @@
 #include "tg/context.h"
 #include "tg/renderer.h"
 #include "tg/theme.h"
+#include "tg/widgets/menu.h"
 #include "tg/widgets/popup.h"
 #include <algorithm>
 #include <chrono>
@@ -31,6 +32,8 @@ namespace tg
             for ( auto& K : Children() )
             {
                 if ( !K->Visible ) continue;
+                // Full-screen layers (dialog backdrops, the toast area) fill the whole viewport.
+                if ( K->Layout.Width.K == Size::Kind::Grow && K->Layout.Height.K == Size::Kind::Grow ) { K->Arrange( R ); continue; }
                 auto* P = dynamic_cast<Popup*>( K.get() );
                 if ( !P ) { Vec2 S = K->MeasureCached( R.w ); K->Arrange( { K->Layout.Offset, S } ); continue; }
                 float W = P->Layout.Width.K == Size::Kind::Fixed ? P->Layout.Width.V : std::max( P->MinWidth, P->MeasureCached( R.w ).x );
@@ -137,6 +140,70 @@ namespace tg
             if ( auto* P = dynamic_cast<Popup*>( K.get() ) ) P->Close();
     }
 
+    static Widget* DeepestIn( Widget* W, Vec2 P )
+    {
+        if ( !W->Visible || !W->Bounds.Contains( P ) ) return nullptr;
+        for ( auto It = W->Children().rbegin(); It != W->Children().rend(); ++It )
+            if ( Widget* D = DeepestIn( It->get(), P ) ) return D;
+        return W;
+    }
+
+    Widget* Context::DeepestAt( Vec2 P )
+    {
+        // Prefer what the hit test says (respects scroll clipping), then dig into non-interactive children.
+        Widget* Start = HitTestAll( P );
+        if ( Start )
+            if ( Widget* D = DeepestIn( Start, P ) ) return D;
+        if ( Widget* D = DeepestIn( OverlayWidget.get(), P ); D && D != OverlayWidget.get() ) return D;
+        return DeepestIn( RootWidget.get(), P );
+    }
+
+    void Context::UpdateTooltip()
+    {
+        Widget* T = nullptr;
+        for ( Widget* W = DeepestAt( Mouse ); W; W = W->GetParent() )
+            if ( !W->Tooltip.empty() ) { T = W; break; }
+        if ( T == TipW ) return;
+        bool WasShown = TipW && !TipSuppressed && Now - TipSince >= TooltipDelay;
+        TipW = T;
+        TipSince = FixedDt > 0 ? Now : Clock();
+        TipSuppressed = false;
+        if ( T ) RequestFrameIn( TooltipDelay + 0.01 );
+        if ( WasShown ) RequestFrame();
+    }
+
+    void Context::DrawTooltip()
+    {
+        if ( !TipW || TipSuppressed || PressW || Now - TipSince < TooltipDelay ) return;
+        const Font* F = GetTheme().Small;
+        if ( !F ) return;
+        const float MaxW = 280, Pad = 8;
+        Vec2 S = F->Measure( TipW->Tooltip, MaxW );
+        Rect R = { Mouse.x + 12, Mouse.y + 18, S.x + Pad * 2, S.y + Pad * 1.5f };
+        if ( R.Right() > Viewport.x - 4 ) R.x = Viewport.x - 4 - R.w;
+        if ( R.Bottom() > Viewport.y - 4 ) R.y = Mouse.y - 8 - R.h;
+        R.x = std::max( 4.f, R.x );
+        R.y = std::max( 4.f, R.y );
+        const Theme& T = GetTheme();
+        List.Shadow( R, 6, Color( 0, 0, 0, 100 ), 8, { 0, 3 } );
+        List.RectFilled( R, T[ Tok::Raised ], 6 );
+        List.RectStroke( R, T[ Tok::BorderStrong ], 6 );
+        List.Text( *F, { R.x + Pad, R.y + Pad * 0.75f }, TipW->Tooltip, T[ Tok::Text ], MaxW );
+    }
+
+    bool Context::OpenContextMenu()
+    {
+        for ( Widget* W = DeepestAt( Mouse ); W; W = W->GetParent() )
+            if ( W->ContextMenu )
+            {
+                ClosePopups(); // one menu at a time
+                Menu& M = OpenMenu( *W, Mouse );
+                W->ContextMenu( M );
+                return true;
+            }
+        return false;
+    }
+
     void Context::UpdateHover()
     {
         Widget* H = HitTestAll( Mouse );
@@ -154,6 +221,7 @@ namespace tg
     {
         Mouse = P;
         UpdateHover();
+        UpdateTooltip();
         Event E; E.Type = EventType::MouseMove;
         E.Pos = P;
         Dispatch( PressW ? PressW : HoverW, E );
@@ -185,6 +253,7 @@ namespace tg
             return;
         }
         if ( Swallowed ) return;
+        if ( Down && TipW ) { TipSuppressed = true; RequestFrame(); } // clicking hides the tooltip until you move elsewhere
         if ( B == MouseButton::Back || B == MouseButton::Forward ) { Dispatch( HoverW, E ); return; }
         if ( Down )
         {
@@ -212,8 +281,9 @@ namespace tg
         }
         else
         {
-            Dispatch( B == MouseButton::Left && PressW ? PressW : HoverW, E );
+            bool Handled = Dispatch( B == MouseButton::Left && PressW ? PressW : HoverW, E );
             if ( B == MouseButton::Left ) PressW = nullptr;
+            if ( B == MouseButton::Right && !Handled ) OpenContextMenu();
         }
         RequestFrame();
     }
@@ -281,6 +351,7 @@ namespace tg
         if ( HoverW == W ) HoverW = nullptr;
         if ( PressW == W ) PressW = nullptr;
         if ( CaptureW == W ) CaptureW = nullptr;
+        if ( TipW == W ) TipW = nullptr;
         if ( FocusW == W ) FocusW = nullptr;
     }
 
@@ -360,6 +431,7 @@ namespace tg
         List.RectFilled( { 0, 0, Viewport.x, Viewport.y }, GetTheme()[ Tok::Background ] );
         RootWidget->Draw( List );
         OverlayWidget->Draw( List );
+        DrawTooltip();
         return List;
     }
 

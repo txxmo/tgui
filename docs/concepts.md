@@ -121,6 +121,21 @@ P.Add<tg::ListItem>( "Rename" ).OnClick = [&] { /* ... */ P.Close(); };
 P.OnClose = [&] { /* opener forgets its pointer */ };
 ```
 
+## Tooltips and context menus
+
+Every widget has two hooks that work without subclassing:
+
+```cpp
+Btn.Tooltip = "Builds and ships to every region";
+Card.ContextMenu = []( tg::Menu& M ) { M.Item( "Copy", ... ); M.Separator(); M.Item( "Delete", ... ).Danger = true; };
+```
+
+For both, the context looks up the **deepest widget under the mouse**, even a non-interactive one like a Label, then walks up its parents to the first one that has the hook. Setting it on a row or card therefore covers everything inside.
+
+## Modal dialogs and toasts
+
+`tg::Confirm(...)` / `tg::OpenDialog(...)` and `tg::Toast(...)` add full-screen layers to `Ctx.Overlay()`. A dialog swallows input until it's answered. The toast layer is click-through except on the toasts themselves. See [Controls reference](widgets.md#feedback).
+
 ## Threads
 
 **Only the UI thread may touch widgets.** Everything else posts:

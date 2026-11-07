@@ -44,6 +44,22 @@ struct DemoApp
     tg::Keybind* MenuBind = nullptr;
     tg::Key AimKey = tg::Key::Mouse5, MenuKey = tg::Key::Insert;
 
+    // "More" tab
+    int Plan = 1, Period = 1, Port = 8443;
+    float UiScale = 1.f, PriceLo = 200, PriceHi = 800;
+    bool DetailsOpen = true, AdvancedOpen = false, Verbose = false, Pinned = false;
+    std::string LastAction;
+    int Deleted = 0;
+    tg::RadioGroup* PlanRadio = nullptr;
+    tg::Segmented* PeriodSeg = nullptr;
+    tg::NumberInput* PortInput = nullptr;
+    tg::RangeSlider* Price = nullptr;
+    tg::TreeView* Servers = nullptr;
+    tg::Collapsible* Advanced = nullptr;
+    tg::Splitter* Split = nullptr;
+    tg::Button *ToastBtn = nullptr, *DeleteBtn = nullptr;
+    tg::Label* ActionLabel = nullptr;
+
     // plain app state bound to controls, like the old tgui did with bool*
     bool AutoRestart = true, Notifications = false, Compact = false, LightTheme = false;
     float Volume = 65;

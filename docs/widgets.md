@@ -193,6 +193,108 @@ The popup has a saturation/value square, a hue bar, an alpha bar over a checkerb
 | `GetColor()`, `SetColor()`, `OnChange( Color )`, `Bind`, `ShowAlpha`, `ShowHex` | |
 | Helpers | `tg::ToHSV`, `tg::FromHSV`, `tg::ToHex`, `tg::ParseHex`, `tg::DrawChecker` |
 
+### RadioGroup
+
+```cpp
+W.Radio( { "Low", "Medium", "High" }, &Quality );                  // column
+W.Radio( { "Day", "Week", "Month" }, &Period, tg::Dir::Row );      // row
+```
+
+`GetIndex()`, `SetIndex()`, `OnChange( int )`, `Bind`, `Options`, `Direction`. `Style`: `Size`, `LabelGap`, `ItemGap`, `Ring`, `RingHover`, `Fill`, `Dot`, `TextColor`, `TextColorOff`.
+
+### Segmented
+
+A pill selector with a sliding highlight, for a few short options:
+
+```cpp
+W.Segmented( { "1h", "24h", "7d", "30d" }, &Range );
+```
+
+`GetIndex()`, `SetIndex()`, `OnChange( int )`, `Bind`, `SegmentRect( i )`. `Style`: `Height`, `Radius`, `Inset`, `MinSegment`, colors.
+
+### NumberInput
+
+```cpp
+W.Number( "Scale", &Scale, 0.25f, 4, 0.25f, "%.2f" );   // float, label + field
+W.NumberInt( "Port", &Port, 1, 65535 );                  // int
+```
+
+- **Input:** type a value and press Enter (or click away), click **−** / **+**, or use **Up/Down** while it's focused (**Shift** = ×10). The wheel also steps while it's focused.
+- **Validation:** input that isn't a number is reverted, and values are clamped to `[Min, Max]` and snapped to `Step`.
+
+`GetValue()`, `SetValue()`, `StepBy( n )`, `OnChange( float )`, `Bind`, `Min`, `Max`, `Step`, `Format`, `Field()` (the inner `TextInput`). `Style`: `ButtonWidth`, `Radius`, colors.
+
+### RangeSlider
+
+```cpp
+W.Range( "Price", &Lo, &Hi, 0, 1000, 10, "$%.0f" );     // label + "lo – hi" above, two knobs below
+```
+
+The nearer knob follows the mouse, and `Low <= High` always holds. `GetLow()`, `GetHigh()`, `SetRange()`, `OnChange( lo, hi )`. Uses `SliderStyle`.
+
+---
+
+## Feedback
+
+### Tooltip (any widget)
+
+```cpp
+W.Button( "Deploy" ).Tooltip = "Builds and ships to every region";
+```
+
+Every widget has a `Tooltip` string. It works on labels and containers too, and the nearest ancestor with one answers. It shows after `Ctx.TooltipDelay` (0.45 s), wraps at 280 units, stays on screen, and hides when you click. `Ctx.ShownTooltip()` returns the widget whose tooltip is showing.
+
+### Context menu (any widget) and Menu
+
+```cpp
+Row.ContextMenu = [&]( tg::Menu& M ) {              // right-click on Row or anything inside it
+    M.Header( "vps-fra-01" );
+    M.Item( "Connect", [&] { Connect(); }, "Enter" );   // text, action, shortcut hint
+    M.Check( "Pinned", &Pinned );                       // tick + flips the bool
+    M.Separator();
+    M.Item( "Delete", [&] { Delete(); } ).Danger = true;
+};
+
+tg::OpenMenu( Btn, Btn.Bounds ).Item( "Export", [] { ... } );   // a "..." button menu
+```
+
+The nearest ancestor with a `ContextMenu` answers a right-click, unless the clicked widget handles right-clicks itself (like Keybind). Clicking an item closes the menu, then runs its action. `MenuItem` has `Text`, `Shortcut`, `OnClick`, `Checked` (`bool*`) and `Danger`.
+
+### Dialog (modal)
+
+```cpp
+tg::Confirm( Ctx, "Delete vps-fra-01?", "This can't be undone.", { "Cancel", "Delete" },
+             [&]( int Choice ) { if ( Choice == 1 ) Delete(); } );    // -1 = dismissed
+
+auto& D = tg::OpenDialog( Ctx, "Rename server" );                     // custom body
+auto& Name = D.Body().Input( "New name" );
+D.AddButton( "Cancel" );
+D.AddButton( "Rename", [&] { Rename( Name.GetText() ); } ).Style = tg::Button::Primary();
+```
+
+- **Modal:** it dims and blocks everything behind it.
+- **Keys:** Enter presses the last (primary) button, and Escape dismisses with `-1`.
+- **Closing:** any button closes it. `OnResult( index )` reports which button.
+- **Contents:** `Body()` is a Container, so all the helpers work inside it, including combos and pickers (their popups appear above the dialog).
+- **Look:** `Style`: `Width`, `Radius`, `Backdrop`, `Fill`, `Stroke`.
+
+### Toast
+
+```cpp
+tg::Toast( Ctx, "Settings saved", tg::Tok::Success );
+tg::Toast( Ctx, "Deploy failed: exit code 1", tg::Tok::Danger, 6 );   // seconds; <= 0 = until clicked
+```
+
+Toasts stack in the bottom-right corner, slide in, fade out on their own, and close on click. They're safe to call from `Post()`, so background threads can raise them. `tg::ToastCount( Ctx )` returns how many are on screen.
+
+### Spinner, Badge, Link
+
+```cpp
+W.Spinner();                                  // animated while visible
+W.Badge( "LIVE", tg::Tok::Danger );           // soft pill; .Soft = false for solid
+W.Link( "Open the docs", [] { ... } );        // underlined on hover
+```
+
 ---
 
 ## Data
@@ -237,6 +339,24 @@ T.DrawCell = [&]( tg::DrawList& D, tg::Rect Cell, size_t R, size_t C ) {
 | `GetSelected()`, `IsSelected()`, `SetSelected()`, `ClearSelection()`, `SelectedRows()`, `OnSelect`, `OnActivate( Row )` | |
 | `ScrollToRow()`, `GetScroll()` | |
 | `Style`: `RowHeight`, `HeaderHeight`, `CellPadding`, `Striped`, `GridLines`, colors | |
+
+### TreeView
+
+```cpp
+auto& T = W.Tree();
+auto& Eu = T.Add( "Europe" );
+Eu.Add( "vps-fra-01", /*Id*/ 17 );
+Eu.Add( "db-fra-01" ).Color = tg::Tok::Warning;
+Eu.Expanded = true;
+T.OnSelect = []( tg::TreeNode& N ) { Open( N.Id ); };
+T.ContextMenu = [&]( tg::Menu& M ) { M.Item( "Restart " + T.GetSelected()->Text, ... ); };
+```
+
+- **Mouse:** click the chevron to expand or collapse, click a row to select it. The wheel scrolls.
+- **Keyboard (when focused):** **Up/Down** move the selection; **Left** collapses or goes to the parent, **Right** expands.
+- **Drawing:** rows are painted directly, with indentation guides.
+
+`TreeNode`: `Text`, `Expanded`, `Id`, `Color`, `Children`, `Parent`, `Add()`, `Remove()`, `Depth()`. `TreeView`: `Root`, `Add()`, `Clear()`, `ExpandAll()`, `Select()`, `GetSelected()`, `Toggle()`, `OnSelect`, `OnActivate`, `OnToggle`.
 
 ### LineChart
 
@@ -308,6 +428,25 @@ Tabs share the full width (`Style.EqualWidth`), the highlight slides between the
 | API | |
 |---|---|
 | `AddTab()`, `Page( i )`, `TabCount()`, `TabName( i )`, `GetIndex()`, `Select()`, `OnChange( int )`, `Bind`, `TabRect( i )` | |
+
+### Collapsible
+
+```cpp
+auto& Adv = W.Collapsible( "Advanced", &AdvancedOpen );   // a Container: helpers work inside
+Adv.Checkbox( "Verbose logging", &Verbose );
+```
+
+Click the header to fold the section open or closed; the height animates. `IsOpen()`, `SetOpen()`, `OnToggle( bool )`, `Bind`. `Frame`: `HeaderHeight`, `Radius`, colors.
+
+### Splitter
+
+```cpp
+auto& S = W.Split( tg::Dir::Row, 0.3f );   // side by side; Dir::Column = stacked
+S.First().Tree();
+S.Second().Table( { "Name", "CPU" } );
+```
+
+Drag the divider to resize. `First()` and `Second()` are Containers. `Ratio` is the first pane's share (0..1). `Style`: `Handle`, `MinFirst`, `MinSecond`, `Line`, `LineHot`.
 
 ### Groupbox
 

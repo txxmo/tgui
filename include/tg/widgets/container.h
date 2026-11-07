@@ -32,6 +32,16 @@ namespace tg
     class Table;
     class Groupbox;
     class Keybind;
+    class RadioGroup;
+    class Segmented;
+    class NumberInput;
+    class RangeSlider;
+    class TreeView;
+    class Collapsible;
+    class Splitter;
+    class Spinner;
+    class Badge;
+    class Link;
     class TabView;
     struct TableColumn;
 
@@ -61,6 +71,17 @@ namespace tg
         tg::ColorPanel& ColorPanel( tg::Color* Value = nullptr, bool Alpha = true );
         tg::ProgressBar& Progress( float Value = 0 );
         tg::Keybind& Keybind( std::string Label, tg::Key* Value = nullptr ); // [label ....... [ KEY ]]
+        tg::RadioGroup& Radio( std::vector<std::string> Options, int* Index = nullptr, Dir Direction = Dir::Column );
+        tg::Segmented& Segmented( std::vector<std::string> Options, int* Index = nullptr );
+        tg::NumberInput& Number( std::string Label, float* Value, float Min, float Max, float Step = 1, const char* Format = "%g" );
+        tg::NumberInput& NumberInt( std::string Label, int* Value, int Min, int Max, int Step = 1 );
+        tg::RangeSlider& Range( std::string Label, float* Low, float* High, float Min, float Max, float Step = 0, const char* Format = "%.0f" );
+        tg::TreeView& Tree();
+        tg::Collapsible& Collapsible( std::string Title, bool* Open = nullptr );
+        tg::Splitter& Split( Dir Direction = Dir::Row, float Ratio = 0.5f );
+        tg::Spinner& Spinner( float Size = 18 );
+        tg::Badge& Badge( std::string Text, Paint Fill = Tok::Accent );
+        tg::Link& Link( std::string Text, std::function<void()> OnClick = {} );
         // W.Table( { "Name", "CPU", "Memory" } ) — Grow columns; tweak with T.Column( i ).Width = Px( 80 )
         tg::Table& Table( std::vector<std::string> Columns, SelectMode Mode = SelectMode::Single, int* Selected = nullptr );
 

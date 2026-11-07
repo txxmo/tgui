@@ -13,6 +13,7 @@
 #pragma once
 #include "core.h"
 #include "input.h"
+#include <functional>
 #include <memory>
 #include <string>
 #include <utility>
@@ -22,6 +23,7 @@ namespace tg
 {
     class Context;
     class DrawList;
+    class Menu;
 
     enum class Dir : uint8_t { Column, Row, Stack, Free };
     enum class Align : uint8_t { Start, Center, End, Stretch };
@@ -80,6 +82,12 @@ namespace tg
         bool Interactive = false; // gets hover/press/click (otherwise mouse falls through to the parent)
         bool Focusable = false;   // can take keyboard focus
         bool RaiseOnClick = false; // move to the top of its parent when clicked (windows)
+
+        // Hover text, shown after a short delay. Works on any widget (labels too).
+        std::string Tooltip;
+        // Right-click menu. Fill the menu when it opens:  W.ContextMenu = []( tg::Menu& M ) { M.Item( "Copy", ... ); };
+        // The nearest ancestor with a ContextMenu answers, so set it on a row/card to cover its children.
+        std::function<void( Menu& )> ContextMenu;
 
         // ---- override points ----
         // Natural size (including Layout.Padding) when given at most AvailWidth. Used for Fit().

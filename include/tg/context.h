@@ -36,6 +36,10 @@ namespace tg
         Widget& Overlay() { return *OverlayWidget; } // popups live here, above everything
         void ClosePopups();                          // close every open popup
         bool HasPopups() const;
+        // Deepest visible widget under P (interactive or not), overlay first. Used for tooltips / context menus.
+        Widget* DeepestAt( Vec2 P );
+        float TooltipDelay = 0.45f;                  // seconds of hovering before a tooltip shows
+        Widget* ShownTooltip() const { return TipW && !TipSuppressed && Now - TipSince >= TooltipDelay ? TipW : nullptr; }
 
         // ---- feed input (UI units, not framebuffer pixels) ----
         void SetViewport( Vec2 Size, float Scale = 1.f ); // Size in UI units, Scale = framebuffer px per unit
@@ -108,6 +112,14 @@ namespace tg
         bool KeyState[ size_t( Key::Count ) ] = {};
         uint32_t PressCount[ size_t( Key::Count ) ] = {};
         bool TrackKey( Key K, bool Down ); // updates state; returns true if OnKeyEvent swallowed it
+
+        // tooltip state
+        Widget* TipW = nullptr;
+        double TipSince = 0;
+        bool TipSuppressed = false;
+        void UpdateTooltip();
+        void DrawTooltip();
+        bool OpenContextMenu();
 
         struct PostQueue;
         std::unique_ptr<PostQueue> Posts;

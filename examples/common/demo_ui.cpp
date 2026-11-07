@@ -423,6 +423,91 @@ static void BuildTables( DemoApp& App, Container& Page )
     Side.Caption( "Built with W.Table( { \"Remote\", \"Port\", \"State\" }, SelectMode::None )" );
 }
 
+// More controls: choices, numbers, feedback (toasts, dialogs, tooltips, menus), tree + splitter + collapsibles.
+static void BuildMore( DemoApp& App, Container& Page )
+{
+    Page.Layout.Gap = 12;
+    auto& Top = Page.Columns( 12 );
+
+    auto& Choices = Top.Group( "Choices" );
+    App.PlanRadio = &Choices.Radio( { "Hobby  \xC2\xB7  1 vCPU", "Pro  \xC2\xB7  4 vCPU", "Team  \xC2\xB7  16 vCPU" }, &App.Plan );
+    Choices.Separator();
+    Choices.Caption( "Period" );
+    App.PeriodSeg = &Choices.Segmented( { "1h", "24h", "7d", "30d" }, &App.Period );
+
+    auto& Numbers = Top.Group( "Numbers" );
+    Numbers.LabelWidth = 64;
+    App.PortInput = &Numbers.NumberInt( "Port", &App.Port, 1, 65535 );
+    App.PortInput->Tooltip = "Type a number, use -/+ , or Up/Down (Shift = x10)";
+    Numbers.Number( "UI scale", &App.UiScale, 0.5f, 3, 0.25f, "%.2f" );
+    App.Price = &Numbers.Range( "Price", &App.PriceLo, &App.PriceHi, 0, 1000, 10, "$%.0f" );
+
+    auto& Feedback = Top.Group( "Feedback" );
+    auto& Btns = Feedback.Row( 8 );
+    App.ToastBtn = &Btns.Button( "Toast", [ &App ] { tg::Toast( *App.Ctx, "Settings saved", Tok::Success ); } );
+    App.ToastBtn->Tooltip = "Shows a notification in the corner; it fades out on its own";
+    Btns.Button( "Error", [ &App ] { tg::Toast( *App.Ctx, "Deploy failed: exit code 1", Tok::Danger, 6 ); } );
+    App.DeleteBtn = &Btns.Button( "Delete\xE2\x80\xA6", [ &App ] {
+        tg::Confirm( *App.Ctx, "Delete vps-fra-01?", "The server and its disks are destroyed. This can't be undone.", { "Cancel", "Delete" },
+                     [ &App ]( int Choice ) { if ( Choice == 1 ) { App.Deleted++; tg::Toast( *App.Ctx, "vps-fra-01 deleted", Tok::Danger ); } } );
+    } );
+    App.DeleteBtn->Style = Button::Danger();
+    App.DeleteBtn->Tooltip = "Opens a confirm dialog (Enter = Delete, Escape = cancel)";
+    auto& Busy = Feedback.Row( 10 );
+    Busy.Layout.CrossAlign = Align::Center;
+    Busy.Spinner();
+    Busy.Text( "Syncing 3 servers\xE2\x80\xA6" ).Style.TextColor = Tok::TextDim;
+    auto& Tags = Feedback.Row( 6 );
+    Tags.Badge( "LIVE", Tok::Danger );
+    Tags.Badge( "v0.5", Tok::Accent );
+    Tags.Badge( "healthy", Tok::Success );
+    auto& Solid = Tags.Badge( "PRO", Tok::Warning );
+    Solid.Soft = false;
+    Feedback.Link( "Open the docs", [ &App ] { tg::Toast( *App.Ctx, "docs/README.md", Tok::Accent ); } );
+
+    // ---- explorer: tree | details, in a resizable splitter
+    auto& Explorer = Page.Columns( 12 );
+    auto& G = Explorer.Group( "Explorer  \xC2\xB7  drag the divider, right-click a server" );
+    App.Split = &G.Split( Dir::Row, 0.38f );
+    auto& T = App.Split->First().Tree();
+    App.Servers = &T;
+    struct { const char* Region; std::vector<const char*> Hosts; } Regions[] = {
+        { "Europe", { "vps-fra-01", "vps-ams-02", "db-fra-01" } },
+        { "North America", { "vps-nyc-01", "vps-tor-01" } },
+        { "Asia Pacific", { "vps-sgp-01", "vps-syd-01", "vps-tyo-01" } },
+    };
+    for ( auto& R : Regions )
+    {
+        auto& N = T.Add( R.Region );
+        for ( const char* H : R.Hosts ) N.Add( H );
+    }
+    T.Root.Children[ 0 ]->Expanded = true;
+    T.Root.Children[ 0 ]->Children[ 2 ]->Color = Tok::Warning;
+    T.OnSelect = [ &App ]( TreeNode& N ) { App.ActionLabel->SetText( "Selected: " + N.Text ); };
+    T.ContextMenu = [ &App ]( Menu& M ) {
+        TreeNode* N = App.Servers->GetSelected();
+        std::string Name = N ? N->Text : "server";
+        M.Header( Name );
+        M.Item( "Connect", [ &App, Name ] { App.LastAction = "Connect " + Name; App.ActionLabel->SetText( App.LastAction ); }, "Enter" );
+        M.Item( "Restart", [ &App, Name ] { App.LastAction = "Restart " + Name; App.ActionLabel->SetText( App.LastAction ); }, "Ctrl+R" );
+        M.Check( "Pinned", &App.Pinned );
+        M.Separator();
+        M.Item( "Delete", [ &App, Name ] { App.LastAction = "Delete " + Name; App.ActionLabel->SetText( App.LastAction ); } ).Danger = true;
+    };
+
+    auto& Right = App.Split->Second();
+    Right.Layout.Padding = Insets( 0, 0, 0, 0 );
+    App.ActionLabel = &Right.Text( "Selected: nothing" );
+    auto& Details = Right.Collapsible( "Details", &App.DetailsOpen );
+    Details.Text( "Ubuntu 24.04  \xC2\xB7  4 vCPU  \xC2\xB7  8 GB  \xC2\xB7  10.0.4.21" ).Style.TextColor = Tok::TextDim;
+    Details.Progress( 0.62f ).Style.Thresholds = true;
+    App.Advanced = &Right.Collapsible( "Advanced", &App.AdvancedOpen );
+    App.Advanced->Checkbox( "Verbose logging", &App.Verbose );
+    App.Advanced->NumberInt( "Workers", &App.FpsCap, 1, 64 );
+    auto& Danger = Right.Collapsible( "Danger zone" );
+    Danger.Button( "Reinstall OS" ).Style = Button::Danger();
+}
+
 // ---------------------------------------------------------------- app
 
 void DemoApp::Build( Context& C, Widget& Root )
@@ -450,7 +535,7 @@ void DemoApp::Build( Context& C, Widget& Root )
     // ---- tabs across the top, one page each
     auto& Body = Root.Add<Container>( Dir::Column, 0, Insets( 16, 14, 16, 16 ) );
     Body.Layout.Height = Grow();
-    const char* Names[] = { "Dashboard", "Chat", "Controls", "Tables", "Windows" };
+    const char* Names[] = { "Dashboard", "Chat", "Controls", "Tables", "Windows", "More" };
     for ( const char* N : Names ) Pages.push_back( &Body.Tab( N ) );
     Tabs = Body.Tabs();
     Tabs->OnChange = [ this ]( int i ) { Page = i; };
@@ -460,6 +545,7 @@ void DemoApp::Build( Context& C, Widget& Root )
     BuildControls( *this, *Pages[ 2 ] );
     BuildTables( *this, *Pages[ 3 ] );
     BuildWindows( *this, *Pages[ 4 ] );
+    BuildMore( *this, *Pages[ 5 ] );
 
     // Global hotkey, like the old tgui Insert key: show/hide the Test Window.
     C.OnKeyEvent = [ this ]( Key K, bool Down ) {

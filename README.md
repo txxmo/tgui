@@ -51,6 +51,8 @@ These come from `tg_headless`, which renders with the built-in software rasteriz
 
 <img src="docs/tables.png" width="640">
 
+<img src="docs/more.png" width="640">
+
 | | |
 |---|---|
 | <img src="docs/chat.png" width="400"> | <img src="docs/windows.png" width="400"> |
@@ -127,6 +129,17 @@ Groups.Group( "Example Group 2" ).Button( "Print", [] { ... } );
 | ListBox | `W.List( items, SelectMode::Single, &index )` | `SelectMode::None` = plain list, `Single`, `Multi`; switch live with `SetMode()` |
 | ColorPicker | `W.ColorPicker( "Tint", &color )` | swatch → popup: SV square, hue, alpha, hex input |
 | ColorPanel | `W.ColorPanel( &color )` | the picker, inline |
+| RadioGroup / Segmented | `W.Radio( opts, &i )`, `W.Segmented( opts, &i )` | pick one of a few |
+| NumberInput | `W.Number( "Scale", &f, 0, 4, 0.25f )`, `W.NumberInt( "Port", &i, 1, 65535 )` | type, -/+, Up/Down (Shift x10); validates and clamps |
+| RangeSlider | `W.Range( "Price", &lo, &hi, 0, 1000 )` | two knobs |
+| TreeView | `W.Tree().Add( "Europe" ).Add( "vps-fra-01" )` | expand/collapse, select, keyboard, scrolls |
+| Collapsible | `W.Collapsible( "Advanced", &open )` | animated accordion section (a Container) |
+| Splitter | `W.Split( tg::Dir::Row, 0.3f )` | two resizable panes |
+| Tooltip | `AnyWidget.Tooltip = "..."` | on every widget, labels too |
+| Context menu | `AnyWidget.ContextMenu = []( tg::Menu& M ) { ... }` | right-click; items, checks, shortcuts, separators |
+| Dialog | `tg::Confirm( Ctx, title, msg, { "Cancel", "Delete" }, fn )` | modal; Enter / Escape; custom bodies via `OpenDialog` |
+| Toast | `tg::Toast( Ctx, "Saved", tg::Tok::Success )` | notifications that fade out |
+| Spinner / Badge / Link | `W.Spinner()`, `W.Badge( "LIVE", tg::Tok::Danger )`, `W.Link( "docs", fn )` | |
 | Keybind | `W.Keybind( "Aim key", &key )` | click, press any key or mouse button (incl. side buttons); Escape unbinds; right-click for hold / toggle / always; `IsActive()` |
 | ProgressBar | `W.Progress( 0.4f )` | optional warn/hot thresholds |
 | Table | `W.Table( { "Name", "CPU", "Memory" } )` | sortable headers (numbers sort as numbers), drag-to-resize columns, None/Single/Multi row select, custom cells, only visible rows drawn |

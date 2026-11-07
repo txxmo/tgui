@@ -106,11 +106,37 @@ namespace tg
         else Path.push_back( { r.x, r.Bottom() } );
     }
 
+    // Drop consecutive duplicate points (and a closing duplicate): zero-length segments have no normal
+    // and would break the miter/AA math. Returns the cleaned count; writes into Out.
+    static int Dedupe( const Vec2* P, int N, bool Closed, std::vector<Vec2>& Out )
+    {
+        Out.clear();
+        for ( int i = 0; i < N; i++ )
+        {
+            if ( !Out.empty() )
+            {
+                Vec2 D = P[ i ] - Out.back();
+                if ( D.x * D.x + D.y * D.y < 1e-6f ) continue;
+            }
+            Out.push_back( P[ i ] );
+        }
+        if ( Closed && Out.size() > 1 )
+        {
+            Vec2 D = Out.front() - Out.back();
+            if ( D.x * D.x + D.y * D.y < 1e-6f ) Out.pop_back();
+        }
+        return int( Out.size() );
+    }
+
     // ------------------------------------------------------------ fills
 
-    void DrawList::ConvexFillImpl( const Vec2* P, int N, Color c, TextureId Tex, const Rect* UVRect, Vec2 UV0, Vec2 UV1 )
+    void DrawList::ConvexFillImpl( const Vec2* Pin, int Nin, Color c, TextureId Tex, const Rect* UVRect, Vec2 UV0, Vec2 UV1 )
     {
-        if ( N < 3 || c.a == 0 ) return;
+        if ( Nin < 3 || c.a == 0 ) return;
+        thread_local std::vector<Vec2> Clean;
+        int N = Dedupe( Pin, Nin, true, Clean );
+        const Vec2* P = Clean.data();
+        if ( N < 3 ) return;
         SetTexture( Tex ? Tex : AtlasTexture );
 
         const uint32_t Col = c.Pack(), Clear = c.WithAlpha( 0 ).Pack();
@@ -250,9 +276,16 @@ namespace tg
 
     // ------------------------------------------------------------ strokes
 
-    void DrawList::Polyline( const Vec2* P, int N, Color c, float Thickness, bool Closed )
+    void DrawList::Polyline( const Vec2* Pin, int Nin, Color c, float Thickness, bool Closed )
     {
-        if ( N < 2 || c.a == 0 ) return;
+        if ( Nin < 2 || c.a == 0 ) return;
+        thread_local std::vector<Vec2> CleanPts;
+        std::vector<Vec2> Pts; // own copy: callers may pass our Path, and round joins reuse scratch buffers
+        Dedupe( Pin, Nin, Closed, CleanPts );
+        Pts = CleanPts;
+        const Vec2* P = Pts.data();
+        int N = int( Pts.size() );
+        if ( N < 2 ) return;
         SetTexture( AtlasTexture );
 
         const float Feather = 1.0f / Scale;

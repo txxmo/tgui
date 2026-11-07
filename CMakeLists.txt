@@ -25,23 +25,33 @@ add_library( tg STATIC
     src/widgets/button.cpp
     src/widgets/chart.cpp
     src/widgets/checkbox.cpp
+    src/widgets/choice.cpp
+    src/widgets/collapsible.cpp
     src/widgets/colorpicker.cpp
     src/widgets/combo.cpp
     src/widgets/container.cpp
+    src/widgets/dialog.cpp
+    src/widgets/extras.cpp
     src/widgets/groupbox.cpp
     src/widgets/image.cpp
     src/widgets/keybind.cpp
     src/widgets/label.cpp
     src/widgets/listbox.cpp
     src/widgets/listitem.cpp
+    src/widgets/menu.cpp
+    src/widgets/number.cpp
     src/widgets/popup.cpp
     src/widgets/progress.cpp
+    src/widgets/rangeslider.cpp
     src/widgets/scrollview.cpp
     src/widgets/slider.cpp
+    src/widgets/splitter.cpp
     src/widgets/table.cpp
     src/widgets/tabview.cpp
     src/widgets/textinput.cpp
+    src/widgets/toast.cpp
     src/widgets/toggle.cpp
+    src/widgets/treeview.cpp
     src/widgets/window.cpp
 )
 add_library( tg::tg ALIAS tg )

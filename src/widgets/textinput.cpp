@@ -154,6 +154,7 @@ namespace tg
         case EventType::FocusOut:
             Anchor = Caret;
             Dragging = false;
+            if ( OnBlur ) { auto Fn = OnBlur; Fn(); }
             return true;
         case EventType::Text:
             if ( E.Codepoint < 32 || E.Codepoint == 127 ) return false;

@@ -27,6 +27,7 @@ namespace tg
         std::string Placeholder;
         std::function<void( const std::string& )> OnChange;
         std::function<void( const std::string& )> OnSubmit;
+        std::function<void()> OnBlur; // lost keyboard focus
         bool ClearOnSubmit = false;
         bool Password = false;
         TextInputStyle Style;

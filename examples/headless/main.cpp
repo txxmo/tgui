@@ -346,6 +346,175 @@ int main( int Argc, char** Argv )
     ClickAt( Ctx, { Sb.Right() - 18, Sb.y + 18 } ); // the X
     CHECK( !App.SettingsWin->Visible );
 
+    // ---------------- "More" tab: new controls
+    App.SettingsWin->Show();
+    ClickTab( Ctx, App, 5 );
+    Shot( Ctx, "more" );
+
+    // radio + segmented
+    {
+        tg::RadioGroup& R = *App.PlanRadio;
+        tg::Rect B = R.Bounds;
+        float RowH = ( B.h - 2 * R.Style.ItemGap ) / 3;
+        ClickAt( Ctx, { B.x + 30, B.y + RowH * 2 + R.Style.ItemGap * 2 + RowH * 0.5f } );
+        CHECK( App.Plan == 2 );
+        ClickAt( Ctx, App.PeriodSeg->SegmentRect( 3 ).Center() );
+        CHECK( App.Period == 3 );
+    }
+
+    // number input: +, typing, Enter, Up/Down, garbage, clamping
+    {
+        tg::NumberInput& N = *App.PortInput;
+        tg::Rect B = N.Bounds;
+        ClickAt( Ctx, { B.Right() - N.Style.ButtonWidth * 0.5f, B.Center().y } ); // +
+        CHECK( App.Port == 8444 );
+        ClickAt( Ctx, { B.Right() - N.Style.ButtonWidth * 1.5f, B.Center().y } ); // -
+        CHECK( App.Port == 8443 );
+        Click( Ctx, N.Field() );
+        CHECK( Ctx.Focused() == &N.Field() );
+        Ctx.OnKey( tg::Key::A, true, tg::ModCtrl );
+        for ( const char* p = "9000"; *p; p++ ) Ctx.OnText( uint32_t( *p ) );
+        Ctx.OnKey( tg::Key::Enter, true, 0 );
+        CHECK( App.Port == 9000 );
+        Ctx.OnKey( tg::Key::Up, true, 0 );
+        CHECK( App.Port == 9001 );
+        Ctx.OnKey( tg::Key::Down, true, tg::ModShift );
+        CHECK( App.Port == 8991 );
+        Ctx.OnKey( tg::Key::A, true, tg::ModCtrl );
+        for ( const char* p = "abc"; *p; p++ ) Ctx.OnText( uint32_t( *p ) );
+        Ctx.OnKey( tg::Key::Enter, true, 0 );
+        CHECK( App.Port == 8991 && N.Field().GetText() == "8991" ); // not a number: restored
+        Ctx.OnKey( tg::Key::A, true, tg::ModCtrl );
+        for ( const char* p = "70000"; *p; p++ ) Ctx.OnText( uint32_t( *p ) );
+        ClickAt( Ctx, { 1270, 810 } );                                // blur commits
+        CHECK( App.Port == 65535 );
+    }
+
+    // range slider: drag the high knob left past the low one -> clamps, Lo <= Hi
+    {
+        tg::RangeSlider& R = *App.Price;
+        tg::Rect B = R.Bounds;
+        float Kr = R.Style.KnobRadius, W = B.w - Kr * 2;
+        tg::Vec2 HighKnob = { B.x + Kr + W * 0.8f, B.Center().y };
+        Drag( Ctx, HighKnob, { B.x + Kr + W * 0.5f, B.Center().y } );
+        CHECK( App.PriceHi == 500 && App.PriceLo == 200 );
+        Drag( Ctx, { B.x + Kr + W * 0.5f, B.Center().y }, { B.x, B.Center().y } );
+        CHECK( App.PriceLo <= App.PriceHi );
+    }
+
+    // tooltip appears after the delay, hides on click
+    {
+        Ctx.OnMouseMove( App.ToastBtn->Bounds.Center() );
+        Ctx.Frame();
+        CHECK( Ctx.ShownTooltip() == nullptr );          // not yet
+        for ( int i = 0; i < 40; i++ ) Ctx.Frame();      // ~0.66 s
+        CHECK( Ctx.ShownTooltip() == App.ToastBtn );
+        Shot( Ctx, "more_tooltip" );
+    }
+
+    // toast: click -> appears, times out
+    {
+        CHECK( tg::ToastCount( Ctx ) == 0 );
+        Click( Ctx, *App.ToastBtn );
+        CHECK( Ctx.ShownTooltip() == nullptr );          // clicking hid the tooltip
+        CHECK( tg::ToastCount( Ctx ) == 1 );
+        for ( int i = 0; i < 40; i++ ) Ctx.Frame();
+        Shot( Ctx, "more_toast" );
+        for ( int i = 0; i < 400; i++ ) Ctx.Frame();     // 3.5 s life + fade
+        CHECK( tg::ToastCount( Ctx ) == 0 );
+    }
+
+    // confirm dialog: modal, Enter = primary, Escape = dismiss
+    auto FindDialog = [ & ]() -> tg::Dialog* {
+        for ( auto& K : Ctx.Overlay().Children() )
+            if ( auto* D = dynamic_cast<tg::Dialog*>( K.get() ); D && !D->IsClosed() ) return D;
+        return nullptr;
+    };
+    {
+        Click( Ctx, *App.DeleteBtn );
+        tg::Dialog* D = FindDialog();
+        CHECK( D );
+        Settle( Ctx );
+        Shot( Ctx, "more_dialog" );
+        ClickAt( Ctx, App.ToastBtn->Bounds.Center() );    // behind the backdrop: blocked
+        CHECK( tg::ToastCount( Ctx ) == 0 && FindDialog() == D );
+        Ctx.OnKey( tg::Key::Enter, true, 0 );
+        Ctx.Frame();
+        CHECK( App.Deleted == 1 && FindDialog() == nullptr );
+        Click( Ctx, *App.DeleteBtn );
+        CHECK( FindDialog() );
+        Ctx.OnKey( tg::Key::Escape, true, 0 );
+        Ctx.Frame();
+        CHECK( App.Deleted == 1 && FindDialog() == nullptr );
+        for ( int i = 0; i < 500; i++ ) Ctx.Frame();     // let the "deleted" toast go
+    }
+
+    // tree: expand with the chevron, select, keyboard, context menu
+    {
+        tg::TreeView& T = *App.Servers;
+        CHECK( T.VisibleRows() == 3 + 3 );                // Europe expanded: 3 regions + 3 hosts
+        tg::Rect B = T.Bounds;
+        float Rh = T.Style.RowHeight;
+        // "North America" is row 4 (after Europe + its 3 hosts); click its chevron
+        ClickAt( Ctx, { B.x + 6 + 9, B.y + 4 + Rh * 4.5f } );
+        CHECK( T.VisibleRows() == 3 + 3 + 2 );
+        ClickAt( Ctx, { B.x + 90, B.y + 4 + Rh * 1.5f } ); // vps-fra-01
+        CHECK( T.GetSelected() && T.GetSelected()->Text == "vps-fra-01" );
+        Ctx.OnKey( tg::Key::Down, true, 0 );
+        CHECK( T.GetSelected()->Text == "vps-ams-02" );
+        Ctx.OnKey( tg::Key::Left, true, 0 );              // to the parent
+        CHECK( T.GetSelected()->Text == "Europe" );
+        Ctx.OnKey( tg::Key::Left, true, 0 );              // collapse
+        CHECK( T.VisibleRows() == 3 + 2 );
+        Ctx.OnKey( tg::Key::Right, true, 0 );             // expand again
+        CHECK( T.VisibleRows() == 3 + 3 + 2 );
+        // right-click vps-ams-02 (not selected yet) -> selects it, context menu -> Restart
+        Ctx.OnMouseMove( { B.x + 90, B.y + 4 + Rh * 2.5f } );
+        Ctx.OnMouseButton( tg::MouseButton::Right, true );
+        Ctx.OnMouseButton( tg::MouseButton::Right, false );
+        Ctx.Frame();
+        auto* M = dynamic_cast<tg::Menu*>( OpenPopup( Ctx ) );
+        CHECK( M );
+        Settle( Ctx );
+        Shot( Ctx, "more_menu" );
+        tg::MenuItem* Restart = Find<tg::MenuItem>( *M, 1 );
+        CHECK( Restart && Restart->Text == "Restart" );
+        Click( Ctx, *Restart );
+        CHECK( App.LastAction == "Restart vps-ams-02" && OpenPopup( Ctx ) == nullptr );
+        // checkable item flips its bool
+        Ctx.OnMouseButton( tg::MouseButton::Right, true );
+        Ctx.OnMouseButton( tg::MouseButton::Right, false );
+        Ctx.Frame();
+        M = dynamic_cast<tg::Menu*>( OpenPopup( Ctx ) );
+        Settle( Ctx );
+        Click( Ctx, *Find<tg::MenuItem>( *M, 2 ) );
+        CHECK( App.Pinned );
+    }
+
+    // collapsible: click the header -> opens (animated), contents become clickable
+    {
+        tg::Collapsible& A = *App.Advanced;
+        float H0 = A.Bounds.h;
+        ClickAt( Ctx, { A.Bounds.x + 60, A.Bounds.y + 12 } );
+        Settle( Ctx );
+        CHECK( App.AdvancedOpen && A.Bounds.h > H0 + 40 );
+        bool V = App.Verbose;
+        Click( Ctx, *Find<tg::Checkbox>( A ) );
+        CHECK( App.Verbose != V );
+    }
+
+    // splitter: drag the divider
+    {
+        tg::Splitter& S = *App.Split;
+        float R0 = S.Ratio;
+        tg::Rect Pane = S.First().Bounds;
+        Drag( Ctx, { Pane.Right() + 3, Pane.Center().y }, { Pane.Right() + 83, Pane.Center().y } );
+        CHECK( S.Ratio > R0 + 0.05f );
+        CHECK( S.First().Bounds.w > Pane.w + 70 );
+    }
+    Settle( Ctx );
+    Shot( Ctx, "more_after" );
+
     // ---------------- light theme
     tg::GetTheme().UseColors( tg::Theme::Light() );
     App.SettingsWin->Show();
