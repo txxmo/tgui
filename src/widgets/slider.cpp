@@ -1,0 +1,71 @@
+#include "tg/widgets/slider.h"
+#include "tg/draw.h"
+#include <algorithm>
+#include <cmath>
+
+namespace tg
+{
+    Slider::Slider( float* B, float Mn, float Mx, float St ) : Bind( B ), Min( Mn ), Max( Mx ), Step( St )
+    {
+        Interactive = true;
+        Own = Mn;
+    }
+
+    void Slider::SetValue( float V )
+    {
+        V = Clamp( V, std::min( Min, Max ), std::max( Min, Max ) );
+        if ( Step > 0 ) V = Min + std::round( ( V - Min ) / Step ) * Step;
+        if ( V == GetValue() ) return;
+        ( Bind ? *Bind : Own ) = V;
+        if ( OnChange ) OnChange( V );
+        Redraw();
+    }
+
+    void Slider::SetFromMouse( float X )
+    {
+        float L = Bounds.x + Style.KnobRadius, W = Bounds.w - Style.KnobRadius * 2;
+        float t = W > 0 ? Clamp( ( X - L ) / W, 0, 1 ) : 0;
+        SetValue( Min + ( Max - Min ) * t );
+    }
+
+    Vec2 Slider::Measure( float Avail ) { return { std::min( Avail, 160.f ), Style.Height }; }
+
+    void Slider::Draw( DrawList& D )
+    {
+        const SliderStyle& S = Style;
+        Animate( HoverT, IsHovered() || IsPressed() ? 1.f : 0.f );
+
+        float t = Max != Min ? Clamp( ( GetValue() - Min ) / ( Max - Min ), 0, 1 ) : 0;
+        float Cy = Bounds.y + Bounds.h * 0.5f;
+        float L = Bounds.x + S.KnobRadius, W = Bounds.w - S.KnobRadius * 2;
+        Rect Track = { L, Cy - S.TrackHeight * 0.5f, W, S.TrackHeight };
+
+        D.RectFilled( Track, S.Track.Resolve(), S.TrackHeight * 0.5f );
+        D.RectFilled( { Track.x, Track.y, W * t, Track.h }, S.TrackFill.Resolve(), S.TrackHeight * 0.5f );
+
+        Vec2 Knob = { L + W * t, Cy };
+        float R = S.KnobRadius + HoverT * 1.5f;
+        D.CircleFilled( Knob, R + 2, S.KnobStroke.Resolve().Fade( 0.25f * HoverT ) );
+        D.CircleFilled( Knob, R, S.KnobStroke.Resolve() );
+        D.CircleFilled( Knob, R - 2, S.Knob.Resolve() );
+    }
+
+    bool Slider::OnEvent( const Event& E )
+    {
+        switch ( E.Type )
+        {
+        case EventType::MouseDown:
+            if ( E.Button != MouseButton::Left ) return false;
+            SetFromMouse( E.Pos.x );
+            return true;
+        case EventType::MouseMove:
+            if ( !IsPressed() ) return false;
+            SetFromMouse( E.Pos.x );
+            return true;
+        case EventType::MouseUp:
+            return E.Button == MouseButton::Left;
+        default:
+            return false;
+        }
+    }
+}
