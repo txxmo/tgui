@@ -25,7 +25,7 @@ import sys
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 INCLUDE_DIRS = [os.path.join(ROOT, d) for d in ("include", "backends", "third_party/stb", "third_party/nanosvg")]
-THIRD_PARTY = os.path.join(ROOT, "third_party")
+THIRD_PARTY = os.path.normcase(os.path.join(ROOT, "third_party"))
 
 # Core sources, in CMake order (src/ then src/widgets/), minus the platform-specific pieces.
 def core_sources():
@@ -84,10 +84,12 @@ class Amalgam:
         for d in [from_dir] + INCLUDE_DIRS:
             p = os.path.normpath(os.path.join(d, name))
             if os.path.isfile(p):
-                return p
+                return os.path.normcase(os.path.abspath(p))
         return None
 
     def expand(self, path, out):
+        # one spelling per file: Windows mixes "\\" and "/" (and letter case), which would include headers twice
+        path = os.path.normcase(os.path.abspath(path))
         rel = os.path.relpath(path, ROOT).replace("\\", "/")
         third = path.startswith(THIRD_PARTY)
         if path in self.stack:
