@@ -287,7 +287,10 @@ if( TG_WEBVIEW )
             target_compile_definitions( tg_webview PRIVATE TG_WEBVIEW2_STATIC=1 )
         else()
             # MinGW: the header includes "EventToken.h"; MinGW ships it lowercase
-            file( WRITE ${CMAKE_CURRENT_BINARY_DIR}/tg_webview_shim/EventToken.h "#include <eventtoken.h>\n" )
+            # Define the one type it needs here, under MinGW's own include guard. (Including <eventtoken.h> from
+            # this file finds this file again on Windows' case-insensitive file system.)
+            file( WRITE ${CMAKE_CURRENT_BINARY_DIR}/tg_webview_shim/EventToken.h
+                  "#pragma once\n#ifndef __eventtoken_h__\n#define __eventtoken_h__\n#include <stdint.h>\ntypedef struct EventRegistrationToken { int64_t value; } EventRegistrationToken;\n#endif\n" )
             target_include_directories( tg_webview PRIVATE ${CMAKE_CURRENT_BINARY_DIR}/tg_webview_shim )
             set( TG_WEBVIEW2_LOADER_DLL ${WV2}/${WV2_ARCH}/WebView2Loader.dll CACHE INTERNAL "" )
         endif()
