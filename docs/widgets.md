@@ -707,3 +707,171 @@ Log.Content().Add<tg::Label>( "line", true );
 ### ListItem / Popup
 
 These are building blocks for menus and custom pickers; see [Writing widgets](custom-widgets.md#popups).
+
+---
+
+## More widgets
+
+![More widgets tab](widgets_plus.png)
+
+### Icons
+
+348 [Lucide](https://lucide.dev/icons) icons are built in as a fallback font, so they work inside **any** text: buttons, labels, menus, rich text, table cells.
+
+```cpp
+W.Button( tg::Icon::Trash2 + "  Delete" );
+W.Text( tg::Icon::Server + " vps-fra-01   " + tg::Icon::Cpu + " 42%" );
+Label.SetText( tg::Icon::ByName( Config.IconName ) );    // by Lucide name, e.g. from a data file
+Ctx.Fonts.AddIconFontFile( "lucide.ttf" );               // every Lucide icon (before LoadDefaultFonts)
+```
+
+Icons are centered vertically on the text they sit in. `TG_ICON_TRASH_2` and the other macros give string literals for use in `"..."` concatenation. Add names to `ICONS` in `tools/embed_fonts.py` to embed more.
+
+### RichText
+
+```cpp
+auto& R = W.Rich( "**Deploy** of `api v2.3` finished in <success>42s</>. See [the log](https://ci/1) @mo" );
+R.OnLink = []( const std::string& Url ) { OpenBrowser( Url ); };
+R.OnMention = []( const std::string& Name ) { ShowProfile( Name ); };
+```
+
+Markup: `**bold**`, `*italic*`, `` `code` ``, `[label](url)`, `@mention`, `<accent>` / `<dim>` / `<success>` / `<warning>` / `<danger>` / `<#RRGGBB>` … `</>`, and `\` escapes the next character. Word-wraps to the available width. `PlainText()` returns the text without the markup.
+
+### VirtualList
+
+Only the visible rows are drawn, by a callback rather than one widget per row, so 100,000 rows scroll smoothly.
+
+```cpp
+auto& L = W.List( Lines.size(), [&]( size_t i ) { return Lines[ i ]; } );   // one line of text per row
+L.DrawRow = [&]( tg::DrawList& D, size_t i, tg::Rect R, bool Hover, bool Sel ) { ... };  // or draw rows yourself
+L.HeightOf = [&]( size_t i, float Width ) { return MessageHeight( i, Width ); };       // variable heights (chat)
+L.StickToBottom = true;      // logs / chat: keep following new rows if already at the bottom
+L.SetCount( Lines.size() );  // after adding rows
+```
+
+`OnClick`, `OnActivate` (double-click / Enter), `Selected`, `ScrollTo( i )`, `ScrollToBottom()`, `RowAt( P )`, `RowRect( i )`, `InvalidateHeights()`. Keyboard: arrows, Page Up/Down, Home/End, Enter.
+
+### Command palette
+
+```cpp
+tg::CommandList Cmds;
+Cmds.Add( "Restart server", [&] { Restart(); }, tg::Icon::RotateCw, "Ctrl+R", "Server" );
+Cmds.Add( "Deploy", [&] { Deploy(); }, tg::Icon::Rocket ).Keywords = "ship release";
+Ctx.Shortcut( "Ctrl+K", [&] { tg::OpenPalette( Ctx, Cmds ); } );
+```
+
+Matching is fuzzy and prefers word starts ("rst srv" finds "Restart server"). Use Up/Down, Enter or a click to run a command; Escape or a click outside closes it. `tg::FuzzyScore( Pattern, Text )` is available for your own search boxes.
+
+![Command palette](palette.png)
+
+### Toolbar and StatusBar
+
+```cpp
+auto& Tb = W.Toolbar();
+Tb.Tool( tg::Icon::Save, "Save (Ctrl+S)", [] { Save(); } );
+Tb.ToolToggle( tg::Icon::Wifi, "Live updates", &Live );   // accent while on; bindable to a key
+Tb.Separator();
+Tb.Spacer();                                              // push the rest to the right
+
+auto& Sb = W.StatusBar();
+auto& Conn = Sb.Item( tg::Icon::Wifi + "  connected" );   // a Label: Conn.SetText( ... )
+Sb.Separator();
+Sb.Spacer();
+```
+
+### Knob and XYPad
+
+```cpp
+W.Knob( "Gain", &Gain, -24, 24, 1 );                      // drag up/down (Shift = fine), wheel, arrows; double-click resets
+W.XYPad( "Crosshair", &Offset, { -1, -1 }, { 1, 1 } );    // y points up; arrows nudge
+```
+
+Both support key binds.
+
+### TimePicker and DateRangePicker
+
+```cpp
+static tg::Time At{ 3, 30 };
+W.Time( "Backup at", &At );                 // wheel / arrows on hours or minutes; click for scrolling columns
+static tg::Date From, To;
+W.DateRange( "Report", &From, &To );        // one calendar: click the start, then the end
+```
+
+`TimePicker`: `Seconds`, `H24` (false = AM/PM), `MinuteStep`. `Calendar` has a range mode of its own too (`Range = true`, `OnRange`).
+
+### Swatches and Eyedropper
+
+```cpp
+W.Swatches( &Accent );                       // a default palette, or pass your own colors
+W.Eyedropper( &Accent );                     // click, then click anything in the window; Escape cancels
+```
+
+The eyedropper shows a magnifying loupe and reads the last rendered frame. That needs `Renderer::CanCapture()`: GL3, Direct3D 11 and the software renderer support it, Direct3D 9 doesn't yet. It can only pick colors from inside your window.
+
+### ImageViewer
+
+```cpp
+auto& V = W.ImageViewer( Tex, 1920, 1080 );   // wheel zooms at the cursor, drag pans, double-click fit / 100%
+V.Fit(); V.Actual(); V.ZoomAt( 2, Point );
+```
+
+Keys: `+`/`-` zoom, `0` fits, `1` shows 100%. Zoom and pan glide, transparent images get a checkerboard, and a zoom-percentage badge fades after each change.
+
+### Pagination, Stepper, Wizard, Accordion
+
+```cpp
+W.Pagination( &Page, 20 );                                 // ‹ 1 … 6 7 8 … 20 ›   (0-based Page)
+W.Stepper( { "Account", "Server", "Confirm" }, &Step );    // click a finished step to go back
+
+auto& Wz = W.Wizard();                                     // stepper + pages + Back / Next / Finish
+Wz.Step( "Account" ).Input( "Email", &Email );
+Wz.Step( "Server" ).Combo( "Region", Regions, &Region );
+Wz.CanAdvance = [&]( int S ) { return S != 0 || !Email.empty(); };
+Wz.OnFinish = [&] { Create(); };
+
+auto& Acc = W.Accordion();                                 // Exclusive: one section open at a time
+Acc.Section( "General", true ).Checkbox( "Autostart", &Auto );
+```
+
+### PropertyGrid
+
+```cpp
+auto& G = W.PropertyGrid();
+G.Category( "Server" );
+G.Text( "Hostname", &Host );  G.Int( "Port", &Port, 1, 65535 );  G.Bool( "TLS", &Tls );
+G.Category( "Look", /*Open*/ false );
+G.Enum( "Density", { "Compact", "Comfy" }, &Density );  G.Color( "Accent", &Accent );
+G.Float( "Scale", &Scale, 0.5f, 3 );  G.Range( "Opacity", &Op, 0, 1 );  G.Vec2( "Offset", &Off );
+G.ReadOnly( "Uptime", "4d 3h" );
+G.Row( "Custom" ).Add<MyEditor>();
+```
+
+### CodeEditor
+
+```cpp
+auto& Ed = W.Add<tg::CodeEditor>( Source, tg::CodeLang::Cpp );   // Plain, Cpp, Json, Python, Lua, Shell
+Ed.OnChange = [&]( const std::string& T ) { Dirty = true; };
+Ed.Highlighter = []( std::string_view Line, int& State, std::vector<tg::CodeSpan>& Out ) { ... }; // your own language
+```
+
+- **Display:** syntax colors (block comments carry across lines), line numbers, a current-line highlight, and Tab / Shift+Tab to indent or outdent the selected lines.
+- **Typing:** Enter keeps the indent, plus one more after `{ ( [` (and `:` in Python).
+- **Carets:** Alt+click or **Ctrl+D** (select the next occurrence) add a caret; Escape goes back to one.
+- **Shortcuts:**
+  - **Ctrl+/** toggles line comments.
+  - Ctrl+C / Ctrl+X with nothing selected copies or cuts the whole line.
+  - Undo and redo are the editor's own, so its Ctrl+Z doesn't touch `Ctx.History`.
+  - Smart Home (first non-blank, then column 0), and Ctrl with the arrows / Backspace / Delete moves or deletes by word.
+- **Settings:** `ReadOnly`, `LineNumbers`, `InsertSpaces`, `TabSize`, and `Style` (all colors per token kind).
+
+### Drag and drop
+
+Any widget can be a source or a target. No list is needed.
+
+```cpp
+Card.OnDragStart = [&]( tg::DragData& D ) { D.Type = "server"; D.Text = Name; return true; };
+Bin.AcceptDrop = []( const tg::DragData& D ) { return D.Type == "server"; };
+Bin.OnDrop = [&]( const tg::DragData& D, tg::Vec2 At ) { Remove( D.Text ); };
+```
+
+A drag starts after the mouse moves `Ctx.DragThreshold` (6) units with the button down. A chip with `D.Label` (or `D.Text`) follows the cursor, accepting targets are outlined, and Escape cancels. `D.Data` (a `shared_ptr<void>`) carries anything else. `Ctx.IsDragging()`, `Ctx.Dragged()` and `Ctx.DropTarget()` let targets draw insertion markers. A drag that starts doesn't count as a click.

@@ -14,6 +14,15 @@
 #include "tg/widgets/taginput.h"
 #include "tg/widgets/textarea.h"
 #include "tg/widgets/terminal.h"
+#include "tg/widgets/bars.h"
+#include "tg/widgets/dials.h"
+#include "tg/widgets/richtext.h"
+#include "tg/widgets/steps.h"
+#include "tg/widgets/virtuallist.h"
+#include "tg/widgets/imageviewer.h"
+#include "tg/widgets/propertygrid.h"
+#include "tg/widgets/swatches.h"
+#include "tg/widgets/timepicker.h"
 #include "tg/widgets/collapsible.h"
 #include "tg/widgets/extras.h"
 #include "tg/widgets/groupbox.h"
@@ -195,6 +204,27 @@ namespace tg
         return T;
     }
     tg::Terminal& Container::Terminal() { return Add<tg::Terminal>(); }
+    tg::RichText& Container::Rich( std::string M ) { return Add<tg::RichText>( std::move( M ) ); }
+    tg::VirtualList& Container::List( size_t N, std::function<std::string( size_t )> T )
+    {
+        auto& L = Add<tg::VirtualList>( N );
+        L.TextOf = std::move( T );
+        return L;
+    }
+    tg::Toolbar& Container::Toolbar() { return Add<tg::Toolbar>(); }
+    tg::StatusBar& Container::StatusBar() { return Add<tg::StatusBar>(); }
+    tg::Knob& Container::Knob( std::string L, float* V, float Mn, float Mx, float St ) { return Add<tg::Knob>( std::move( L ), V, Mn, Mx, St ); }
+    tg::XYPad& Container::XYPad( std::string L, Vec2* V, Vec2 Mn, Vec2 Mx ) { return Add<tg::XYPad>( std::move( L ), V, Mn, Mx ); }
+    tg::Pagination& Container::Pagination( int* P, int N ) { return Add<tg::Pagination>( P, N ); }
+    tg::Stepper& Container::Stepper( std::vector<std::string> S, int* C ) { return Add<tg::Stepper>( std::move( S ), C ); }
+    tg::Wizard& Container::Wizard() { return Add<tg::Wizard>(); }
+    tg::Accordion& Container::Accordion() { return Add<tg::Accordion>(); }
+    tg::PropertyGrid& Container::PropertyGrid() { return Add<tg::PropertyGrid>(); }
+    tg::TimePicker& Container::Time( std::string L, tg::Time* V ) { return Labeled( std::move( L ) ).Add<tg::TimePicker>( V ); }
+    tg::DateRangePicker& Container::DateRange( std::string L, tg::Date* A, tg::Date* B ) { return Labeled( std::move( L ) ).Add<tg::DateRangePicker>( A, B ); }
+    tg::Swatches& Container::Swatches( tg::Color* V, std::vector<tg::Color> P ) { return Add<tg::Swatches>( V, std::move( P ) ); }
+    tg::Eyedropper& Container::Eyedropper( tg::Color* V ) { return Add<tg::Eyedropper>( V ); }
+    tg::ImageViewer& Container::ImageViewer( TextureId T, int W, int H ) { return Add<tg::ImageViewer>( T, W, H ); }
     tg::MenuBar& Container::MenuBar() { return Add<tg::MenuBar>(); }
     tg::TagInput& Container::Tags( std::vector<std::string>* V, std::string Ph ) { return Add<tg::TagInput>( V, std::move( Ph ) ); }
     tg::SearchBox& Container::Search( std::string Ph, std::string* V ) { return Add<tg::SearchBox>( std::move( Ph ), V ); }

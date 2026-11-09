@@ -2,6 +2,7 @@
 #include "tg/draw.h"
 #include "tg/font.h"
 #include "tg/widgets/popup.h"
+#include <algorithm>
 #include <cmath>
 #include <cstdio>
 #include <ctime>
@@ -110,7 +111,15 @@ namespace tg
         {
             Rect R = DayRect( Dd ).Shrink( 2 );
             tg::Date This = { ViewYear, ViewMonth, Dd };
-            bool Sel = This == Selected, IsToday = This == Today;
+            bool Sel = !Range && This == Selected, IsToday = This == Today;
+            if ( Range )
+            {
+                tg::Date A = RangeStart, B = PickingEnd && HoverDay > 0 ? tg::Date{ ViewYear, ViewMonth, HoverDay } : RangeEnd;
+                if ( B < A ) std::swap( A, B );
+                bool In = !( This < A ) && !( B < This ), End = This == A || This == B;
+                if ( In && !End ) D.RectFilled( DayRect( Dd ).Shrink( { 0, 2, 0, 2 } ), T[ Tok::Accent ].Fade( 0.22f ) );
+                if ( End ) { D.RectFilled( R, T[ Tok::Accent ], 6 ); Sel = true; }
+            }
             if ( Sel ) D.RectFilled( R, T[ Tok::Accent ], 6 );
             else if ( Dd == HoverDay && IsHovered() ) D.RectFilled( R, Color( 255, 255, 255, 16 ), 6 );
             if ( IsToday && !Sel ) D.RectStroke( R, T[ Tok::Accent ], 6, 1.2f );
@@ -149,6 +158,16 @@ namespace tg
                 int Dd = DayAt( E.Pos );
                 if ( Dd < 0 ) return true;
                 Pick = { ViewYear, ViewMonth, Dd };
+            }
+            if ( Range )
+            {
+                if ( !PickingEnd ) { RangeStart = RangeEnd = Pick; PickingEnd = true; Redraw(); return true; }
+                RangeEnd = Pick;
+                if ( RangeEnd < RangeStart ) std::swap( RangeStart, RangeEnd );
+                PickingEnd = false;
+                auto Fr = OnRange;
+                if ( Fr ) Fr( RangeStart, RangeEnd );
+                return true;
             }
             Selected = Pick;
             auto Fn = OnPick;
@@ -211,6 +230,80 @@ namespace tg
     }
 
     bool DatePicker::OnEvent( const Event& E )
+    {
+        if ( E.Button != MouseButton::Left ) return false;
+        if ( E.Type == EventType::MouseDown ) return true;
+        if ( E.Type == EventType::MouseUp )
+        {
+            if ( IsHovered() ) { if ( Open ) Open->Close(); else OpenCalendar(); }
+            return true;
+        }
+        return false;
+    }
+
+    // ------------------------------------------------------------ DateRangePicker
+
+    DateRangePicker::DateRangePicker( tg::Date* A, tg::Date* B ) : StartBind( A ), EndBind( B ) { Interactive = true; Focusable = true; KeyActivates = true; }
+
+    DateRangePicker::~DateRangePicker()
+    {
+        if ( Open ) { Open->OnClose = nullptr; Open->Close(); }
+    }
+
+    void DateRangePicker::SetRange( tg::Date A, tg::Date B )
+    {
+        if ( B < A ) std::swap( A, B );
+        if ( A == GetStart() && B == GetEnd() ) return;
+        ( StartBind ? *StartBind : OwnA ) = A;
+        ( EndBind ? *EndBind : OwnB ) = B;
+        if ( OnChange ) OnChange( A, B );
+        Redraw();
+    }
+
+    BindValue DateRangePicker::BindGet() const
+    {
+        tg::Date A = GetStart(), B = GetEnd();
+        return { { double( A.Year ), double( A.Month ), double( A.Day ), double( B.Year ), double( B.Month ), double( B.Day ) } };
+    }
+
+    void DateRangePicker::BindSet( const BindValue& V )
+    {
+        if ( V.V.size() >= 6 )
+            SetRange( { int( V.V[ 0 ] ), int( V.V[ 1 ] ), int( V.V[ 2 ] ) }, { int( V.V[ 3 ] ), int( V.V[ 4 ] ), int( V.V[ 5 ] ) } );
+    }
+
+    void DateRangePicker::OpenCalendar()
+    {
+        if ( Open ) return;
+        Popup& P = OpenPopup( *this, Bounds );
+        P.MinWidth = 0;
+        P.Layout.Padding = Insets( 10 );
+        Open = &P;
+        P.OnClose = [ this ] { Open = nullptr; Redraw(); };
+        auto& C = P.Add<Calendar>( GetStart() );
+        C.Range = true;
+        C.RangeStart = GetStart();
+        C.RangeEnd = GetEnd();
+        C.OnRange = [ this ]( const tg::Date& A, const tg::Date& B ) { SetRange( A, B ); if ( Open ) Open->Close(); };
+    }
+
+    Vec2 DateRangePicker::Measure( float Avail )
+    {
+        const Font& F = *GetTheme().Body;
+        return { std::min( Avail, std::ceil( F.Width( "0000-00-00  \xE2\x86\x92  0000-00-00" ) ) + 52 ), F.LineHeight + 16 };
+    }
+
+    void DateRangePicker::Draw( DrawList& D )
+    {
+        const Theme& T = GetTheme();
+        const Font& F = *T.Body;
+        D.RectFilled( Bounds, T[ Tok::SurfaceAlt ], 6 );
+        D.RectStroke( Bounds, Open ? T[ Tok::Accent ] : T[ Tok::Border ], 6 );
+        std::string S = GetStart().ToString() + "  \xE2\x86\x92  " + GetEnd().ToString();
+        D.Text( F, { Bounds.x + 10, std::floor( Bounds.y + ( Bounds.h - F.LineHeight ) * 0.5f ) }, S, T[ Tok::Text ] );
+    }
+
+    bool DateRangePicker::OnEvent( const Event& E )
     {
         if ( E.Button != MouseButton::Left ) return false;
         if ( E.Type == EventType::MouseDown ) return true;

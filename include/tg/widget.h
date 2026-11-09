@@ -33,6 +33,15 @@ namespace tg
         std::vector<double> V;
     };
 
+    // What's being dragged (see Widget::OnDragStart). Type lets targets pick what they accept.
+    struct DragData
+    {
+        std::string Type;           // "server", "file", "color", ... your choice
+        std::string Text;           // payload as text (names, ids, paths)
+        std::string Label;          // shown next to the cursor while dragging (default: Text)
+        std::shared_ptr<void> Data; // anything else
+    };
+
     enum class Dir : uint8_t { Column, Row, Stack, Free };
     enum class Align : uint8_t { Start, Center, End, Stretch };
 
@@ -124,6 +133,14 @@ namespace tg
         virtual std::string BindName() const;                         // its label; default: the label next to it
         virtual bool BindIsAction() const { return false; }           // buttons: a key press clicks it
         bool Bindable = true;                                         // false: no bind menu on this control
+
+        // ---- drag and drop between any widgets
+        //   Card.OnDragStart = [&]( tg::DragData& D ) { D.Type = "server"; D.Text = Name; return true; };
+        //   Bin.AcceptDrop = []( const tg::DragData& D ) { return D.Type == "server"; };
+        //   Bin.OnDrop = [&]( const tg::DragData& D, tg::Vec2 At ) { Remove( D.Text ); };
+        std::function<bool( DragData& )> OnDragStart;               // fill it in; false = don't drag
+        std::function<bool( const DragData& )> AcceptDrop;
+        std::function<void( const DragData&, Vec2 At )> OnDrop;
 
         // Cached Measure(): call this (not Measure) when laying out children.
         Vec2 MeasureCached( float AvailWidth );

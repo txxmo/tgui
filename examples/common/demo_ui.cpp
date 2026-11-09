@@ -664,6 +664,102 @@ static void BuildTerminal( DemoApp& App, Container& Page )
         "\xE2\x95\x9A\xE2\x95\x90\xE2\x95\x90\xE2\x95\xA9\xE2\x95\x90\xE2\x95\x90\xE2\x95\x9D \xE2\x95\xB0\xE2\x94\x80\xE2\x94\x80\xE2\x95\xAF\r\n" );
 }
 
+// More widgets: icons, rich text, toolbar, virtual list, palette, dials, steps, pickers, editor, drag & drop.
+static void BuildWidgetsPlus( DemoApp& App, Container& Page )
+{
+    DemoApp* A = &App;
+    Page.Layout.Gap = 10;
+    App.Tools = &Page.Toolbar();
+    App.Tools->Tool( Icon::Save, "Save (Ctrl+S)", [ A ] { A->LastMenu = "Save"; } );
+    App.Tools->Tool( Icon::Undo2, "Undo", [ A ] { A->Ctx->History.Undo(); } );
+    App.Tools->Separator();
+    App.Tools->ToolToggle( Icon::Wifi, "Live updates", &App.Live );
+    App.Tools->ToolToggle( Icon::Bell, "Notifications", &App.Notifications );
+    App.Tools->Spacer();
+    App.Tools->Tool( Icon::Command, "Command palette (Ctrl+K)", [ A ] { A->OpenCommands(); } );
+
+    auto& Cols = Page.Columns( 12 );
+    // ---- column 1: rich text, virtual list, drag & drop
+    auto& C1 = Cols.Group( "Rich text  \xC2\xB7  100k-row list  \xC2\xB7  drag & drop" );
+    C1.Layout.Width = Grow( 4 );
+    App.Rich = &C1.Rich( Icon::Rocket + " **Deploy** of `api v2.3` finished on <success>fra-01</> in *42s*. "
+                         "See [the build log](https://ci.example/123), @mo. <warning>2 warnings</>, <danger>0 errors</>." );
+    App.Rich->OnLink = [ A ]( const std::string& U ) { A->LastLink = U; };
+    App.BigList = &C1.List( 100000, []( size_t i ) { return "log line " + std::to_string( i + 1 ) + "  \xC2\xB7  GET /api/v2/servers 200 " + std::to_string( 3 + i % 97 ) + "ms"; } );
+    App.BigList->Layout.Height = Px( 150 );
+    auto& Dnd = C1.Row( 8 );
+    for ( const char* N : { "vps-fra-01", "vps-ams-02", "db-fra-01" } )
+    {
+        auto& Chip = Dnd.Add<Badge>( std::string( Icon::Server ) + " " + N, Tok::Raised );
+        std::string Name = N;
+        Chip.OnDragStart = [ Name ]( DragData& D ) { D.Type = "server"; D.Text = Name; return true; };
+        Chip.Interactive = true;
+    }
+    auto& Bin = C1.Add<Box>( Dir::Column, 4, Insets( 10 ) );
+    Bin.Style = Box::Card();
+    Bin.Layout.Height = Px( 46 );
+    App.DropLabel = &AddText( Bin, Icon::Trash2 + "  drop a server here", nullptr, Tok::TextDim );
+    Bin.AcceptDrop = []( const DragData& D ) { return D.Type == "server"; };
+    Bin.OnDrop = [ A ]( const DragData& D, Vec2 ) { A->Dropped = D.Text; A->DropLabel->SetText( Icon::Trash2 + "  removed " + D.Text ); };
+    App.DropBin = &Bin;
+
+    // ---- column 2: dials, pickers, steps
+    auto& C2 = Cols.Group( "Dials  \xC2\xB7  pickers  \xC2\xB7  steps" );
+    C2.Layout.Width = Grow( 3 );
+    auto& Dials = C2.Row( 18 );
+    App.GainKnob = &Dials.Knob( "Gain", &App.Gain, -24, 24, 1 );
+    App.SensKnob = &Dials.Knob( "Sens", &App.Sens, 0, 10, 0.1f );
+    App.SensKnob->Format = "%.1f";
+    App.Pad = &Dials.XYPad( "Crosshair", &App.Cross, { -1, -1 }, { 1, 1 } );
+    App.Pad->Size = 96;
+    App.TimeW = &C2.Time( "Backup at", &App.BackupAt );
+    App.RangeW = &C2.DateRange( "Report", &App.From, &App.To );
+    auto& Sw = C2.Row( 8 );
+    Sw.Layout.CrossAlign = Align::Center;
+    App.SwatchW = &Sw.Swatches( &App.Accent );
+    App.SwatchW->Columns = 8;
+    App.Dropper = &Sw.Eyedropper( &App.Accent );
+    App.Pager = &C2.Pagination( &App.PageNo, 20 );
+    App.Steps = &C2.Stepper( { "Account", "Server", "Confirm" }, &App.StepNo );
+
+    // ---- column 3: code editor, property grid, accordion
+    auto& C3 = Cols.Group( "Code editor  \xC2\xB7  inspector" );
+    C3.Layout.Width = Grow( 4 );
+    App.Editor = &C3.Add<CodeEditor>( "// tg::CodeEditor\n#include <cstdio>\n\nint main()\n{\n    /* hello */\n    std::printf( \"%d\\n\", 42 );\n    return 0;\n}\n", CodeLang::Cpp );
+    App.Editor->Layout.Height = Px( 170 );
+    App.Props = &C3.PropertyGrid();
+    App.Props->Category( "Server" );
+    App.Props->Text( "Hostname", &App.Host );
+    App.Props->Int( "Port", &App.SrvPort, 1, 65535 );
+    App.Props->Bool( "TLS", &App.Tls );
+    App.Props->Category( "Look", false );
+    App.Props->Enum( "Density", { "Compact", "Comfy" }, &App.Density );
+    App.Props->Color( "Accent", &App.Accent );
+    App.Acc = &C3.Accordion();
+    App.Acc->Section( "General", true ).Text( "Accordion: one section open at a time." );
+    App.Acc->Section( "Advanced" ).Text( "Opening this closes General." );
+
+    auto& Sb = Page.StatusBar();
+    Sb.Item( Icon::Wifi + "  connected" );
+    Sb.Separator();
+    Sb.Item( "3 servers" );
+    Sb.Spacer();
+    Sb.Item( "F12 inspector  \xC2\xB7  Ctrl+K commands" );
+}
+
+void DemoApp::OpenCommands()
+{
+    CommandList L;
+    DemoApp* A = this;
+    L.Add( "Restart server", [ A ] { A->LastMenu = "Restart server"; }, Icon::RotateCw, "Ctrl+R", "Server" );
+    L.Add( "Open terminal", [ A ] { A->Tabs->Select( 8 ); }, Icon::Terminal, "", "View" );
+    L.Add( "Toggle light theme", [ A ] { A->LastMenu = "Toggle light theme"; }, Icon::Sun, "", "View" );
+    L.Add( "Deploy to production", [ A ] { A->LastMenu = "Deploy to production"; }, Icon::Rocket, "Ctrl+Shift+D", "Release" ).Keywords = "ship release";
+    L.Add( "Show inspector", [ A ] { A->Ctx->ShowInspector = true; }, Icon::Search, "F12", "Debug" );
+    L.Add( "Clear logs", [ A ] { A->LastMenu = "Clear logs"; }, Icon::Trash2, "", "Server" );
+    Palette = &OpenPalette( *Ctx, L, "Type a command" );
+}
+
 void DemoApp::StartShell()
 {
     if ( !Shell ) return;
@@ -700,7 +796,7 @@ void DemoApp::Build( Context& C, Widget& Root )
     // ---- tabs across the top, one page each
     auto& Body = Root.Add<Container>( Dir::Column, 0, Insets( 16, 14, 16, 16 ) );
     Body.Layout.Height = Grow();
-    const char* Names[] = { "Dashboard", "Chat", "Controls", "Tables", "Windows", "More", "Forms", "Charts", "Terminal" };
+    const char* Names[] = { "Dashboard", "Chat", "Controls", "Tables", "Windows", "More", "Forms", "Charts", "Terminal", "More widgets" };
     for ( const char* N : Names ) Pages.push_back( &Body.Tab( N ) );
     Tabs = Body.Tabs();
     Tabs->OnChange = [ this ]( int i ) {
@@ -717,6 +813,8 @@ void DemoApp::Build( Context& C, Widget& Root )
     BuildForms( *this, *Pages[ 6 ] );
     BuildCharts( *this, *Pages[ 7 ] );
     BuildTerminal( *this, *Pages[ 8 ] );
+    BuildWidgetsPlus( *this, *Pages[ 9 ] );
+    C.Shortcut( "Ctrl+K", [ this ] { OpenCommands(); } );
 
     // Global hotkey, like the old tgui Insert key: show/hide the Test Window.
     C.OnKeyEvent = [ this ]( Key K, bool Down ) {

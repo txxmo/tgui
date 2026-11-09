@@ -114,6 +114,13 @@ namespace tg
                 }
             }
         }
+        if ( CaptureNext )
+        {
+            CaptureNext = false;
+            Captured.W = W;
+            Captured.H = H;
+            Captured.Px = Pixels;
+        }
     }
 
     bool SoftRenderer::SavePNG( const std::string& Path ) const

@@ -33,6 +33,7 @@ namespace tg
         TextureId CreateTexture( int W, int H, const void* Pixels ) override;
         void UpdateTexture( TextureId Tex, int W, int H, const void* Pixels ) override;
         void DestroyTexture( TextureId Tex ) override;
+        bool CanCapture() const override { return true; }
         void Render( const DrawList& List, Vec2 FramebufferSize, float Scale = 1.f ) override;
 
     private:

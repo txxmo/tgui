@@ -19,8 +19,8 @@ namespace tg
 
     namespace fonts
     {
-        extern const unsigned char InterRegular[], InterMedium[], InterSemiBold[], MonoRegular[], MonoBold[];
-        extern const size_t InterRegularSize, InterMediumSize, InterSemiBoldSize, MonoRegularSize, MonoBoldSize;
+        extern const unsigned char InterRegular[], InterMedium[], InterSemiBold[], MonoRegular[], MonoBold[], Icons[];
+        extern const size_t InterRegularSize, InterMediumSize, InterSemiBoldSize, MonoRegularSize, MonoBoldSize, IconsSize;
     }
 
     // Overlay layer: popups are placed under their anchor (or above when there's no room),
@@ -79,6 +79,7 @@ namespace tg
         auto MonoB = [] { return std::vector<unsigned char>( fonts::MonoBold, fonts::MonoBold + fonts::MonoBoldSize ); };
         T.Mono = Fonts.AddFromMemory( MonoR(), 14 );
         T.MonoBold = Fonts.AddFromMemory( MonoB(), 14 );
+        Fonts.AddIconFont( std::vector<unsigned char>( fonts::Icons, fonts::Icons + fonts::IconsSize ) ); // tg::Icon::* in any text
         Fonts.AddEmojiFont(); // no-op without FreeType
         Fonts.AddCjkFont();   // read on first use
     }
@@ -268,6 +269,34 @@ namespace tg
         if ( KeyHotW && P != Mouse ) { KeyHotW = nullptr; RequestFrame(); } // the mouse takes over from arrow keys
         Mouse = P;
         UpdateHover();
+        // drag and drop: start once the press moves far enough from a draggable widget
+        if ( !DragOn && PressW && IsKeyDown( Key::Mouse1 ) )
+        {
+            Vec2 Dv = P - PressAt;
+            if ( Dv.x * Dv.x + Dv.y * Dv.y > DragThreshold * DragThreshold )
+                for ( Widget* W = PressW; W; W = W->GetParent() )
+                    if ( W->OnDragStart )
+                    {
+                        DragData D;
+                        if ( W->OnDragStart( D ) )
+                        {
+                            if ( D.Label.empty() ) D.Label = D.Text;
+                            DragOn = true;
+                            DragNow = std::move( D );
+                            DragSrc = W;
+                            PressW = nullptr; // the press became a drag: no click
+                        }
+                        break;
+                    }
+        }
+        if ( DragOn )
+        {
+            DropW = nullptr;
+            for ( Widget* W = DeepestAt( Mouse ); W; W = W->GetParent() ) // targets needn't be interactive (a panel, a card)
+                if ( W->AcceptDrop && W->OnDrop && W->AcceptDrop( DragNow ) ) { DropW = W; break; }
+            RequestFrame();
+            return;
+        }
         Event E; E.Type = EventType::MouseMove;
         E.Pos = P;
         E.Mods = Mods();
@@ -319,6 +348,16 @@ namespace tg
         if ( Swallowed ) return;
         if ( Down && TipW ) { TipSuppressed = true; RequestFrame(); } // clicking hides the tooltip until you move elsewhere
         if ( Down ) FocusRing = false; // the ring is for keyboard users
+        if ( Down && B == MouseButton::Left ) PressAt = Mouse;
+        if ( DragOn && B == MouseButton::Left && !Down )
+        {
+            Widget* T = DropW;
+            DragData D = std::move( DragNow );
+            CancelDrag();
+            if ( T && T->OnDrop ) T->OnDrop( D, Mouse );
+            History.End();
+            return;
+        }
         if ( B == MouseButton::Left && Down )
         {
             // undo: snapshot the control under the mouse and the owners of open dropdowns / pickers
@@ -401,6 +440,7 @@ namespace tg
             PopupKeys( K, Handled ); // arrows / Enter inside the newest menu or dropdown
             if ( Handled ) { RequestFrame(); return; }
         }
+        if ( Down && K == Key::Escape && DragOn ) { CancelDrag(); return; }
         if ( Down && K == Key::Escape && HasPopups() )
         {
             // Escape closes the newest popup first.
@@ -535,6 +575,34 @@ namespace tg
         }
     }
 
+    // ------------------------------------------------------------ drag and drop
+
+    void Context::CancelDrag()
+    {
+        DragOn = false;
+        DragNow = DragData{};
+        DragSrc = DropW = nullptr;
+        RequestFrame();
+    }
+
+    void Context::DrawDrag()
+    {
+        Theme& Th = GetTheme();
+        if ( DropW && Shown( DropW ) )
+        {
+            List.RectFilled( DropW->Bounds, Th[ Tok::Accent ].Fade( 0.10f ), Th.Radius );
+            List.RectStroke( DropW->Bounds, Th[ Tok::Accent ], Th.Radius, 2 );
+        }
+        if ( DragNow.Label.empty() ) return;
+        const Font& F = *Th.Body;
+        float W = F.Width( DragNow.Label ) + 20;
+        Rect R = { Mouse.x + 14, Mouse.y + 10, W, F.LineHeight + 12 };
+        List.Shadow( R, 8, Color( 0, 0, 0, 130 ), 10, { 0, 3 } );
+        List.RectFilled( R, Th[ Tok::Raised ], 8 );
+        List.RectStroke( R, DropW ? Th[ Tok::Accent ] : Th[ Tok::BorderStrong ], 8 );
+        List.Text( F, { R.x + 10, R.y + 6 }, DragNow.Label, Th[ Tok::Text ] );
+    }
+
     // ------------------------------------------------------------ shortcuts
 
     bool Context::ParseShortcut( const std::string& Combo, Key& K, uint8_t& Mods )
@@ -640,6 +708,8 @@ namespace tg
         if ( TipW == W ) TipW = nullptr;
         if ( FocusW == W ) FocusW = nullptr;
         if ( KeyHotW == W ) KeyHotW = nullptr;
+        if ( DragSrc == W ) DragSrc = nullptr;
+        if ( DropW == W ) DropW = nullptr;
         Binds.Forget( W );
         History.Forget( W );
     }
@@ -750,6 +820,7 @@ namespace tg
             List.RectStroke( { B.x - 3, B.y - 3, B.w + 6, B.h + 6 }, Th[ Tok::Accent ].Fade( 0.85f ), Th.Radius + 3, 2 );
         }
         DrawTooltip();
+        if ( DragOn ) DrawDrag();
         FrameCpu = Clock() - T0;
         if ( ShowInspector || ShowStats ) DrawDevTools();
         auto Hooks = FrameHooks; // hooks may add/remove hooks; they see the same FrameIndex() as Draw did

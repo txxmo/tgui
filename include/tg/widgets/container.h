@@ -44,6 +44,23 @@ namespace tg
     class Link;
     class TextArea;
     class Terminal;
+    class RichText;
+    class VirtualList;
+    class Toolbar;
+    class StatusBar;
+    class Knob;
+    class XYPad;
+    class Pagination;
+    class Stepper;
+    class Wizard;
+    class Accordion;
+    class PropertyGrid;
+    class TimePicker;
+    class DateRangePicker;
+    class Swatches;
+    class Eyedropper;
+    class ImageViewer;
+    struct Time;
     class MenuBar;
     class TagInput;
     class SearchBox;
@@ -95,6 +112,22 @@ namespace tg
         tg::Link& Link( std::string Text, std::function<void()> OnClick = {} );
         tg::TextArea& TextArea( std::string Placeholder = {}, std::string* Value = nullptr );
         tg::Terminal& Terminal(); // VT terminal: .Spawn() a shell, or .Write() output yourself
+        tg::RichText& Rich( std::string Markup );                           // **bold** `code` [link](url) <accent>..</>
+        tg::VirtualList& List( size_t Count, std::function<std::string( size_t )> TextOf = {} ); // 100k rows
+        tg::Toolbar& Toolbar();
+        tg::StatusBar& StatusBar();
+        tg::Knob& Knob( std::string Label, float* Value, float Min, float Max, float Step = 0 );
+        tg::XYPad& XYPad( std::string Label, Vec2* Value, Vec2 Min = { 0, 0 }, Vec2 Max = { 1, 1 } );
+        tg::Pagination& Pagination( int* Page, int PageCount );
+        tg::Stepper& Stepper( std::vector<std::string> Steps, int* Current = nullptr );
+        tg::Wizard& Wizard();
+        tg::Accordion& Accordion();
+        tg::PropertyGrid& PropertyGrid();
+        tg::TimePicker& Time( std::string Label, tg::Time* Value = nullptr );
+        tg::DateRangePicker& DateRange( std::string Label, tg::Date* Start = nullptr, tg::Date* End = nullptr );
+        tg::Swatches& Swatches( tg::Color* Value = nullptr, std::vector<tg::Color> Palette = {} );
+        tg::Eyedropper& Eyedropper( tg::Color* Value = nullptr );
+        tg::ImageViewer& ImageViewer( TextureId Tex, int Width, int Height );
         tg::MenuBar& MenuBar();
         tg::TagInput& Tags( std::vector<std::string>* Value = nullptr, std::string Placeholder = "Add..." );
         tg::SearchBox& Search( std::string Placeholder = "Search", std::string* Value = nullptr );

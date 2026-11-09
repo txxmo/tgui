@@ -142,6 +142,7 @@ namespace tg
         std::shared_ptr<stbtt_fontinfo> Info; // null for fonts stb can't read (bitmap-only color fonts)
         bool Color = false;                   // has color glyphs (emoji)
         std::string LazyPath;                 // big fallbacks (CJK, ~20 MB) are read on first use
+        bool Icons = false;                   // icon font: glyphs are centred on the text's cap height
 #ifdef TG_HAS_FREETYPE
         FT_Face Face = nullptr;
 #endif
@@ -487,6 +488,19 @@ namespace tg
         return true;
     }
 
+    bool FontAtlas::AddIconFont( std::vector<unsigned char> Data )
+    {
+        if ( !AddFallbackMemory( std::move( Data ) ) ) return false;
+        Fallbacks.back()->Icons = true;
+        return true;
+    }
+
+    bool FontAtlas::AddIconFontFile( const std::string& Path )
+    {
+        std::vector<unsigned char> D;
+        return ReadFile( Path, D ) && AddIconFont( std::move( D ) );
+    }
+
     bool FontAtlas::AddFallbackFile( const std::string& Path )
     {
         std::vector<unsigned char> D;
@@ -613,7 +627,18 @@ namespace tg
         if ( TrySource( Own ) ) Got = FromOwn = true;
         else
             for ( auto& Fb : Fallbacks )
-                if ( Ready( *Fb ) && TrySource( *Fb ) ) { Got = true; break; }
+                if ( Ready( *Fb ) && TrySource( *Fb ) )
+                {
+                    Got = true;
+                    if ( Fb->Icons && B.H > 0 )
+                    {
+                        // sit icons in the middle of capital letters, whatever the icon font's own metrics
+                        float Want = -PxHeight * 0.36f, Mid = ( B.Y0 + B.Y1 ) * 0.5f, D = std::round( Want - Mid );
+                        B.Y0 += D;
+                        B.Y1 += D;
+                    }
+                    break;
+                }
         if ( !Got ) return false;
         if ( !PackBitmap( B, Out ) ) return false;
         Out.Index = FromOwn && Own.Info ? stbtt_FindGlyphIndex( Own.Info.get(), int( Cp ) ) : 0;

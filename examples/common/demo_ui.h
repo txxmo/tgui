@@ -77,6 +77,34 @@ struct DemoApp
     tg::DatePicker* ExpiresPicker = nullptr;
     std::vector<std::string> QueueItems = { "deploy api v2.3", "migrate users table", "rotate TLS certs", "warm redis cache", "purge CDN", "notify #general" };
 
+    // "More widgets" tab
+    tg::Toolbar* Tools = nullptr;
+    tg::RichText* Rich = nullptr;
+    tg::VirtualList* BigList = nullptr;
+    tg::Label* DropLabel = nullptr;
+    tg::Box* DropBin = nullptr;
+    tg::Knob *GainKnob = nullptr, *SensKnob = nullptr;
+    tg::XYPad* Pad = nullptr;
+    tg::TimePicker* TimeW = nullptr;
+    tg::DateRangePicker* RangeW = nullptr;
+    tg::Swatches* SwatchW = nullptr;
+    tg::Eyedropper* Dropper = nullptr;
+    tg::Pagination* Pager = nullptr;
+    tg::Stepper* Steps = nullptr;
+    tg::CodeEditor* Editor = nullptr;
+    tg::PropertyGrid* Props = nullptr;
+    tg::Accordion* Acc = nullptr;
+    tg::CommandPalette* Palette = nullptr;
+    bool Live = true;
+    float Gain = 0, Sens = 2.5f;
+    tg::Vec2 Cross = { 0, 0 };
+    tg::Time BackupAt = { 3, 30 };
+    tg::Date From = { 2026, 11, 1 }, To = { 2026, 11, 7 };
+    int PageNo = 0, StepNo = 1, SrvPort = 443, Density = 0;
+    bool Tls = true;
+    std::string Host = "vps-fra-01", LastLink, Dropped;
+    void OpenCommands();
+
     // "Terminal" tab
     tg::Terminal* Shell = nullptr;
     tg::Terminal* Log = nullptr;

@@ -109,6 +109,13 @@ namespace tg
         static bool ParseShortcut( const std::string& Combo, Key& K, uint8_t& Mods );
         static std::string ShortcutText( Key K, uint8_t Mods ); // "Ctrl+Shift+S"
 
+        // ---- drag and drop (see Widget::OnDragStart / AcceptDrop / OnDrop)
+        bool IsDragging() const { return DragOn; }
+        const DragData* Dragged() const { return DragOn ? &DragNow : nullptr; }
+        Widget* DropTarget() const { return DropW; }
+        void CancelDrag();
+        float DragThreshold = 6;
+
         // ---- developer tools: F12 = inspector (hover anything), Ctrl+F12 = performance stats
         bool ShowInspector = false, ShowStats = false;
         bool DevToolKeys = true;
@@ -174,6 +181,11 @@ namespace tg
 
         uint64_t Frames = 0;
         Widget* KeyHotW = nullptr;
+        bool DragOn = false;
+        DragData DragNow;
+        Widget *DragSrc = nullptr, *DropW = nullptr;
+        Vec2 PressAt;
+        void DrawDrag();
         bool FocusRing = false;
         struct ShortcutEntry { uint32_t Id; Key K; uint8_t Mods; std::function<void()> Fn; };
         std::vector<ShortcutEntry> Shortcuts;

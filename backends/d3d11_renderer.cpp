@@ -306,6 +306,53 @@ float4 ps( PsIn i ) : SV_Target { return i.col * Tex.Sample( Smp, i.uv ); }
             Dc->DrawIndexed( C.IdxCount, C.IdxOffset, 0 );
         }
 
+        if ( CaptureNext )
+        {
+            // copy the bound render target to a CPU-readable texture
+            CaptureNext = false;
+            ID3D11RenderTargetView* Rtv = nullptr;
+            Dc->OMGetRenderTargets( 1, &Rtv, nullptr );
+            ID3D11Resource* Res = nullptr;
+            if ( Rtv ) { Rtv->GetResource( &Res ); Rtv->Release(); }
+            ID3D11Texture2D* Src = nullptr;
+            if ( Res ) { Res->QueryInterface( __uuidof( ID3D11Texture2D ), (void**)&Src ); Res->Release(); }
+            if ( Src )
+            {
+                D3D11_TEXTURE2D_DESC Dd;
+                Src->GetDesc( &Dd );
+                Dd.Usage = D3D11_USAGE_STAGING;
+                Dd.BindFlags = 0;
+                Dd.CPUAccessFlags = D3D11_CPU_ACCESS_READ;
+                Dd.MiscFlags = 0;
+                ID3D11Texture2D* Stage = nullptr;
+                if ( Dd.SampleDesc.Count == 1 && SUCCEEDED( Dev->CreateTexture2D( &Dd, nullptr, &Stage ) ) )
+                {
+                    Dc->CopyResource( Stage, Src );
+                    D3D11_MAPPED_SUBRESOURCE M;
+                    if ( SUCCEEDED( Dc->Map( Stage, 0, D3D11_MAP_READ, 0, &M ) ) )
+                    {
+                        bool Bgra = Dd.Format == DXGI_FORMAT_B8G8R8A8_UNORM || Dd.Format == DXGI_FORMAT_B8G8R8A8_UNORM_SRGB;
+                        Captured.W = int( Dd.Width );
+                        Captured.H = int( Dd.Height );
+                        Captured.Px.resize( size_t( Dd.Width ) * Dd.Height );
+                        for ( UINT y = 0; y < Dd.Height; y++ )
+                        {
+                            const uint32_t* Row = (const uint32_t*)( (const uint8_t*)M.pData + size_t( y ) * M.RowPitch );
+                            for ( UINT x = 0; x < Dd.Width; x++ )
+                            {
+                                uint32_t P = Row[ x ];
+                                if ( Bgra ) P = ( P & 0xFF00FF00u ) | ( ( P & 0xFF ) << 16 ) | ( ( P >> 16 ) & 0xFF );
+                                Captured.Px[ size_t( y ) * Dd.Width + x ] = P;
+                            }
+                        }
+                        Dc->Unmap( Stage, 0 );
+                    }
+                    Stage->Release();
+                }
+                Src->Release();
+            }
+        }
+
         B.Restore( Dc );
     }
 }

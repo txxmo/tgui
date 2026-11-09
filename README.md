@@ -150,6 +150,19 @@ Groups.Group( "Example Group 2" ).Button( "Print", [] { ... } );
 | Charts | `W.BarChart()`, `W.Donut()`, `W.Gauge( "CPU", v )`, `W.Sparkline()` | animated, hover details |
 | Terminal | `W.Terminal().Spawn()` | VT/xterm emulator: your shell or any command in a pty (ConPTY on Windows), or `Write()` bytes from SSH / websockets; 256 + truecolor, alt screen, scrollback, selection, emoji + CJK, mouse reporting (vim/htop/tmux), double/triple-click select, middle-click / Shift+Insert paste |
 | WebView | `Pane.Add<tg::WebView>( url )` | web pages in your UI (WebView2 / WebKitGTK); `tg.post()` / `tg.on()` bridge to C++; `-DTG_WEBVIEW=ON` |
+| Icons | `W.Button( tg::Icon::Trash2 + " Delete" )` | 348 Lucide icons in any text |
+| Rich text | `W.Rich( "**bold** `code` [link](url) <success>ok</>" )` | wrapping, links, mentions, colors |
+| Virtual list | `W.List( 100000, TextOf )` | only visible rows drawn; variable heights; stick to bottom |
+| Command palette | `tg::OpenPalette( Ctx, Cmds )` | fuzzy search, shortcuts, groups |
+| Toolbar / status bar | `W.Toolbar().Tool( Icon::Save, "Save", fn )` | icon tools, toggles, separators |
+| Knob / XY pad | `W.Knob( "Gain", &g, -24, 24 )`, `W.XYPad( ... )` | drag, wheel, keys, bindable |
+| Time / date range | `W.Time( "At", &t )`, `W.DateRange( "Report", &a, &b )` | |
+| Swatches / eyedropper | `W.Swatches( &c )`, `W.Eyedropper( &c )` | pick any color in the window |
+| Image viewer | `W.ImageViewer( tex, w, h )` | zoom at cursor, pan, fit / 100% |
+| Pagination / stepper / wizard / accordion | `W.Wizard().Step( "Account" )` | |
+| Property grid | `W.PropertyGrid().Int( "Port", &port, 1, 65535 )` | inspector rows with categories |
+| Code editor | `W.Add<tg::CodeEditor>( src, tg::CodeLang::Cpp )` | highlighting, multi-caret, Ctrl+D, Ctrl+/ |
+| Drag & drop | `W.OnDragStart` / `AcceptDrop` / `OnDrop` | between any widgets |
 | Copy & paste | `Label.SetSelectable( true )` | selectable chat/log text, right-click Cut/Copy/Paste in text fields, Ctrl+C on table rows (TSV) |
 | Drag to reorder | `List.Reorderable = true` | ListBox rows |
 | Tooltip | `AnyWidget.Tooltip = "..."` | on every widget, labels too |

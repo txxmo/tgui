@@ -1,7 +1,9 @@
 #include "gl3_renderer.h"
 #include "tg/draw.h"
 #include <cstddef>
+#include <algorithm>
 #include <cstdio>
+#include <vector>
 
 // ---- the slice of OpenGL we use, declared by hand so no GL headers/loaders are required ----
 #if defined( _WIN32 ) && !defined( __CYGWIN__ )
@@ -55,7 +57,8 @@ typedef std::ptrdiff_t GLsizeiptr;
     X( void, BlendFuncSeparate, GLenum, GLenum, GLenum, GLenum ) \
     X( void, Viewport, GLint, GLint, GLsizei, GLsizei ) \
     X( void, Scissor, GLint, GLint, GLsizei, GLsizei ) \
-    X( void, DrawElements, GLenum, GLsizei, GLenum, const void* )
+    X( void, DrawElements, GLenum, GLsizei, GLenum, const void* ) \
+    X( void, ReadPixels, GLint, GLint, GLsizei, GLsizei, GLenum, GLenum, void* )
 
 namespace
 {
@@ -219,5 +222,18 @@ namespace tg
 
         glDisable( GL_SCISSOR_TEST );
         glBindVertexArray( 0 );
+        if ( CaptureNext )
+        {
+            CaptureNext = false;
+            int Cw = int( Fb.x ), Ch = int( Fb.y );
+            std::vector<uint32_t> Up( size_t( Cw ) * Ch );
+            glPixelStorei( 0x0D05 /* GL_PACK_ALIGNMENT */, 1 );
+            glReadPixels( 0, 0, Cw, Ch, 0x1908 /* GL_RGBA */, 0x1401 /* GL_UNSIGNED_BYTE */, Up.data() );
+            Captured.W = Cw;
+            Captured.H = Ch;
+            Captured.Px.resize( Up.size() );
+            for ( int y = 0; y < Ch; y++ ) // GL rows go bottom-up
+                std::copy( Up.begin() + size_t( Ch - 1 - y ) * Cw, Up.begin() + size_t( Ch - y ) * Cw, Captured.Px.begin() + size_t( y ) * Cw );
+        }
     }
 }

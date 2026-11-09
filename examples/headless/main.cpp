@@ -1172,6 +1172,164 @@ int main( int Argc, char** Argv )
         App.Procs->SetSelected( 0, false );
     }
 
+    // ---------------- "More widgets" tab
+    ClickTab( Ctx, App, 9 );
+    Settle( Ctx );
+    Shot( Ctx, "widgets_plus" );
+    {
+        // icons are text
+        CHECK( !tg::Icon::Trash2.empty() && tg::Icon::ByName( "trash-2" ) == tg::Icon::Trash2 && tg::Icon::ByName( "nope" ).empty() );
+        CHECK( tg::GetTheme().Body->Find( 0xE18D ).Advance > 0 ); // trash-2 has a glyph (icon font fallback)
+        // rich text: markup parsed; links clickable
+        CHECK( App.Rich->PlainText().find( "Deploy of api v2.3 finished on fra-01 in 42s" ) != std::string::npos );
+        // virtual list: 100k rows, only the visible ones drawn; keyboard + ScrollTo
+        tg::VirtualList& L = *App.BigList;
+        CHECK( L.Count() == 100000 );
+        L.ScrollTo( 99999 );
+        Settle( Ctx );
+        CHECK( L.GetScroll() > 99000 * 28.f );
+        Ctx.SetFocus( &L );
+        L.Selected = 50;
+        Ctx.OnKey( tg::Key::Down, true, 0 );
+        CHECK( L.Selected == 51 );
+        Ctx.OnKey( tg::Key::Home, true, 0 );
+        Settle( Ctx );
+        CHECK( L.Selected == 0 && L.GetScroll() < 1 && L.RowAt( L.RowRect( 3 ).Center() ) == 3 );
+        // fuzzy matching ranks word starts first
+        CHECK( tg::FuzzyScore( "rst srv", "Restart server" ) > 0 && tg::FuzzyScore( "xyz", "Restart server" ) < 0 );
+        CHECK( tg::FuzzyScore( "dp", "Deploy to production" ) > tg::FuzzyScore( "dp", "Open help page" ) );
+        // command palette: Ctrl+K, type, Enter runs the best match
+        Ctx.SetFocus( nullptr );
+        Ctx.OnKey( tg::Key::K, true, tg::ModCtrl );
+        Settle( Ctx );
+        CHECK( App.Palette && App.Palette->Visible );
+        for ( const char* c = "dply"; *c; c++ ) Ctx.OnText( uint32_t( *c ) );
+        Settle( Ctx );
+        Shot( Ctx, "palette" );
+        CHECK( App.Palette->Matches() == 1 );
+        Ctx.OnKey( tg::Key::Enter, true, 0 );
+        Settle( Ctx );
+        CHECK( App.LastMenu == "Deploy to production" );
+        Ctx.OnKey( tg::Key::K, true, tg::ModCtrl );
+        Settle( Ctx );
+        Ctx.OnKey( tg::Key::Escape, true, 0 );
+        Settle( Ctx );
+        bool AnyPalette = false;
+        for ( auto& K : Ctx.Overlay().Children() ) if ( dynamic_cast<tg::CommandPalette*>( K.get() ) ) AnyPalette = true;
+        CHECK( !AnyPalette );
+        // toolbar toggle
+        bool Live0 = App.Live;
+        Click( Ctx, *Find<tg::ToolButton>( *App.Tools, 2 ) );
+        CHECK( App.Live != Live0 );
+        // knob: drag up raises, double-click resets; wheel
+        tg::Knob& K = *App.GainKnob;
+        Drag( Ctx, K.Bounds.Center(), K.Bounds.Center() + tg::Vec2{ 0, -50 } );
+        CHECK( App.Gain > 5 );
+        ClickAt( Ctx, K.Bounds.Center() );
+        ClickAt( Ctx, K.Bounds.Center() );
+        CHECK( App.Gain == 0 );
+        // xy pad: click the top-right quarter
+        tg::XYPad& Xy = *App.Pad;
+        tg::Rect Pr = { Xy.Bounds.x, Xy.Bounds.Bottom() - Xy.Size, Xy.Size, Xy.Size };
+        for ( int i = 0; i < 30; i++ ) Ctx.Frame();
+        ClickAt( Ctx, { Pr.x + Pr.w * 0.75f, Pr.y + Pr.h * 0.25f } );
+        CHECK( std::fabs( App.Cross.x - 0.5f ) < 0.05f && std::fabs( App.Cross.y - 0.5f ) < 0.05f );
+        // time picker: wheel on the minutes; open the list and pick an hour
+        tg::TimePicker& Tp = *App.TimeW;
+        Ctx.OnMouseMove( { Tp.Bounds.x + 10 + tg::GetTheme().Body->Width( "00:" ) + 4, Tp.Bounds.Center().y } );
+        Ctx.OnMouseWheel( { 0, 1 } );
+        CHECK( App.BackupAt.M == 31 && App.BackupAt.H == 3 );
+        Click( Ctx, Tp );
+        CHECK( Tp.IsOpen() );
+        Settle( Ctx );
+        auto* Hours = Find<tg::VirtualList>( *OpenPopup( Ctx ) );
+        CHECK( Hours );
+        Hours->ScrollTo( 0 );
+        Settle( Ctx );
+        ClickAt( Ctx, Hours->RowRect( 1 ).Center() );
+        CHECK( App.BackupAt.H == 1 && App.BackupAt.M == 31 && Tp.IsOpen() ); // stays open to pick the minutes too
+        Ctx.ClosePopups();
+        Settle( Ctx );
+        // date range: two clicks
+        Click( Ctx, *App.RangeW );
+        Settle( Ctx );
+        auto* Cal = Find<tg::Calendar>( *OpenPopup( Ctx ) );
+        CHECK( Cal && Cal->Range );
+        ClickAt( Ctx, Cal->DayRect( 10 ).Center() );
+        CHECK( App.RangeW->IsOpen() );
+        ClickAt( Ctx, Cal->DayRect( 3 ).Center() );
+        Settle( Ctx );
+        CHECK( App.From.Day == 3 && App.To.Day == 10 && !App.RangeW->IsOpen() );
+        // swatches + eyedropper (reads the rendered frame)
+        tg::Swatches& Sw = *App.SwatchW;
+        ClickAt( Ctx, { Sw.Bounds.x + 2 * ( Sw.Size + Sw.Gap ) + Sw.Size * 0.5f, Sw.Bounds.y + Sw.Size * 0.5f } ); // third color
+        CHECK( App.Accent == Sw.Palette[ 2 ] );
+        Click( Ctx, *App.Dropper );
+        CHECK( App.Dropper->IsPicking() );
+        tg::Vec2 V = Ctx.GetViewport();
+        Ctx.Frame();
+        Ctx.Render( { V.x * Scale, V.y * Scale } ); // the capture happens here
+        tg::Vec2 Red = Find<tg::Badge>( *App.Pages[ 9 ] )->Bounds.Center(); // a raised chip: not the accent
+        Ctx.OnMouseMove( { App.DropBin->Bounds.x + 3, App.DropBin->Bounds.Center().y } );
+        Ctx.OnMouseButton( tg::MouseButton::Left, true );
+        Ctx.OnMouseButton( tg::MouseButton::Left, false );
+        (void)Red;
+        CHECK( !App.Dropper->IsPicking() && App.Accent == tg::GetTheme()[ tg::Tok::Surface ] );
+        // pagination + stepper
+        ClickAt( Ctx, { App.Pager->Bounds.x + 34 * 2 + 15, App.Pager->Bounds.Center().y } ); // the "2"
+        CHECK( App.PageNo == 1 );
+        Ctx.SetFocus( App.Pager );
+        Ctx.OnKey( tg::Key::End, true, 0 );
+        CHECK( App.PageNo == 19 );
+        ClickAt( Ctx, { App.Steps->Bounds.x + 20, App.Steps->Bounds.y + 15 } ); // back to step 1
+        CHECK( App.StepNo == 0 );
+        // accordion: opening one closes the other
+        auto* SecA = Find<tg::Collapsible>( *App.Acc, 0 );
+        auto* SecB = Find<tg::Collapsible>( *App.Acc, 1 );
+        CHECK( SecA->IsOpen() && !SecB->IsOpen() );
+        SecB->SetOpen( true );
+        CHECK( !SecA->IsOpen() );
+        // drag and drop: chip -> bin
+        auto* Chip = Find<tg::Badge>( *App.Pages[ 9 ], 1 );
+        Drag( Ctx, Chip->Bounds.Center(), App.DropBin->Bounds.Center() );
+        CHECK( App.Dropped == "vps-ams-02" && !Ctx.IsDragging() );
+        Ctx.OnMouseMove( Chip->Bounds.Center() );
+        Ctx.OnMouseButton( tg::MouseButton::Left, true );
+        Ctx.OnMouseMove( App.DropBin->Bounds.Center() );
+        CHECK( Ctx.IsDragging() && Ctx.DropTarget() == App.DropBin );
+        Settle( Ctx );
+        Shot( Ctx, "drag_drop" );
+        Ctx.OnKey( tg::Key::Escape, true, 0 );
+        Ctx.OnMouseButton( tg::MouseButton::Left, false );
+        CHECK( !Ctx.IsDragging() );
+        // code editor: typing, auto-indent, multi-caret (Ctrl+D), comment toggle, undo
+        tg::CodeEditor& Ed = *App.Editor;
+        Ed.SetText( "int a = 1;\nint b = a;\n" );
+        Ctx.SetFocus( &Ed );
+        Ed.SetCaret( 0, 4 );
+        Ctx.OnKey( tg::Key::D, true, tg::ModCtrl ); // select "a"
+        Ctx.OnKey( tg::Key::D, true, tg::ModCtrl ); // ... and the next "a"
+        CHECK( Ed.CaretCount() == 2 );
+        for ( const char* c = "x2"; *c; c++ ) Ctx.OnText( uint32_t( *c ) );
+        CHECK( Ed.GetText() == "int x2 = 1;\nint b = x2;\n" );
+        Ctx.OnKey( tg::Key::Escape, true, 0 );
+        CHECK( Ed.CaretCount() == 1 );
+        Ctx.OnKey( tg::Key::Slash, true, tg::ModCtrl );
+        CHECK( Ed.Line( 1 ) == "// int b = x2;" );
+        Ctx.OnKey( tg::Key::Z, true, tg::ModCtrl );
+        CHECK( Ed.Line( 1 ) == "int b = x2;" );
+        Ed.SetText( "void f() {" );
+        Ed.SetCaret( 0, 10 );
+        Ctx.OnKey( tg::Key::Enter, true, 0 );
+        Ctx.OnText( 'x' );
+        CHECK( Ed.GetText() == "void f() {\n    x" );
+        Ctx.OnKey( tg::Key::Tab, true, tg::ModShift );
+        CHECK( Ed.Line( 1 ) == "x" );
+        Ctx.SetFocus( nullptr );
+        Settle( Ctx );
+        Shot( Ctx, "widgets_plus_after" );
+    }
+
     // ---------------- light theme
     tg::GetTheme().UseColors( tg::Theme::Light() );
     App.SettingsWin->Show();

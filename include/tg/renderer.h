@@ -4,6 +4,7 @@
 // means implementing these five functions; nothing else in tg touches the GPU.
 #pragma once
 #include "core.h"
+#include <vector>
 
 namespace tg
 {
@@ -22,5 +23,17 @@ namespace tg
 
         // Draw a frame. FramebufferSize is in pixels; the DrawList is in UI units (Scale converts).
         virtual void Render( const DrawList& List, Vec2 FramebufferSize, float Scale = 1.f ) = 0;
+
+        // ---- frame capture (eyedropper, screenshots). Set CaptureNext before Render(); afterwards Captured
+        //      holds the frame (RGBA in Color::Pack layout, top row first, framebuffer pixels).
+        bool CaptureNext = false;
+        struct Capture
+        {
+            int W = 0, H = 0;
+            std::vector<uint32_t> Px;
+            bool Valid() const { return W > 0 && H > 0 && Px.size() == size_t( W ) * H; }
+            uint32_t At( int X, int Y ) const { return X >= 0 && Y >= 0 && X < W && Y < H ? Px[ size_t( Y ) * W + X ] : 0; }
+        } Captured;
+        virtual bool CanCapture() const { return false; }
     };
 }

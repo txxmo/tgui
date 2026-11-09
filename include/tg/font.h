@@ -101,6 +101,10 @@ namespace tg
         // Color fonts (emoji) need FreeType; without it they're ignored.
         bool AddFallbackFile( const std::string& Path );
         bool AddFallbackMemory( std::vector<unsigned char> Data );
+        // An icon font as a fallback (Lucide is built in): its glyphs are centred vertically on the text.
+        // AddIconFontFile( "lucide.ttf" ) with the full Lucide font gives every icon, not just tg::Icon's set.
+        bool AddIconFont( std::vector<unsigned char> Data );
+        bool AddIconFontFile( const std::string& Path );
         // Finds the system color emoji font (Segoe UI Emoji / Noto Color Emoji / Apple Color Emoji). Needs FreeType.
         bool AddEmojiFont();
         // Finds a system CJK font (YaHei / PingFang / Noto Sans CJK / WenQuanYi). Read lazily: costs nothing
