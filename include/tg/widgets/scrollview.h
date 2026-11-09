@@ -20,6 +20,7 @@ namespace tg
 
         ScrollStyle Style;
         bool StickToBottom = false;
+        bool SmoothStick = false; // with StickToBottom: glide down to new content instead of jumping (chat)
         float MaxHeight = 0; // when sized by content (dropdowns): cap the natural height and scroll beyond it
 
         Widget& Content() { return *Children()[ 0 ]; }

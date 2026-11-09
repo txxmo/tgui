@@ -19,6 +19,7 @@ namespace tg
 
     struct DialogStyle
     {
+        float Rise = 6; // the card slides up this far while it fades in
         float Width = 420, Radius = 12;
         Paint Backdrop = Color( 0, 0, 0, 140 );
         Paint Fill = Tok::Surface;

@@ -60,11 +60,14 @@ namespace tg
         Animate( FadeT, 1.f, 14.f );
         size_t V0 = D.Vtx.size();
         D.RectFilled( Bounds, Style.Backdrop.Resolve() );
+        size_t V1 = D.Vtx.size(), C1 = D.Cmds.size();
         Rect C = Card->Bounds;
         D.Shadow( C, Style.Radius, Color( 0, 0, 0, 140 ), 18, { 0, 8 } );
         D.RectFilled( C, Style.Fill.Resolve(), Style.Radius );
         D.RectStroke( C, Style.Stroke.Resolve(), Style.Radius );
         DrawChildren( D );
+        if ( FadeT < 0.999f ) // the card rises a few pixels as it fades in
+            D.TransformFrom( V1, C1, C.Center(), 1, 0, { 0, std::round( ( 1 - EaseOutCubic( FadeT ) ) * Style.Rise ) } );
         D.FadeFrom( V0, FadeT );
     }
 

@@ -53,7 +53,11 @@ namespace tg
             ContentH = C.MeasureCached( W ).y + Layout.Padding.Vertical();
         }
 
-        if ( StickToBottom && AtBottom ) Target = Scroll = MaxScroll();
+        if ( StickToBottom && AtBottom )
+        {
+            Target = MaxScroll();
+            if ( !SmoothStick ) Scroll = Target;
+        }
         Target = Clamp( Target, 0, MaxScroll() );
         Scroll = Clamp( Scroll, 0, MaxScroll() );
 
