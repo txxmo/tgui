@@ -110,6 +110,17 @@ namespace tg
         return Last;
     }
 
+    std::string Ellipsize( const Font& F, std::string_view T, float Max )
+    {
+        if ( F.Width( T ) <= Max ) return std::string( T );
+        const char* Dots = "\xE2\x80\xA6";
+        float Dw = F.Width( Dots );
+        size_t End = T.size();
+        while ( End > 0 && F.Width( T.substr( 0, End ) ) + Dw > Max ) End = PrevGrapheme( T, End );
+        while ( End > 0 && T[ End - 1 ] == ' ' ) End--;
+        return std::string( T.substr( 0, End ) ) + Dots;
+    }
+
     static bool IsWordByte( unsigned char C ) { return C >= 0x80 || std::isalnum( C ) || C == '_'; }
 
     void WordAt( std::string_view S, size_t i, size_t& Begin, size_t& End )

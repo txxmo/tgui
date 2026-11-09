@@ -1,4 +1,10 @@
 #include "tg/theme.h"
+#include <cstdio>
+#include <cstdlib>
+#include <cstring>
+#include <filesystem>
+#include <fstream>
+#include <sstream>
 
 namespace tg
 {
@@ -46,5 +52,90 @@ namespace tg
     {
         static Theme T = Theme::Dark();
         return T;
+    }
+
+    const char* Theme::TokenName( Tok T )
+    {
+        static const char* N[] = { "Background", "Surface", "SurfaceAlt", "Raised", "Border", "BorderStrong", "Text", "TextDim",
+                                   "TextOnAccent", "Accent", "AccentHover", "Success", "Warning", "Danger" };
+        static_assert( sizeof( N ) / sizeof( N[ 0 ] ) == size_t( Tok::Count ), "token names out of sync" );
+        return N[ size_t( T ) ];
+    }
+
+    std::string Theme::ToJson() const
+    {
+        std::string S = "{\n";
+        char B[ 64 ];
+        for ( size_t i = 0; i < size_t( Tok::Count ); i++ )
+        {
+            Color C = Colors[ i ];
+            if ( C.a == 255 ) std::snprintf( B, sizeof( B ), "  \"%s\": \"#%02X%02X%02X\",\n", TokenName( Tok( i ) ), C.r, C.g, C.b );
+            else std::snprintf( B, sizeof( B ), "  \"%s\": \"#%02X%02X%02X%02X\",\n", TokenName( Tok( i ) ), C.r, C.g, C.b, C.a );
+            S += B;
+        }
+        std::snprintf( B, sizeof( B ), "  \"Radius\": %g\n}\n", Radius );
+        return S + B;
+    }
+
+    bool Theme::FromJson( const std::string& J )
+    {
+        // a tiny reader for flat { "Key": "#hex" | number } objects
+        bool Any = false;
+        for ( size_t i = 0; ( i = J.find( '"', i ) ) != std::string::npos; )
+        {
+            size_t E = J.find( '"', i + 1 );
+            if ( E == std::string::npos ) break;
+            std::string Key = J.substr( i + 1, E - i - 1 );
+            size_t Colon = J.find_first_not_of( " \t\r\n", E + 1 );
+            if ( Colon == std::string::npos || J[ Colon ] != ':' ) { i = E + 1; continue; }
+            size_t V = J.find_first_not_of( " \t\r\n", Colon + 1 );
+            if ( V == std::string::npos ) break;
+            if ( J[ V ] == '"' )
+            {
+                size_t Ve = J.find( '"', V + 1 );
+                if ( Ve == std::string::npos ) break;
+                std::string Val = J.substr( V + 1, Ve - V - 1 );
+                if ( !Val.empty() && Val[ 0 ] == '#' )
+                {
+                    unsigned long H = std::strtoul( Val.c_str() + 1, nullptr, 16 );
+                    Color C = Val.size() == 9 ? Color( uint8_t( H >> 24 ), uint8_t( H >> 16 ), uint8_t( H >> 8 ), uint8_t( H ) ) : Color::Hex( uint32_t( H ) );
+                    for ( size_t t = 0; t < size_t( Tok::Count ); t++ )
+                        if ( Key == TokenName( Tok( t ) ) ) { Colors[ t ] = C; Any = true; }
+                }
+                i = Ve + 1;
+            }
+            else
+            {
+                if ( Key == "Radius" ) { Radius = float( std::atof( J.c_str() + V ) ); Any = true; }
+                i = V + 1;
+            }
+        }
+        return Any;
+    }
+
+    bool LoadThemeFile( const std::string& Path )
+    {
+        std::ifstream F( Path, std::ios::binary );
+        if ( !F ) return false;
+        std::stringstream S;
+        S << F.rdbuf();
+        return GetTheme().FromJson( S.str() );
+    }
+
+    bool SaveThemeFile( const std::string& Path )
+    {
+        std::ofstream F( Path, std::ios::binary );
+        if ( !F ) return false;
+        F << GetTheme().ToJson();
+        return bool( F );
+    }
+
+    std::string ThemeFileStamp( const std::string& Path )
+    {
+        std::error_code Ec;
+        auto T = std::filesystem::last_write_time( Path, Ec );
+        if ( Ec ) return {};
+        auto Sz = std::filesystem::file_size( Path, Ec );
+        return std::to_string( T.time_since_epoch().count() ) + ":" + std::to_string( Sz );
     }
 }

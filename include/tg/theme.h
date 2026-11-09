@@ -7,6 +7,7 @@
 // And if that isn't enough: the widget's Draw() is ~30 lines in src/widgets/<name>.cpp. Edit it, or subclass.
 #pragma once
 #include "core.h"
+#include <string>
 
 namespace tg
 {
@@ -63,6 +64,12 @@ namespace tg
         static Theme Dark();
         static Theme Light();
 
+        // Theme files (JSON): { "Accent": "#6EB7D4", "Background": "#0E1116", ..., "Radius": 6 }.
+        // Missing keys keep their value, so a file can change just a few colors.
+        std::string ToJson() const;
+        bool FromJson( const std::string& Text );
+        static const char* TokenName( Tok T ); // "Accent"
+
         // Swap palettes at runtime without losing fonts:  GetTheme().UseColors( Theme::Light() );
         void UseColors( const Theme& Other )
         {
@@ -72,6 +79,9 @@ namespace tg
 
     // The active theme. Plain global: read it in Draw(), poke it from your app.
     Theme& GetTheme();
+    bool LoadThemeFile( const std::string& Path ); // into GetTheme(); Ctx.WatchTheme( Path ) reloads on change
+    bool SaveThemeFile( const std::string& Path );
+    std::string ThemeFileStamp( const std::string& Path ); // modification time + size ("" if missing)
 
     inline Color Paint::Resolve() const { return IsToken ? GetTheme()[ Token ] : Literal; }
 }

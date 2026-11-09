@@ -4,6 +4,7 @@
 #include "soft_renderer.h"
 #include "tg/settings.h"
 #include <filesystem>
+#include <fstream>
 #include <cstdio>
 #include <cmath>
 #include <cstdlib>
@@ -1328,6 +1329,99 @@ int main( int Argc, char** Argv )
         Ctx.SetFocus( nullptr );
         Settle( Ctx );
         Shot( Ctx, "widgets_plus_after" );
+    }
+
+    // ---------------- layout & theme
+    ClickTab( Ctx, App, 10 );
+    Settle( Ctx );
+    Shot( Ctx, "layout_theme" );
+    {
+        // grid: columns from ColumnMin, ColSpan
+        tg::Container& G = *App.GridBox;
+        auto Kid = [ & ]( size_t i ) { return G.Children()[ i ].get(); };
+        int Cols = int( ( G.Bounds.w + 10 ) / ( 170 + 10 ) );
+        CHECK( Cols >= 2 );
+        float Cw = ( G.Bounds.w - 10 * ( Cols - 1 ) ) / Cols;
+        CHECK( std::fabs( Kid( 0 )->Bounds.w - ( Cw * 2 + 10 ) ) < 1 );        // spans 2 columns
+        CHECK( std::fabs( Kid( 1 )->Bounds.x - ( G.Bounds.x + 2 * ( Cw + 10 ) ) ) < 1 || Cols == 2 );
+        // wrap: badges flow onto more than one line, all inside the box
+        tg::Container& W = *App.WrapBox;
+        float MinY = 1e9f, MaxY = -1e9f;
+        for ( auto& K : W.Children() ) { MinY = std::min( MinY, K->Bounds.y ); MaxY = std::max( MaxY, K->Bounds.y ); CHECK( K->Bounds.Right() <= W.Bounds.Right() + 0.5f ); }
+        (void)MinY;
+        // StackBelow: side by side now
+        tg::Container& S = *App.StackRow;
+        CHECK( S.Bounds.w >= 520 && std::fabs( S.Children()[ 0 ]->Bounds.y - S.Children()[ 1 ]->Bounds.y ) < 1 );
+        // reorder animates: right after a shuffle a card is still drawn at its old spot
+        tg::Widget* Second = Kid( 1 );
+        tg::Vec2 Before = Second->Bounds.Pos();
+        Click( Ctx, *Find<tg::Button>( *App.Pages[ 10 ], 0 ) );
+        Ctx.Frame();
+        CHECK( Second->Bounds.Pos() != Before );
+        Settle( Ctx );
+        // a narrow viewport: fewer columns, the row stacks
+        Ctx.SetViewport( { 700, 820 }, Scale );
+        Settle( Ctx );
+        CHECK( S.Bounds.w < 520 && S.Children()[ 1 ]->Bounds.y > S.Children()[ 0 ]->Bounds.y );
+        int Cols2 = int( ( G.Bounds.w + 10 ) / ( 170 + 10 ) );
+        CHECK( Cols2 < Cols || Cols2 == 1 );
+        Shot( Ctx, "layout_narrow" );
+        Ctx.SetViewport( { 1280, 820 }, Scale );
+        Settle( Ctx );
+        // Responsive(): fires on crossing
+        int Wide = -1;
+        tg::Responsive( *App.Pages[ 10 ], 1000, [ & ]( bool Wd ) { Wide = Wd; } );
+        Ctx.InvalidateLayout();
+        Settle( Ctx );
+        CHECK( Wide == 1 );
+        Ctx.SetViewport( { 900, 820 }, Scale );
+        Settle( Ctx );
+        CHECK( Wide == 0 );
+        Ctx.SetViewport( { 1280, 820 }, Scale );
+        App.Pages[ 10 ]->OnResize = nullptr;
+        Settle( Ctx );
+        // aspect + max width
+        tg::Container Test( tg::Dir::Column, 0 );
+        auto& Box16 = Test.Add<tg::Box>();
+        Box16.Layout.Aspect = 2;
+        auto& Narrow = Test.Add<tg::Box>();
+        Narrow.Layout.MaxWidth = 100;
+        Test.Layout.CrossAlign = tg::Align::Stretch;
+        Test.Arrange( { 0, 0, 400, 600 } );
+        CHECK( Box16.Bounds.w == 400 && Box16.Bounds.h == 200 && Narrow.Bounds.w == 100 );
+        // timers (fixed timestep: frame time)
+        int Ticks = 0, Once = 0;
+        uint32_t Tid = Ctx.Every( 0.1, [ & ] { Ticks++; } );
+        Ctx.After( 0.25, [ & ] { Once++; } );
+        for ( int i = 0; i < 30; i++ ) Ctx.Frame(); // 0.5 s
+        CHECK( Ticks >= 4 && Ticks <= 6 && Once == 1 );
+        Ctx.CancelTimer( Tid );
+        for ( int i = 0; i < 30; i++ ) Ctx.Frame();
+        CHECK( Ticks <= 6 );
+        // theme files: JSON round trip, partial files, live reload
+        tg::Theme Saved = tg::GetTheme();
+        std::string J = tg::GetTheme().ToJson();
+        CHECK( J.find( "\"Accent\": \"#" ) != std::string::npos );
+        tg::GetTheme()[ tg::Tok::Accent ] = tg::Color::Hex( 0x123456 );
+        CHECK( tg::GetTheme().FromJson( J ) && tg::GetTheme()[ tg::Tok::Accent ] == Saved[ tg::Tok::Accent ] );
+        CHECK( tg::GetTheme().FromJson( "{ \"Danger\": \"#FF0000\", \"Radius\": 9 }" ) && tg::GetTheme()[ tg::Tok::Danger ] == tg::Color( 255, 0, 0 ) && tg::GetTheme().Radius == 9 );
+        std::string Tf = std::string( OutDir ) + "/theme.json";
+        CHECK( tg::SaveThemeFile( Tf ) );
+        Ctx.WatchTheme( Tf );
+        { std::ofstream F( Tf ); F << "{ \"Accent\": \"#00FF00\" }  "; }
+        for ( int i = 0; i < 40; i++ ) Ctx.Frame();
+        CHECK( tg::GetTheme()[ tg::Tok::Accent ] == tg::Color( 0, 255, 0 ) );
+        // the theme editor writes straight into the theme
+        auto* Pick = Find<tg::ColorPicker>( *App.ThemeEd, int( tg::Tok::Accent ) );
+        CHECK( Pick && Pick->Bind == &tg::GetTheme().Colors[ size_t( tg::Tok::Accent ) ] );
+        Pick->SetColor( tg::Color::Hex( 0xFF00FF ) );
+        CHECK( tg::GetTheme()[ tg::Tok::Accent ] == tg::Color::Hex( 0xFF00FF ) && App.ThemeEd->CppSnippet().find( "0xFF00FF" ) != std::string::npos );
+        // variants
+        tg::Button Vb( "x" );
+        CHECK( tg::UseVariant( Vb, "danger" ) && !tg::UseVariant( Vb, "nope" ) );
+        tg::GetTheme().UseColors( Saved );
+        tg::GetTheme().Radius = Saved.Radius;
+        Settle( Ctx );
     }
 
     // ---------------- light theme

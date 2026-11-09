@@ -105,6 +105,10 @@ struct DemoApp
     std::string Host = "vps-fra-01", LastLink, Dropped;
     void OpenCommands();
 
+    // "Layout & theme" tab
+    tg::Container *GridBox = nullptr, *WrapBox = nullptr, *StackRow = nullptr;
+    tg::ThemeEditor* ThemeEd = nullptr;
+
     // "Terminal" tab
     tg::Terminal* Shell = nullptr;
     tg::Terminal* Log = nullptr;

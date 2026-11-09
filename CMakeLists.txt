@@ -33,6 +33,7 @@ add_library( tg STATIC
     src/input.cpp
     src/pty.cpp
     src/theme.cpp
+    src/variants.cpp
     src/widget.cpp
     src/widgets/bars.cpp
     src/widgets/box.cpp
@@ -78,6 +79,7 @@ add_library( tg STATIC
     src/widgets/terminal.cpp
     src/widgets/textarea.cpp
     src/widgets/textinput.cpp
+    src/widgets/themeeditor.cpp
     src/widgets/timepicker.cpp
     src/widgets/toast.cpp
     src/widgets/toggle.cpp

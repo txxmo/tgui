@@ -112,3 +112,61 @@ Layout runs only when something calls `Invalidate()`: adding or removing widgets
 ## Writing your own layout
 
 Override `Measure( AvailWidth )` to report a natural size and `Arrange( Rect )` to place children. See [Writing widgets](custom-widgets.md#layout-hooks).
+
+## Grid
+
+```cpp
+auto& G = W.Add<tg::Container>( tg::Dir::Grid, 10 );   // Gap between cells
+G.Layout.Columns = 3;                                   // fixed columns...
+G.Layout.ColumnMin = 170;                               // ...or as many >= 170-unit columns as fit (responsive)
+G.Layout.RowGap = 12;                                   // -1 = same as Gap
+Card.Layout.ColSpan = 2;                                // on a child: span cells
+Tall.Layout.RowSpan = 2;
+```
+
+Cells are filled row by row, skipping cells already taken by row spans. Rows are as tall as their tallest cell. `CrossAlign = Stretch` (the default) makes every cell fill its row's height.
+
+## Wrap
+
+```cpp
+auto& Tags = W.Add<tg::Container>( tg::Dir::Wrap, 6 );  // children flow left to right and wrap like words
+```
+
+`MainAlign` aligns each line (Start, Center, End), and `RowGap` sets the space between lines.
+
+## Size limits and aspect ratio
+
+```cpp
+Panel.Layout.MaxWidth = 720;       // Grow, but never wider (centered with MainAlign = Center)
+Thumb.Layout.Aspect = 16.f / 9;    // the height follows the width
+Box.Layout.MinWidth = 120;  Box.Layout.MaxHeight = 300;
+```
+
+## Responsive layouts
+
+```cpp
+Row.Layout.StackBelow = 520;                          // a Row narrower than this becomes a Column
+tg::Responsive( Page, 760, [&]( bool Wide ) {          // runs when the width crosses 760 (and at first layout)
+    Sidebar->Visible = Wide;
+} );
+W.OnResize = [&]( tg::Widget& Self, float Width ) { ... };   // every width change
+```
+
+## Animated layout changes
+
+```cpp
+List.Layout.AnimateChildren = true;   // children glide to their new place: reorder, show / hide, resize
+List.MoveChild( From, To );           // reorder children
+```
+
+![Grid, wrap, StackBelow and the theme editor](layout_theme.png)
+
+## Timers
+
+```cpp
+uint32_t Id = Ctx.Every( 2.0, [&] { PollStats(); } );   // repeating, on the UI thread
+Ctx.After( 0.5, [&] { HideHint(); } );                  // once
+Ctx.CancelTimer( Id );
+```
+
+The app still sleeps between timers; it only wakes when one is due.

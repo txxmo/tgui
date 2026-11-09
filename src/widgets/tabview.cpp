@@ -108,9 +108,10 @@ namespace tg
         {
             Rect T = TabRect( i );
             if ( int( i ) == HoverTab && int( i ) != Active ) D.RectFilled( T, S.HoverFill.Resolve(), S.Radius - 2 );
-            float W = F.Width( Names[ i ] );
+            std::string Name = Ellipsize( F, Names[ i ], T.w - 12 ); // narrow windows: "More wid…"
+            float W = F.Width( Name );
             D.PushClip( T );
-            D.Text( F, { std::floor( T.x + ( T.w - W ) * 0.5f ), std::floor( T.y + ( T.h - F.LineHeight ) * 0.5f ) }, Names[ i ],
+            D.Text( F, { std::floor( T.x + ( T.w - W ) * 0.5f ), std::floor( T.y + ( T.h - F.LineHeight ) * 0.5f ) }, Name,
                     ( int( i ) == Active ? S.ActiveText : S.Text ).Resolve() );
             D.PopClip();
         }

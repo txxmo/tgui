@@ -203,6 +203,39 @@ The bigger motions, and how to tune or turn them off:
 
 Easing helpers for your own widgets live in `core.h`: `EaseOutCubic`, `EaseInCubic`, `EaseInOutCubic`, `EaseOutBack`. To animate a whole subtree, draw it, then `D.TransformFrom( VtxStart, CmdStart, Center, Scale, Angle, Offset )` and `D.FadeFrom( VtxStart, Alpha )`. That's how windows and popups do it.
 
+## Theme files and live editing
+
+A theme is a small JSON file. Any keys you leave out keep their current value:
+
+```json
+{ "Accent": "#6EB7D4", "Background": "#0E1116", "Danger": "#E5534B", "Radius": 6 }
+```
+
+```cpp
+tg::LoadThemeFile( "theme.json" );
+tg::SaveThemeFile( "theme.json" );
+Ctx.WatchTheme( "theme.json" );                 // reload whenever the file changes: tweak colors in your editor
+std::string J = tg::GetTheme().ToJson();
+tg::GetTheme().FromJson( J );
+```
+
+The built-in **theme editor** has a color picker for every token, a radius slider, Dark/Light presets, and Copy JSON / Copy C++ (plus Save/Load when you give it a path):
+
+```cpp
+App.Window( "Theme", {}, { 360, 600 } ).Add<tg::ThemeEditor>( "theme.json" );
+```
+
+## Style variants by name
+
+```cpp
+#include "tg/variants.h"
+tg::SetVariant<tg::ButtonStyle>( "pill", Pill );   // register once
+tg::UseVariant( MyButton, "pill" );                // apply by name: from a config file, a plugin...
+tg::UseVariant( Btn, "danger" );                   // built in: default, primary, danger, ghost; Box: card, panel
+```
+
+There is one registry per style type, so this works for any widget with a `Style` member.
+
 ## Light and dark
 
 ```cpp

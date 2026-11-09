@@ -747,6 +747,54 @@ static void BuildWidgetsPlus( DemoApp& App, Container& Page )
     Sb.Item( "F12 inspector  \xC2\xB7  Ctrl+K commands" );
 }
 
+// Layout & theme: responsive grid, wrap, StackBelow, animated reflow, the live theme editor.
+static void BuildLayoutTheme( DemoApp& App, Container& Page )
+{
+    DemoApp* A = &App;
+    auto& Cols = Page.Columns( 12 );
+    auto& Left = Cols.Group( "Grid (ColumnMin 170: resize the window)  \xC2\xB7  wrap  \xC2\xB7  animated reflow" );
+    Left.Layout.Width = Grow( 3 );
+    auto& Grid = Left.Add<Container>( Dir::Grid, 10 );
+    Grid.Layout.ColumnMin = 170;
+    Grid.Layout.AnimateChildren = true;
+    App.GridBox = &Grid;
+    const char* Names[] = { "fra-01", "ams-02", "nyc-01", "sgp-01", "syd-01", "db-fra-01" };
+    for ( int i = 0; i < 6; i++ )
+    {
+        auto& Card = AddCard( Grid, Dir::Column, 6 );
+        if ( i == 0 ) Card.Layout.ColSpan = 2; // the first card is twice as wide
+        AddText( Card, Icon::Server + "  " + Names[ i ], GetTheme().Bold );
+        AddText( Card, i % 3 == 2 ? "degraded" : "healthy", nullptr, i % 3 == 2 ? Tok::Warning : Tok::Success );
+        Card.Add<ProgressBar>( 0.2f + 0.13f * i );
+    }
+    auto& Wrap = Left.Add<Container>( Dir::Wrap, 6 );
+    Wrap.Layout.AnimateChildren = true;
+    App.WrapBox = &Wrap;
+    for ( const char* T : { "prod", "eu-west", "k8s", "postgres", "redis", "nginx", "grafana", "backup", "tls", "ipv6" } ) Wrap.Badge( T, Tok::Raised );
+    auto& Shuffle = Left.Row( 8 );
+    Shuffle.Button( Icon::Shuffle + "  Shuffle cards", [ A ] {
+        size_t N = A->GridBox->Children().size();
+        if ( N > 2 ) A->GridBox->MoveChild( 1, N - 1 ); // reorder: the cards glide to their new cells
+    } );
+    auto& Split = Left.Row( 10 );
+    Split.Layout.StackBelow = 520; // side by side when wide, stacked when narrow
+    App.StackRow = &Split;
+    auto& Va = AddCard( Split, Dir::Column, 4 );
+    Va.Layout.Width = Grow();
+    AddText( Va, "StackBelow = 520", GetTheme().Bold );
+    AddText( Va, "These two cards sit side by side, or stack when the row is narrow.", nullptr, Tok::TextDim, true );
+    auto& Vb = AddCard( Split, Dir::Column, 4 );
+    Vb.Layout.Width = Grow();
+    Vb.Layout.Aspect = 0; // (Aspect = width / height pins a ratio)
+    AddText( Vb, "Variants", GetTheme().Bold );
+    auto& Vr = AddRow( Vb, 6 );
+    for ( const char* V : { "default", "primary", "danger", "ghost" } ) UseVariant( Vr.Add<Button>( V ), V );
+
+    auto& Right = Cols.Group( "Theme editor (live)" );
+    Right.Layout.Width = Grow( 2 );
+    App.ThemeEd = &Right.Add<ThemeEditor>();
+}
+
 void DemoApp::OpenCommands()
 {
     CommandList L;
@@ -796,7 +844,7 @@ void DemoApp::Build( Context& C, Widget& Root )
     // ---- tabs across the top, one page each
     auto& Body = Root.Add<Container>( Dir::Column, 0, Insets( 16, 14, 16, 16 ) );
     Body.Layout.Height = Grow();
-    const char* Names[] = { "Dashboard", "Chat", "Controls", "Tables", "Windows", "More", "Forms", "Charts", "Terminal", "More widgets" };
+    const char* Names[] = { "Dashboard", "Chat", "Controls", "Tables", "Windows", "More", "Forms", "Charts", "Terminal", "More widgets", "Layout & theme" };
     for ( const char* N : Names ) Pages.push_back( &Body.Tab( N ) );
     Tabs = Body.Tabs();
     Tabs->OnChange = [ this ]( int i ) {
@@ -814,6 +862,7 @@ void DemoApp::Build( Context& C, Widget& Root )
     BuildCharts( *this, *Pages[ 7 ] );
     BuildTerminal( *this, *Pages[ 8 ] );
     BuildWidgetsPlus( *this, *Pages[ 9 ] );
+    BuildLayoutTheme( *this, *Pages[ 10 ] );
     C.Shortcut( "Ctrl+K", [ this ] { OpenCommands(); } );
 
     // Global hotkey, like the old tgui Insert key: show/hide the Test Window.

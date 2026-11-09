@@ -137,6 +137,14 @@ namespace tg
         // (network thread receiving chat messages, stats poller, decoder thread, ...).
         void Post( std::function<void()> Fn );
 
+        // ---- timers (UI thread). Every: repeating; After: once. The app sleeps until the next one is due.
+        //   Ctx.Every( 2.0, [&] { PollStats(); } );
+        uint32_t Every( double Seconds, std::function<void()> Fn );
+        uint32_t After( double Seconds, std::function<void()> Fn );
+        void CancelTimer( uint32_t Id );
+        // Reload the theme file whenever it changes on disk (edit colors live). See tg/theme.h for the format.
+        void WatchTheme( const std::string& Path );
+
         // ---- native integration (WebView and other native child windows)
         void* NativeWindow = nullptr; // HWND / X11 Window / NSWindow* we draw into; set by the platform layer
         uint64_t FrameIndex() const { return Frames; }
@@ -180,6 +188,11 @@ namespace tg
         bool OpenContextMenu();
 
         uint64_t Frames = 0;
+        struct Timer { uint32_t Id; double Due, Period; std::function<void()> Fn; };
+        std::vector<Timer> Timers;
+        uint32_t NextTimer = 1;
+        double TimerNow() const;
+        void RunTimers();
         Widget* KeyHotW = nullptr;
         bool DragOn = false;
         DragData DragNow;

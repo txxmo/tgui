@@ -42,7 +42,10 @@ namespace tg
         std::shared_ptr<void> Data; // anything else
     };
 
-    enum class Dir : uint8_t { Column, Row, Stack, Free };
+    // Column / Row: flex lines. Stack: children on top of each other. Free: absolute (Offset).
+    // Grid: cells in Columns (or as many ColumnMin-wide columns as fit), ColSpan / RowSpan on children.
+    // Wrap: children left to right, wrapping onto new lines like words.
+    enum class Dir : uint8_t { Column, Row, Stack, Free, Grid, Wrap };
     enum class Align : uint8_t { Start, Center, End, Stretch };
 
     struct Size
@@ -63,7 +66,21 @@ namespace tg
         Align MainAlign = Align::Start;
         Align CrossAlign = Align::Stretch;
         float MinWidth = 0, MinHeight = 0;
+        float MaxWidth = 0, MaxHeight = 0; // 0 = no limit
+        float Aspect = 0;                  // width / height: the height follows the width (16:9 = 1.777)
         Vec2 Offset; // position inside a Dir::Free parent
+
+        // Grid
+        int Columns = 2;                   // fixed column count...
+        float ColumnMin = 0;               // ...or, when > 0, as many columns at least this wide as fit (responsive)
+        float RowGap = -1;                 // Grid / Wrap line spacing; -1 = Gap
+        int ColSpan = 1, RowSpan = 1;      // on a child of a Grid
+
+        // Responsive: a Row narrower than this lays its children out as a Column (cards side by side
+        // on a wide window, stacked on a narrow one). 0 = never.
+        float StackBelow = 0;
+        // Children glide to their new place when the layout changes (reorder, show / hide, resize).
+        bool AnimateChildren = false;
     };
 
     class Widget
@@ -88,12 +105,15 @@ namespace tg
         void Remove( Widget* W );
         void Clear();
         void BringToFront(); // draw last among siblings (and get hit first)
+        void MoveChild( size_t From, size_t To ); // reorder children (relayouts; AnimateChildren makes them glide)
         Widget* GetParent() const { return Parent; }
         const std::vector<std::unique_ptr<Widget>>& Children() const { return Kids; }
 
         // ---- public state ----
         LayoutSpec Layout;
         Rect Bounds;           // where layout put us, in UI units
+        Vec2 Slide;          // AnimateChildren: drawn offset easing back to 0
+        float LastResizeW = -1;
         bool Visible = true;
         bool Enabled = true;
         bool Interactive = false; // gets hover/press/click (otherwise mouse falls through to the parent)
@@ -134,6 +154,9 @@ namespace tg
         virtual bool BindIsAction() const { return false; }           // buttons: a key press clicks it
         bool Bindable = true;                                         // false: no bind menu on this control
 
+        // Called by the parent's layout when this widget's width changes (responsive layouts).
+        std::function<void( Widget& Self, float Width )> OnResize;
+
         // ---- drag and drop between any widgets
         //   Card.OnDragStart = [&]( tg::DragData& D ) { D.Type = "server"; D.Text = Name; return true; };
         //   Bin.AcceptDrop = []( const tg::DragData& D ) { return D.Type == "server"; };
@@ -144,6 +167,7 @@ namespace tg
 
         // Cached Measure(): call this (not Measure) when laying out children.
         Vec2 MeasureCached( float AvailWidth );
+        Vec2 MeasureFlow( const std::vector<Widget*>& Visible, float InnerW, const Rect* Place ); // Grid / Wrap
 
         // ---- helpers ----
         bool IsHovered() const;
@@ -156,6 +180,7 @@ namespace tg
     protected:
         void DrawChildren( DrawList& D );
         void ArrangeChildren( Rect Inner ); // the flex algorithm, on the area inside padding
+        void ArrangeChildrenImpl( Rect Inner );
         Vec2 MeasureChildren( float AvailInnerWidth );
 
         // Exponential ease toward Target. Keeps requesting frames until it settles.
@@ -174,4 +199,8 @@ namespace tg
         uint32_t CacheGen = 0;
         static inline uint32_t LayoutGeneration = 1;
     };
+
+    // Call Fn( Wide ) whenever W's width crosses Breakpoint (and once at the first layout).
+    //   tg::Responsive( Page, 760, [&]( bool Wide ) { Sidebar->Visible = Wide; } );
+    void Responsive( Widget& W, float Breakpoint, std::function<void( bool Wide )> Fn );
 }

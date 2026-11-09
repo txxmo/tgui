@@ -1,6 +1,7 @@
 #include "tg/context.h"
 #include "tg/renderer.h"
 #include "tg/theme.h"
+#include "tg/variants.h"
 #include "tg/widgets/dialog.h"
 #include "tg/widgets/menu.h"
 #include "tg/widgets/popup.h"
@@ -58,6 +59,7 @@ namespace tg
 
     Context::Context( Renderer& Rend ) : R( Rend ), RootWidget( std::make_unique<Widget>() ), OverlayWidget( std::make_unique<OverlayLayer>() ), Posts( std::make_unique<PostQueue>() )
     {
+        RegisterBuiltinVariants();
         Start = 0;
         Start = Clock();
         RootWidget->Ctx = this;
@@ -749,6 +751,7 @@ namespace tg
     {
         if ( NeedsFrame() ) return 0;
         double T = NextTimedFrame >= 0 ? std::max( 0.0, NextTimedFrame - Clock() ) : 1e9;
+        for ( auto& Tm : Timers ) T = std::min( T, std::max( 0.0, Tm.Due - TimerNow() ) );
         return Pumps.empty() ? T : std::min( T, 0.01 ); // pumps need regular turns
     }
 
@@ -766,8 +769,57 @@ namespace tg
     void Context::RemoveFrameHook( const void* K ) { DropHook( FrameHooks, K ); }
     void Context::AddPump( const void* K, std::function<void()> Fn ) { SetHook( Pumps, K, std::move( Fn ) ); }
     void Context::RemovePump( const void* K ) { DropHook( Pumps, K ); }
+    double Context::TimerNow() const { return FixedDt > 0 ? Now : Clock(); }
+
+    uint32_t Context::Every( double S, std::function<void()> Fn )
+    {
+        Timers.push_back( { NextTimer, TimerNow() + S, std::max( 0.001, S ), std::move( Fn ) } );
+        if ( WakeUp ) WakeUp();
+        return NextTimer++;
+    }
+
+    uint32_t Context::After( double S, std::function<void()> Fn )
+    {
+        Timers.push_back( { NextTimer, TimerNow() + S, 0, std::move( Fn ) } );
+        if ( WakeUp ) WakeUp();
+        return NextTimer++;
+    }
+
+    void Context::CancelTimer( uint32_t Id )
+    {
+        Timers.erase( std::remove_if( Timers.begin(), Timers.end(), [ Id ]( auto& T ) { return T.Id == Id; } ), Timers.end() );
+    }
+
+    void Context::RunTimers()
+    {
+        double N = TimerNow();
+        std::vector<std::function<void()>> Due;
+        for ( auto It = Timers.begin(); It != Timers.end(); )
+        {
+            if ( It->Due > N ) { ++It; continue; }
+            Due.push_back( It->Fn );
+            if ( It->Period > 0 ) { It->Due = std::max( It->Due + It->Period, N ); ++It; }
+            else It = Timers.erase( It );
+        }
+        for ( auto& Fn : Due ) Fn();
+    }
+
+    void Context::WatchTheme( const std::string& Path )
+    {
+        auto Stamp = std::make_shared<std::string>( ThemeFileStamp( Path ) );
+        LoadThemeFile( Path );
+        InvalidateLayout();
+        Every( 0.5, [ this, Path, Stamp ] {
+            std::string S = ThemeFileStamp( Path );
+            if ( S == *Stamp || S.empty() ) return;
+            *Stamp = S;
+            if ( LoadThemeFile( Path ) ) InvalidateLayout();
+        } );
+    }
+
     void Context::RunPumps()
     {
+        RunTimers();
         auto Copy = Pumps; // a pump may remove itself
         for ( auto& [ K, Fn ] : Copy ) Fn();
     }
@@ -792,6 +844,7 @@ namespace tg
             Run.swap( Posts->Q );
         }
         for ( auto& Fn : Run ) Fn();
+        RunTimers();
 
         if ( NextTimedFrame >= 0 && Now >= NextTimedFrame ) NextTimedFrame = -1;
         FrameRequested = false;
@@ -803,6 +856,21 @@ namespace tg
             Widget::LayoutGeneration++;
             RootWidget->Arrange( { 0, 0, Viewport.x, Viewport.y } );
             OverlayWidget->Arrange( { 0, 0, Viewport.x, Viewport.y } );
+            // OnResize: widgets whose width changed in this layout pass
+            std::vector<Widget*> St = { RootWidget.get(), OverlayWidget.get() }, Fire;
+            while ( !St.empty() )
+            {
+                Widget* W = St.back();
+                St.pop_back();
+                if ( W->OnResize && W->Bounds.w != W->LastResizeW ) Fire.push_back( W );
+                for ( auto& K : W->Children() ) St.push_back( K.get() );
+            }
+            for ( Widget* W : Fire )
+            {
+                W->LastResizeW = W->Bounds.w;
+                auto Fn = W->OnResize;
+                Fn( *W, W->Bounds.w );
+            }
             UpdateHover(); // things moved
             FrameRequested = false;
         }

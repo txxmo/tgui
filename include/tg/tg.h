@@ -7,6 +7,7 @@
 #include "pty.h"
 #include "renderer.h"
 #include "theme.h"
+#include "variants.h"
 #include "widget.h"
 
 #include "widgets/bars.h"
@@ -53,6 +54,7 @@
 #include "widgets/terminal.h"
 #include "widgets/textarea.h"
 #include "widgets/textinput.h"
+#include "widgets/themeeditor.h"
 #include "widgets/timepicker.h"
 #include "widgets/toast.h"
 #include "widgets/toggle.h"
