@@ -81,6 +81,9 @@ namespace tg
         auto MonoB = [] { return std::vector<unsigned char>( fonts::MonoBold, fonts::MonoBold + fonts::MonoBoldSize ); };
         T.Mono = Fonts.AddFromMemory( MonoR(), 14 );
         T.MonoBold = Fonts.AddFromMemory( MonoB(), 14 );
+        T.MonoItalic = Fonts.AddOblique( T.Mono, 0.18f );
+        T.Italic = Fonts.AddOblique( T.Body );       // synthetic italics: slanted upright faces
+        T.BoldItalic = Fonts.AddOblique( T.Bold );
         Fonts.AddIconFont( std::vector<unsigned char>( fonts::Icons, fonts::Icons + fonts::IconsSize ) ); // tg::Icon::* in any text
         Fonts.AddEmojiFont(); // no-op without FreeType
         Fonts.AddCjkFont();   // read on first use
@@ -769,6 +772,20 @@ namespace tg
     void Context::RemoveFrameHook( const void* K ) { DropHook( FrameHooks, K ); }
     void Context::AddPump( const void* K, std::function<void()> Fn ) { SetHook( Pumps, K, std::move( Fn ) ); }
     void Context::RemovePump( const void* K ) { DropHook( Pumps, K ); }
+    ShaderId Context::Shader( const ShaderDesc& D )
+    {
+        auto It = ShaderCache.find( &D );
+        if ( It != ShaderCache.end() ) return It->second;
+        ShaderId S = R.CanShade() ? R.CreateShader( D ) : 0;
+        ShaderCache[ &D ] = S;
+        return S;
+    }
+
+    void Context::RenderOffscreen( TextureId T, std::unique_ptr<DrawList> L, Vec2 Size )
+    {
+        PendingOffscreen.push_back( { T, std::move( L ), Size } );
+    }
+
     double Context::TimerNow() const { return FixedDt > 0 ? Now : Clock(); }
 
     uint32_t Context::Every( double S, std::function<void()> Fn )
@@ -878,6 +895,7 @@ namespace tg
         LayoutCpu = Clock() - T0;
         Fonts.Maintain( R ); // grow the glyph atlas now if on-demand glyphs ran out of room last frame
         List.Reset( { 0, 0, Viewport.x, Viewport.y }, Scale, Fonts.Texture, Fonts.WhiteUV );
+        List.Time = float( Now );
         List.RectFilled( { 0, 0, Viewport.x, Viewport.y }, GetTheme()[ Tok::Background ] );
         RootWidget->Draw( List );
         OverlayWidget->Draw( List );
@@ -900,6 +918,8 @@ namespace tg
     void Context::Render( Vec2 Fb )
     {
         Fonts.Upload( R ); // glyphs rasterized on demand this frame (emoji, CJK...)
+        for ( auto& O : PendingOffscreen ) R.RenderTo( O.Target, *O.List, O.Size, Scale ); // cached panels first
+        PendingOffscreen.clear();
         R.Render( List, Fb, Scale );
     }
 }

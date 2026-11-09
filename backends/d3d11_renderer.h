@@ -35,6 +35,12 @@ namespace tg
         void DestroyTexture( TextureId Tex ) override;
         bool CanCapture() const override { return true; }
         void Render( const DrawList& List, Vec2 FramebufferSize, float Scale = 1.f ) override;
+        ShaderId CreateShader( const ShaderDesc& Desc ) override; // ShaderDesc::Hlsl
+        void DestroyShader( ShaderId S ) override;
+        bool CanShade() const override { return true; }
+        bool CanBackdrop() const override { return true; }
+        TextureId CreateRenderTarget( int Width, int Height ) override;
+        void RenderTo( TextureId Target, const DrawList& List, Vec2 Size, float Scale ) override;
 
     private:
         struct Tex;
@@ -50,6 +56,17 @@ namespace tg
         ID3D11RasterizerState* Raster = nullptr;
         ID3D11DepthStencilState* Depth = nullptr;
         std::vector<Tex*> Textures;
-        bool Alloc( Tex& T, int W, int H, const void* Pixels );
+        bool Alloc( Tex& T, int W, int H, const void* Pixels, bool Target = false, int Format = 0 );
+        ID3D11Buffer* ParamCb = nullptr;
+        ID3D11PixelShader *BlurPs = nullptr, *MaskPs = nullptr;
+        ID3D11BlendState* Premul = nullptr;
+        ID3D11Buffer *QVb = nullptr, *QIb = nullptr;
+        std::vector<std::pair<ShaderId, ID3D11PixelShader*>> Custom;
+        ShaderId NextShader = 1;
+        Tex *Back = nullptr, *Ping[ 2 ] = {};
+        void Draw( const DrawList& L, Vec2 Fb, float Scale );
+        void DoBackdrop( const struct DrawCmd& C, Vec2 Fb, float Scale );
+        void SetProj( Vec2 Fb, float Scale, float Time );
+        void Quad( Rect R, Vec2 Uv0, Vec2 Uv1 );
     };
 }

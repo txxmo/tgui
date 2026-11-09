@@ -60,6 +60,7 @@ namespace tg
     class Swatches;
     class Eyedropper;
     class ImageViewer;
+    class SvgView;
     struct Time;
     class MenuBar;
     class TagInput;
@@ -128,6 +129,7 @@ namespace tg
         tg::Swatches& Swatches( tg::Color* Value = nullptr, std::vector<tg::Color> Palette = {} );
         tg::Eyedropper& Eyedropper( tg::Color* Value = nullptr );
         tg::ImageViewer& ImageViewer( TextureId Tex, int Width, int Height );
+        tg::SvgView& Svg( std::string SvgText, Vec2 Size = { 0, 0 } );
         tg::MenuBar& MenuBar();
         tg::TagInput& Tags( std::vector<std::string>* Value = nullptr, std::string Placeholder = "Add..." );
         tg::SearchBox& Search( std::string Placeholder = "Search", std::string* Value = nullptr );

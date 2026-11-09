@@ -2,10 +2,12 @@
 #pragma once
 #include "context.h"
 #include "draw.h"
+#include "effects.h"
 #include "font.h"
 #include "icons.h"
 #include "pty.h"
 #include "renderer.h"
+#include "svg.h"
 #include "theme.h"
 #include "variants.h"
 #include "widget.h"

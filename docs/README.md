@@ -11,6 +11,7 @@ tg is a small retained-mode C++20 GUI framework. You build a tree of widgets onc
 | [Controls reference](widgets.md) | Every widget: how to create it, its API, its style fields, its one-line helper |
 | [App systems](systems.md) | Keyboard navigation, shortcuts, undo/redo, saved settings & profiles, inspector and stats |
 | [Writing widgets](custom-widgets.md) | Subclassing `Widget`, the `DrawList` API, events, animation, popups |
+| [Rendering](rendering.md) | Custom shaders, gradients, frosted glass, render to texture, SVG, italics & font families |
 | [Platforms & renderers](backends.md) | `tg::App`, GLFW/OpenGL, Win32 + Direct3D 11 / 9, overlays, writing a backend |
 | [Testing](testing.md) | The headless test, scripted input, screenshots, cross-compiling + Wine |
 

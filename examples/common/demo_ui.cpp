@@ -795,6 +795,98 @@ static void BuildLayoutTheme( DemoApp& App, Container& Page )
     App.ThemeEd = &Right.Add<ThemeEditor>();
 }
 
+// Effects: shader gradients, shimmer, grayscale, frosted glass, a cached (render-to-texture) panel.
+class GradientTile : public Widget
+{
+public:
+    GradientTile( Gradient G, std::string Label ) : G( G ), Label( std::move( Label ) ) { Layout.Height = Px( 90 ); Layout.Width = Grow(); }
+    void Draw( DrawList& D ) override
+    {
+        if ( Context* C = GetContext() ) FillGradient( D, *C, Bounds, G, 10 );
+        D.Text( *GetTheme().Bold, { Bounds.x + 12, Bounds.Bottom() - 26 }, Label, Color( 255, 255, 255 ) );
+    }
+    Gradient G;
+    std::string Label;
+};
+
+// big colorful blobs to put frosted glass on
+class Blobs : public Widget
+{
+public:
+    Blobs() { Layout.Width = Grow(); Layout.Height = Grow(); }
+    void Draw( DrawList& D ) override
+    {
+        Context* C = GetContext();
+        D.RectFilled( Bounds, Color::Hex( 0x10131A ), 10 );
+        D.PushClip( Bounds );
+        if ( C )
+        {
+            FillGradient( D, *C, { Bounds.x + 20, Bounds.y + 30, 220, 220 }, Gradient::Radial( Color::Hex( 0xE5534B ), Color::Hex( 0xE5534B, 0 ) ), 110 );
+            FillGradient( D, *C, { Bounds.x + 170, Bounds.y + 90, 260, 260 }, Gradient::Radial( Color::Hex( 0x4F8FE0 ), Color::Hex( 0x4F8FE0, 0 ) ), 130 );
+            FillGradient( D, *C, { Bounds.Right() - 240, Bounds.y + 10, 220, 220 }, Gradient::Radial( Color::Hex( 0x3FB97A ), Color::Hex( 0x3FB97A, 0 ) ), 110 );
+        }
+        for ( int i = 0; i < 9; i++ ) D.Text( *GetTheme().Title, { Bounds.x + 30 + i * 52.f, Bounds.y + 140 }, "tg", Color( 255, 255, 255, 200 ) );
+        D.PopClip();
+        DrawChildren( D );
+    }
+};
+
+static void BuildEffects( DemoApp& App, Container& Page )
+{
+    DemoApp* A = &App;
+    auto& Cols = Page.Columns( 12 );
+    auto& L = Cols.Group( "Gradients (shader)  \xC2\xB7  shimmer  \xC2\xB7  grayscale" );
+    L.Layout.Width = Grow();
+    auto& G1 = L.Row( 10 );
+    G1.Add<GradientTile>( Gradient::Linear( 0, Color::Hex( 0x6EB7D4 ), Color::Hex( 0xB277D6 ) ), "Linear" );
+    G1.Add<GradientTile>( Gradient::Radial( Color::Hex( 0xF5C25B ), Color::Hex( 0xE5534B ) ), "Radial" );
+    G1.Add<GradientTile>( Gradient::Conic( Color::Hex( 0xE5534B ), Color::Hex( 0x3FB97A ), Color::Hex( 0x4F8FE0 ) ), "Conic" );
+    auto& G2 = L.Row( 10 );
+    Gradient Three = Gradient::Linear( 0, Color::Hex( 0xE5534B ), Color::Hex( 0xF5C25B ) );
+    Three.At[ 1 ] = 0.5f;
+    G2.Add<GradientTile>( Three.Stop( 1, Color::Hex( 0x3FB97A ) ), "3 stops" );
+    G2.Add<GradientTile>( Gradient::Linear( 45, Color::Hex( 0x3FB97A ), Color::Hex( 0x4DB6C8 ) ), "45\xC2\xB0" );
+    // shimmer skeleton (loading placeholder)
+    auto& Sk = L.Add<Effect>( Effects::Shimmer(), std::vector<float>{ 1, 1, 1, 0.10f, 1.0f } );
+    Sk.Layout.Gap = 8;
+    for ( float W : { 0.9f, 0.6f, 0.75f } )
+    {
+        auto& Bar = Sk.Add<Box>();
+        Bar.Style.Fill = Tok::Raised;
+        Bar.Style.Radius = 6;
+        Bar.Layout.Height = Px( 14 );
+        Bar.Layout.Width = Px( 360 * W );
+    }
+    // grayscale toggle over real controls
+    auto& Gs = L.Add<Effect>( Effects::Grayscale(), std::vector<float>{ 0 } );
+    App.GrayFx = &Gs;
+    auto& Gr = Gs.Row( 8 );
+    Gr.Button( Icon::Rocket + "  Deploy" ).Style = Button::Primary();
+    Gr.Button( Icon::Trash2 + "  Delete" ).Style = Button::Danger();
+    Gr.Toggle( "Grayscale", &App.Gray ).OnChange = [ A ]( bool On ) { A->GrayFx->Params[ 0 ] = On ? 1.f : 0.f; };
+
+    auto& R = Cols.Group( "Frosted glass  \xC2\xB7  cached panel" );
+    R.Layout.Width = Grow();
+    auto& Bg = R.Add<Blobs>();
+    Bg.Layout.Direction = Dir::Free;
+    Bg.Layout.Height = Px( 300 );
+    auto& Glass = Bg.Add<Backdrop>();
+    Glass.Layout.Offset = { 60, 60 };
+    Glass.Layout.Width = Px( 300 );
+    App.Glass = &Glass;
+    Glass.Heading( Icon::Sparkles + "  Frosted glass" );
+    Glass.Caption( "BackdropBlur blurs what's behind; a translucent fill goes on top." );
+    Glass.Slider( "Blur", &Glass.Blur, 0, 30, 1 );
+    auto& Cache = R.Add<CachedPanel>();
+    App.Cached = &Cache;
+    Cache.Heading( "CachedPanel" );
+    Cache.Caption( "Rendered once into a texture, redrawn on MarkDirty(). Good for heavy, mostly static content." );
+    auto& Lc = Cache.Add<LineChart>( 60 );
+    std::vector<float> Pts;
+    for ( int i = 0; i < 60; i++ ) Pts.push_back( 50 + 30 * std::sin( i * 0.25f ) + 10 * std::sin( i * 0.9f ) );
+    Lc.SetData( Pts );
+}
+
 void DemoApp::OpenCommands()
 {
     CommandList L;
@@ -844,7 +936,7 @@ void DemoApp::Build( Context& C, Widget& Root )
     // ---- tabs across the top, one page each
     auto& Body = Root.Add<Container>( Dir::Column, 0, Insets( 16, 14, 16, 16 ) );
     Body.Layout.Height = Grow();
-    const char* Names[] = { "Dashboard", "Chat", "Controls", "Tables", "Windows", "More", "Forms", "Charts", "Terminal", "More widgets", "Layout & theme" };
+    const char* Names[] = { "Dashboard", "Chat", "Controls", "Tables", "Windows", "More", "Forms", "Charts", "Terminal", "More widgets", "Layout & theme", "Effects" };
     for ( const char* N : Names ) Pages.push_back( &Body.Tab( N ) );
     Tabs = Body.Tabs();
     Tabs->OnChange = [ this ]( int i ) {
@@ -863,6 +955,7 @@ void DemoApp::Build( Context& C, Widget& Root )
     BuildTerminal( *this, *Pages[ 8 ] );
     BuildWidgetsPlus( *this, *Pages[ 9 ] );
     BuildLayoutTheme( *this, *Pages[ 10 ] );
+    BuildEffects( *this, *Pages[ 11 ] );
     C.Shortcut( "Ctrl+K", [ this ] { OpenCommands(); } );
 
     // Global hotkey, like the old tgui Insert key: show/hide the Test Window.

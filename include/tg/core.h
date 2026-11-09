@@ -88,6 +88,7 @@ namespace tg
 
     // Opaque handle a Renderer backend hands out for a texture (GL name, D3D SRV pointer, ...).
     using TextureId = uintptr_t;
+    using ShaderId = uintptr_t; // Renderer::CreateShader; 0 = the default shader
 
     inline float Clamp( float v, float lo, float hi ) { return v < lo ? lo : v > hi ? hi : v; }
     inline float Lerp( float a, float b, float t ) { return a + ( b - a ) * t; }

@@ -6,7 +6,10 @@
 #include <chrono>
 #include <thread>
 
-int main()
+#include <cstdlib>
+#include <cstring>
+
+int main( int Argc, char** Argv )
 {
     tg::App App( "tg showcase", 1280, 820 );
     if ( !App.Ok() ) return 1;
@@ -14,6 +17,8 @@ int main()
 
     DemoApp Demo;
     Demo.Build( Ctx, App.Main() );
+    for ( int i = 1; i + 1 < Argc; i++ ) // tg_showcase --tab 11   (open on a tab)
+        if ( !std::strcmp( Argv[ i ], "--tab" ) ) Demo.Tabs->Select( std::atoi( Argv[ i + 1 ] ) );
 
     // Simulated producers. They never touch widgets directly, only Post().
     std::atomic<bool> Running = true;

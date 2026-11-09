@@ -13,6 +13,8 @@ namespace tg
         Idx.clear();
         Cmds.clear();
         ClipStack.clear();
+        ShaderStack.clear();
+        Params.clear();
         Viewport = Vp;
         Scale = S;
         AtlasTexture = Atlas;
@@ -41,14 +43,84 @@ namespace tg
     void DrawList::SetTexture( TextureId Tex )
     {
         Rect Clip = CurrentClip();
+        ShaderId Sh = ShaderStack.empty() ? 0 : ShaderStack.back().S;
+        uint32_t Po = ShaderStack.empty() ? 0 : ShaderStack.back().Off;
         if ( !Cmds.empty() )
         {
             DrawCmd& Last = Cmds.back();
             bool SameClip = Last.Clip.x == Clip.x && Last.Clip.y == Clip.y && Last.Clip.w == Clip.w && Last.Clip.h == Clip.h;
-            if ( Last.Texture == Tex && SameClip ) return;
-            if ( Last.IdxCount == 0 ) { Last.Texture = Tex; Last.Clip = Clip; return; }
+            bool SameShader = Last.Shader == Sh && Last.ParamOffset == Po && Last.Kind == DrawCmd::Draw;
+            if ( Last.Texture == Tex && SameClip && SameShader ) return;
+            if ( Last.IdxCount == 0 && Last.Kind == DrawCmd::Draw ) { Last.Texture = Tex; Last.Clip = Clip; Last.Shader = Sh; Last.ParamOffset = Po; return; }
         }
-        Cmds.push_back( { Clip, Tex, uint32_t( Idx.size() ), 0 } );
+        DrawCmd C{};
+        C.Clip = Clip;
+        C.Texture = Tex;
+        C.IdxOffset = uint32_t( Idx.size() );
+        C.Shader = Sh;
+        C.ParamOffset = Po;
+        Cmds.push_back( C );
+    }
+
+    void DrawList::PushShader( ShaderId S, const float* P, int N )
+    {
+        uint32_t Off = uint32_t( Params.size() );
+        Params.resize( Params.size() + 32, 0.f );
+        for ( int i = 0; i < N && i < 32; i++ ) Params[ Off + size_t( i ) ] = P[ i ];
+        ShaderStack.push_back( { S, Off } );
+    }
+
+    void DrawList::PopShader()
+    {
+        if ( !ShaderStack.empty() ) ShaderStack.pop_back();
+    }
+
+    void DrawList::BackdropBlur( Rect R, float Amount, float Radius )
+    {
+        if ( R.Empty() || Culled( R ) ) return;
+        DrawCmd C{};
+        C.Clip = CurrentClip();
+        C.IdxOffset = uint32_t( Idx.size() );
+        C.Kind = DrawCmd::Backdrop;
+        C.Area = R;
+        C.Amount = Amount;
+        C.Radius = Radius;
+        Cmds.push_back( C );
+    }
+
+    void DrawList::Triangles( const Vec2* P, const Color* C, size_t N )
+    {
+        if ( N < 3 ) return;
+        SetTexture( AtlasTexture );
+        uint32_t Base = uint32_t( Vtx.size() );
+        for ( size_t i = 0; i < N; i++ ) Vtx.push_back( { P[ i ], WhiteUV, C[ i ].Pack() } );
+        for ( size_t i = 0; i + 2 < N; i += 3 ) Tri( Base + uint32_t( i ), Base + uint32_t( i + 1 ), Base + uint32_t( i + 2 ) );
+    }
+
+    void DrawList::ShadeLinear( size_t V0, Vec2 From, Vec2 To, Color A, Color B )
+    {
+        Vec2 D = To - From;
+        float L2 = D.x * D.x + D.y * D.y;
+        for ( size_t i = V0; i < Vtx.size(); i++ )
+        {
+            Vec2 P = Vtx[ i ].Pos - From;
+            float T = L2 > 0 ? std::clamp( ( P.x * D.x + P.y * D.y ) / L2, 0.f, 1.f ) : 0.f;
+            Color C = Color::Lerp( A, B, T );
+            C.a = uint8_t( C.a * ( Color::Unpack( Vtx[ i ].Col ).a / 255.f ) );
+            Vtx[ i ].Col = C.Pack();
+        }
+    }
+
+    void DrawList::ShadeRadial( size_t V0, Vec2 Ctr, float R, Color In, Color Out )
+    {
+        for ( size_t i = V0; i < Vtx.size(); i++ )
+        {
+            Vec2 P = Vtx[ i ].Pos - Ctr;
+            float T = R > 0 ? std::clamp( std::sqrt( P.x * P.x + P.y * P.y ) / R, 0.f, 1.f ) : 0.f;
+            Color C = Color::Lerp( In, Out, T );
+            C.a = uint8_t( C.a * ( Color::Unpack( Vtx[ i ].Col ).a / 255.f ) );
+            Vtx[ i ].Col = C.Pack();
+        }
     }
 
     void DrawList::Tri( uint32_t a, uint32_t b, uint32_t c )
@@ -57,6 +129,17 @@ namespace tg
         Idx.push_back( b );
         Idx.push_back( c );
         Cmds.back().IdxCount += 3;
+    }
+
+    void DrawList::PrimQuadSkew( Vec2 a, Vec2 c, Vec2 uva, Vec2 uvc, uint32_t col, float DxTop, float DxBottom )
+    {
+        uint32_t Base = uint32_t( Vtx.size() );
+        Vtx.push_back( { { a.x + DxTop, a.y }, uva, col } );
+        Vtx.push_back( { { c.x + DxTop, a.y }, { uvc.x, uva.y }, col } );
+        Vtx.push_back( { { c.x + DxBottom, c.y }, uvc, col } );
+        Vtx.push_back( { { a.x + DxBottom, c.y }, { uva.x, uvc.y }, col } );
+        Tri( Base, Base + 1, Base + 2 );
+        Tri( Base, Base + 2, Base + 3 );
     }
 
     void DrawList::PrimQuadUV( Vec2 a, Vec2 c, Vec2 uva, Vec2 uvc, uint32_t col )
@@ -469,7 +552,12 @@ namespace tg
         float X0 = std::round( ( Pos.x + G.X0 ) * Steps ) / Steps;
         float Y0 = std::round( ( Pos.y + F.Ascent ) * Scale ) / Scale + G.Y0;
         uint32_t C = G.Colored ? Color( 255, 255, 255, c.a ).Pack() : c.Pack();
-        PrimQuadUV( { X0, Y0 }, { X0 + ( G.X1 - G.X0 ), Y0 + ( G.Y1 - G.Y0 ) }, { G.U0, G.V0 }, { G.U1, G.V1 }, C );
+        if ( F.Skew != 0 && !G.Colored )
+        {
+            float B = Y0 - G.Y0;
+            PrimQuadSkew( { X0, Y0 }, { X0 + ( G.X1 - G.X0 ), Y0 + ( G.Y1 - G.Y0 ) }, { G.U0, G.V0 }, { G.U1, G.V1 }, C, F.Skew * ( B - Y0 ), F.Skew * ( B - ( Y0 + G.Y1 - G.Y0 ) ) );
+        }
+        else PrimQuadUV( { X0, Y0 }, { X0 + ( G.X1 - G.X0 ), Y0 + ( G.Y1 - G.Y0 ) }, { G.U0, G.V0 }, { G.U1, G.V1 }, C );
     }
 
     Vec2 DrawList::Text( const Font& F, Vec2 Pos, std::string_view Str, Color c, float WrapWidth )
@@ -503,7 +591,10 @@ namespace tg
                     float X0 = std::round( ( X + G.X0 ) * Steps ) / Steps, Y0 = Baseline + G.Y0;
                     // color glyphs (emoji) keep their own colors; the text color only contributes its alpha
                     uint32_t C = G.Colored ? Color( 255, 255, 255, c.a ).Pack() : Col;
-                    PrimQuadUV( { X0, Y0 }, { X0 + ( G.X1 - G.X0 ), Y0 + ( G.Y1 - G.Y0 ) }, { G.U0, G.V0 }, { G.U1, G.V1 }, C );
+                    if ( F.Skew != 0 && !G.Colored ) // synthetic italic: slant around the baseline
+                        PrimQuadSkew( { X0, Y0 }, { X0 + ( G.X1 - G.X0 ), Y0 + ( G.Y1 - G.Y0 ) }, { G.U0, G.V0 }, { G.U1, G.V1 }, C,
+                                      F.Skew * ( Baseline - Y0 ), F.Skew * ( Baseline - ( Y0 + G.Y1 - G.Y0 ) ) );
+                    else PrimQuadUV( { X0, Y0 }, { X0 + ( G.X1 - G.X0 ), Y0 + ( G.Y1 - G.Y0 ) }, { G.U0, G.V0 }, { G.U1, G.V1 }, C );
                 }
                 X += G.Advance;
             }

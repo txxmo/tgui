@@ -1206,7 +1206,7 @@ namespace tg
                 Rect R = { In.x + x * CellW, Y, CellW * Ce.Width, CellH };
                 if ( Ce.Cp > ' ' && !DrawSpecial( D, Ce.Cp, R, Fg ) )
                 {
-                    const Font& F = Ce.Attr & AttrBold ? Bold : Reg;
+                    const Font& F = ( Ce.Attr & AttrItalic ) && GetTheme().MonoItalic && !S.TextFont ? *GetTheme().MonoItalic : Ce.Attr & AttrBold ? Bold : Reg;
                     const Glyph& G = CellGlyph( F, Ce.Cp );
                     float Off = Ce.Width == 2 ? ( R.w - G.Advance ) * 0.5f : 0; // centre wide glyphs in their 2 cells
                     D.Glyph( F, G, { R.x + Off, Y }, Fg );

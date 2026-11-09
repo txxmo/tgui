@@ -6,6 +6,7 @@
 //     else wait for events with timeout ctx.SecondsUntilNextFrame()
 #pragma once
 #include "draw.h"
+#include "renderer.h"
 #include "font.h"
 #include "input.h"
 #include "widget.h"
@@ -14,6 +15,7 @@
 #include <functional>
 #include <memory>
 #include <string>
+#include <unordered_map>
 #include <utility>
 #include <vector>
 
@@ -145,6 +147,11 @@ namespace tg
         // Reload the theme file whenever it changes on disk (edit colors live). See tg/theme.h for the format.
         void WatchTheme( const std::string& Path );
 
+        // ---- shaders & offscreen rendering
+        ShaderId Shader( const ShaderDesc& Desc );   // compiled once per desc (by address); 0 if unsupported
+        // Render List into Target before the next frame's main pass (CachedPanel uses this).
+        void RenderOffscreen( TextureId Target, std::unique_ptr<DrawList> List, Vec2 SizePx );
+
         // ---- native integration (WebView and other native child windows)
         void* NativeWindow = nullptr; // HWND / X11 Window / NSWindow* we draw into; set by the platform layer
         uint64_t FrameIndex() const { return Frames; }
@@ -188,6 +195,9 @@ namespace tg
         bool OpenContextMenu();
 
         uint64_t Frames = 0;
+        std::unordered_map<const ShaderDesc*, ShaderId> ShaderCache;
+        struct Offscreen { TextureId Target; std::unique_ptr<DrawList> List; Vec2 Size; };
+        std::vector<Offscreen> PendingOffscreen;
         struct Timer { uint32_t Id; double Due, Period; std::function<void()> Fn; };
         std::vector<Timer> Timers;
         uint32_t NextTimer = 1;

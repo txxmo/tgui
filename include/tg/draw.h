@@ -26,6 +26,12 @@ namespace tg
         TextureId Texture;  // what to sample
         uint32_t IdxOffset; // first index in DrawList::Idx
         uint32_t IdxCount;
+        ShaderId Shader = 0;      // 0 = default
+        uint32_t ParamOffset = 0; // into DrawList::Params (8 vec4 = 32 floats per shader use)
+        enum Type : uint8_t { Draw, Backdrop } Kind = Draw;
+        Rect Area;                // Backdrop: the region to blur behind
+        float Amount = 0;         // Backdrop: blur radius in UI units
+        float Radius = 0;         // Backdrop: corner radius
     };
 
     enum Corners : uint8_t
@@ -47,6 +53,19 @@ namespace tg
         Vec2 WhiteUV;
         Rect Viewport;
         float Scale = 1; // UI units -> pixels; used to snap text to the pixel grid
+        float Time = 0;  // seconds; shaders get it as `Time`
+        std::vector<float> Params; // shader parameters, 32 floats per PushShader
+
+        // ---- custom shaders: everything drawn until PopShader goes through Shader.
+        //      Params: up to 32 floats, the shader's `Params[0..7]` (vec4 / float4).
+        void PushShader( ShaderId Shader, const float* Params = nullptr, int Count = 0 );
+        void PopShader();
+        // Frosted glass: blur what was drawn behind R (rounded). Draw your translucent panel right after.
+        // Needs a renderer with Renderer::CanBackdrop(); otherwise nothing happens.
+        void BackdropBlur( Rect R, float Amount = 12, float Radius = 0 );
+        // Gradients on anything: recolor what was drawn since VtxStart (keeps each vertex's alpha).
+        void ShadeLinear( size_t VtxStart, Vec2 From, Vec2 To, Color A, Color B );
+        void ShadeRadial( size_t VtxStart, Vec2 Center, float Radius, Color Inner, Color Outer );
 
         void Reset( Rect Viewport, float Scale, TextureId Atlas, Vec2 WhiteUV );
 
@@ -66,6 +85,8 @@ namespace tg
         void Line( Vec2 a, Vec2 b, Color c, float Thickness = 1 );
         void Polyline( const Vec2* Pts, int Count, Color c, float Thickness = 1, bool Closed = false );
         void ConvexFill( const Vec2* Pts, int Count, Color c ); // points clockwise on screen
+        // Raw colored triangles (Count = 3 per triangle), no antialiasing: meshes, gradients, plots.
+        void Triangles( const Vec2* Pts, const Color* Cols, size_t Count );
         // Area between a polyline (left->right) and a horizontal baseline, vertical gradient. For charts.
         void AreaFill( const Vec2* Pts, int Count, float BaseY, Color Top, Color Bottom );
         // Soft drop shadow behind a rounded rect (cheap: a few expanding translucent rings).
@@ -98,9 +119,12 @@ namespace tg
 
     private:
         std::vector<Rect> ClipStack;
+        struct ShaderUse { ShaderId S; uint32_t Off; };
+        std::vector<ShaderUse> ShaderStack;
         void SetTexture( TextureId Tex );
         void Tri( uint32_t a, uint32_t b, uint32_t c );
         void PrimQuadUV( Vec2 a, Vec2 c, Vec2 uva, Vec2 uvc, uint32_t col );
+        void PrimQuadSkew( Vec2 a, Vec2 c, Vec2 uva, Vec2 uvc, uint32_t col, float DxTop, float DxBottom );
         // AA convex fill; if Tex != 0, UVs are mapped from UVRect -> [UV0, UV1].
         void ConvexFillImpl( const Vec2* Pts, int Count, Color c, TextureId Tex, const Rect* UVRect, Vec2 UV0, Vec2 UV1 );
         bool Culled( const Rect& r ) const;

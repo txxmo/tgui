@@ -4,11 +4,25 @@
 // means implementing these five functions; nothing else in tg touches the GPU.
 #pragma once
 #include "core.h"
+#include <string>
+#include <functional>
 #include <vector>
 
 namespace tg
 {
     class DrawList;
+
+    // A pixel shader in up to three dialects; a renderer uses the one it understands.
+    //   Glsl (GL3) and Hlsl (D3D11) define    vec4 / float4 effect( color, uv, pos )
+    //     color: vertex color · uv: texture coords · pos: pixel position (top-left origin)
+    //     available: Texture (sample with tex( uv )), Params[ 8 ] (vec4), Time, Resolution (pixels)
+    //   Cpu: the same in C++, for the software renderer (tests, screenshots).
+    struct ShaderDesc
+    {
+        std::string Glsl;
+        std::string Hlsl;
+        std::function<Color( Color In, Vec2 UV, Vec2 Pos, const float* Params, const std::function<Color( Vec2 )>& Tex )> Cpu;
+    };
 
     class Renderer
     {
@@ -35,5 +49,16 @@ namespace tg
             uint32_t At( int X, int Y ) const { return X >= 0 && Y >= 0 && X < W && Y < H ? Px[ size_t( Y ) * W + X ] : 0; }
         } Captured;
         virtual bool CanCapture() const { return false; }
+
+        // ---- custom shaders (see ShaderDesc). 0 = not supported here: the draw falls back to normal.
+        virtual ShaderId CreateShader( const struct ShaderDesc& Desc ) { (void)Desc; return 0; }
+        virtual void DestroyShader( ShaderId S ) { (void)S; }
+        virtual bool CanShade() const { return false; }
+        virtual bool CanBackdrop() const { return false; } // DrawList::BackdropBlur
+
+        // ---- render to texture: an offscreen target you can draw into (Render with Target) and then
+        //      draw like any texture. Rows are top-down like every other texture.
+        virtual TextureId CreateRenderTarget( int Width, int Height ) { (void)Width; (void)Height; return 0; }
+        virtual void RenderTo( TextureId Target, const DrawList& List, Vec2 Size, float Scale ) { (void)Target; (void)List; (void)Size; (void)Scale; }
     };
 }

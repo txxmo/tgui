@@ -51,7 +51,7 @@ namespace tg
         {
             std::string Text;
             Kind K = Plain;
-            bool Strong = false;
+            bool Strong = false, Em = false;
             Paint Col = Tok::Text;
             std::string Target; // link url / mention name
         };

@@ -45,14 +45,114 @@ namespace tg
         }
     }
 
+    ShaderId SoftRenderer::CreateShader( const ShaderDesc& D )
+    {
+        if ( !D.Cpu ) return 0; // no C++ version: this renderer can't run it
+        Shaders[ NextShader ] = D;
+        return NextShader++;
+    }
+
+    void SoftRenderer::DestroyShader( ShaderId S ) { Shaders.erase( S ); }
+
+    TextureId SoftRenderer::CreateRenderTarget( int W, int H ) { return CreateTexture( W, H, nullptr ); }
+
+    void SoftRenderer::RenderTo( TextureId Target, const DrawList& List, Vec2 Size, float Scale )
+    {
+        auto It = Textures.find( Target );
+        if ( It == Textures.end() ) return;
+        Tex& T = It->second;
+        int W = int( Size.x ), H = int( Size.y );
+        if ( T.W != W || T.H != H ) { T.W = W; T.H = H; }
+        std::vector<uint32_t> Px( size_t( W ) * H, 0u ); // transparent
+        Raster( List, Scale, Px, W, H );
+        T.Px = std::move( Px ); // (sampling never reads the target it's drawing into)
+    }
+
+    // A rounded-rect mask: 1 inside, 0 outside (pixel units).
+    static bool InRounded( float X, float Y, Rect R, float Rad )
+    {
+        if ( !R.Contains( { X, Y } ) ) return false;
+        float Cx = std::clamp( X, R.x + Rad, R.Right() - Rad ), Cy = std::clamp( Y, R.y + Rad, R.Bottom() - Rad );
+        float Dx = X - Cx, Dy = Y - Cy;
+        return Dx * Dx + Dy * Dy <= Rad * Rad;
+    }
+
+    // Three box blurs ≈ a Gaussian; done in place on the region behind a frosted panel.
+    static void BlurRegion( std::vector<uint32_t>& Px, int W, int H, Rect Area, float Amount, float Radius )
+    {
+        int X0 = std::max( 0, int( Area.x ) ), Y0 = std::max( 0, int( Area.y ) );
+        int X1 = std::min( W, int( std::ceil( Area.Right() ) ) ), Y1 = std::min( H, int( std::ceil( Area.Bottom() ) ) );
+        if ( X0 >= X1 || Y0 >= Y1 ) return;
+        int Pad = int( Amount ) + 2;
+        int Rx0 = std::max( 0, X0 - Pad ), Ry0 = std::max( 0, Y0 - Pad ), Rx1 = std::min( W, X1 + Pad ), Ry1 = std::min( H, Y1 + Pad );
+        int Rw = Rx1 - Rx0, Rh = Ry1 - Ry0;
+        std::vector<RGBAf> A( size_t( Rw ) * Rh ), B( A.size() );
+        for ( int y = 0; y < Rh; y++ )
+            for ( int x = 0; x < Rw; x++ ) A[ size_t( y ) * Rw + x ] = Unpack( Px[ size_t( y + Ry0 ) * W + x + Rx0 ] );
+        int R = std::max( 1, int( Amount / 3 ) );
+        for ( int Pass = 0; Pass < 3; Pass++ )
+            for ( int Axis = 0; Axis < 2; Axis++ )
+            {
+                int N = Axis == 0 ? Rw : Rh, M = Axis == 0 ? Rh : Rw;
+                for ( int m = 0; m < M; m++ )
+                {
+                    auto At = [ & ]( int i ) -> RGBAf& { i = std::clamp( i, 0, N - 1 ); return Axis == 0 ? A[ size_t( m ) * Rw + i ] : A[ size_t( i ) * Rw + m ]; };
+                    RGBAf Sum{ 0, 0, 0, 0 };
+                    for ( int i = -R; i <= R; i++ ) { RGBAf V = At( i ); Sum.r += V.r; Sum.g += V.g; Sum.b += V.b; Sum.a += V.a; }
+                    float K = 1.f / ( 2 * R + 1 );
+                    for ( int i = 0; i < N; i++ )
+                    {
+                        RGBAf& O = Axis == 0 ? B[ size_t( m ) * Rw + i ] : B[ size_t( i ) * Rw + m ];
+                        O = { Sum.r * K, Sum.g * K, Sum.b * K, Sum.a * K };
+                        RGBAf Add = At( i + R + 1 ), Sub = At( i - R );
+                        Sum.r += Add.r - Sub.r; Sum.g += Add.g - Sub.g; Sum.b += Add.b - Sub.b; Sum.a += Add.a - Sub.a;
+                    }
+                }
+                A.swap( B );
+            }
+        for ( int y = Y0; y < Y1; y++ )
+            for ( int x = X0; x < X1; x++ )
+                if ( InRounded( x + 0.5f, y + 0.5f, Area, Radius ) )
+                {
+                    RGBAf C = A[ size_t( y - Ry0 ) * Rw + ( x - Rx0 ) ];
+                    auto Q = []( float V ) { return uint32_t( std::clamp( V + 0.5f, 0.f, 255.f ) ); };
+                    Px[ size_t( y ) * W + x ] = Q( C.r ) | Q( C.g ) << 8 | Q( C.b ) << 16 | Q( C.a ) << 24;
+                }
+    }
+
     void SoftRenderer::Render( const DrawList& List, Vec2 Fb, float Scale )
     {
         int W = int( Fb.x ), H = int( Fb.y );
         if ( W != Width || H != Height ) { Width = W; Height = H; }
         Pixels.assign( size_t( W ) * H, 0xFF000000u );
+        Raster( List, Scale, Pixels, W, H );
+        if ( CaptureNext )
+        {
+            CaptureNext = false;
+            Captured.W = W;
+            Captured.H = H;
+            Captured.Px = Pixels;
+        }
+    }
 
+    void SoftRenderer::Raster( const DrawList& List, float Scale, std::vector<uint32_t>& Pixels, int W, int H )
+    {
+        Time = List.Time;
         for ( const DrawCmd& Cmd : List.Cmds )
         {
+            if ( Cmd.Kind == DrawCmd::Backdrop )
+            {
+                Rect A = { Cmd.Area.x * Scale, Cmd.Area.y * Scale, Cmd.Area.w * Scale, Cmd.Area.h * Scale };
+                BlurRegion( Pixels, W, H, A.Intersect( { Cmd.Clip.x * Scale, Cmd.Clip.y * Scale, Cmd.Clip.w * Scale, Cmd.Clip.h * Scale } ), Cmd.Amount * Scale, Cmd.Radius * Scale );
+                continue;
+            }
+            const ShaderDesc* Sh = nullptr;
+            if ( Cmd.Shader )
+            {
+                auto Si = Shaders.find( Cmd.Shader );
+                if ( Si != Shaders.end() ) Sh = &Si->second;
+            }
+            const float* Params = Cmd.ParamOffset + 32 <= List.Params.size() ? List.Params.data() + Cmd.ParamOffset : nullptr;
             auto TexIt = Textures.find( Cmd.Texture );
             const Tex* T = TexIt != Textures.end() ? &TexIt->second : nullptr;
 
@@ -96,7 +196,21 @@ namespace tg
                         float B0 = E0 / Area, B1 = E1 / Area, B2 = E2 / Area;
                         RGBAf C = { Col[ 0 ].r * B0 + Col[ 1 ].r * B1 + Col[ 2 ].r * B2, Col[ 0 ].g * B0 + Col[ 1 ].g * B1 + Col[ 2 ].g * B2,
                                     Col[ 0 ].b * B0 + Col[ 1 ].b * B1 + Col[ 2 ].b * B2, Col[ 0 ].a * B0 + Col[ 1 ].a * B1 + Col[ 2 ].a * B2 };
-                        if ( T && !T->Px.empty() )
+                        if ( Sh )
+                        {
+                            float U = V[ 0 ]->UV.x * B0 + V[ 1 ]->UV.x * B1 + V[ 2 ]->UV.x * B2;
+                            float Vv = V[ 0 ]->UV.y * B0 + V[ 1 ]->UV.y * B1 + V[ 2 ]->UV.y * B2;
+                            static const float Zero[ 32 ] = {};
+                            auto Tx = [ T ]( Vec2 Uv ) {
+                                if ( !T || T->Px.empty() ) return Color( 255, 255, 255 );
+                                RGBAf S = Sample( T->Px, T->W, T->H, Uv.x, Uv.y );
+                                return Color( uint8_t( S.r ), uint8_t( S.g ), uint8_t( S.b ), uint8_t( S.a ) );
+                            };
+                            Color In( uint8_t( std::clamp( C.r, 0.f, 255.f ) ), uint8_t( std::clamp( C.g, 0.f, 255.f ) ), uint8_t( std::clamp( C.b, 0.f, 255.f ) ), uint8_t( std::clamp( C.a, 0.f, 255.f ) ) );
+                            Color O = Sh->Cpu( In, { U, Vv }, { Px, Py }, Params ? Params : Zero, Tx );
+                            C = { float( O.r ), float( O.g ), float( O.b ), float( O.a ) };
+                        }
+                        else if ( T && !T->Px.empty() )
                         {
                             float U = V[ 0 ]->UV.x * B0 + V[ 1 ]->UV.x * B1 + V[ 2 ]->UV.x * B2;
                             float Vv = V[ 0 ]->UV.y * B0 + V[ 1 ]->UV.y * B1 + V[ 2 ]->UV.y * B2;
@@ -113,13 +227,6 @@ namespace tg
                     }
                 }
             }
-        }
-        if ( CaptureNext )
-        {
-            CaptureNext = false;
-            Captured.W = W;
-            Captured.H = H;
-            Captured.Px = Pixels;
         }
     }
 

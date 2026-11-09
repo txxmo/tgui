@@ -63,6 +63,7 @@ namespace tg
         // Extra advance between two codepoints from the font's kerning (0 if none / disabled).
         float Kern( uint32_t A, uint32_t B ) const;
         float SubpixelSteps = 1;   // glyphs are positioned on 1/SubpixelSteps of a pixel
+        float Skew = 0;            // synthetic oblique (italic): x shift per unit above the baseline (0.2 typical)
 
         // Size of the text block. WrapWidth > 0 wraps on spaces like DrawList::Text does.
         Vec2 Measure( std::string_view Str, float WrapWidth = 0 ) const;
@@ -81,10 +82,24 @@ namespace tg
         mutable std::unordered_map<uint32_t, Glyph> Glyphs;
         mutable std::unordered_map<std::string, Glyph> Sequences; // Index = -1: no single glyph
         Glyph Fallback{};
+        const Font* Synthetic = nullptr; // AddOblique: the upright font this one mirrors (metrics / kerning)
         std::shared_ptr<void> Info;   // stbtt_fontinfo (+ the font bytes it points into), for kerning
         float KernScale = 0;          // font units -> UI units
         bool Kerning = false;
         mutable std::unordered_map<uint64_t, float> KernCache;
+    };
+
+    // Faces of one typeface. Missing italics are synthesized (slanted) from the upright faces.
+    struct FontFamily
+    {
+        Font *Regular = nullptr, *Medium = nullptr, *Bold = nullptr, *Italic = nullptr, *BoldItalic = nullptr;
+        Font* Get( bool IsBold, bool IsItalic ) const
+        {
+            if ( IsBold && IsItalic && BoldItalic ) return BoldItalic;
+            if ( IsBold && Bold ) return Bold;
+            if ( IsItalic && Italic ) return Italic;
+            return Regular;
+        }
     };
 
     class FontAtlas
@@ -96,6 +111,11 @@ namespace tg
         // Queue fonts. They are rasterized when Build() runs. Returns nullptr if the file can't be read.
         Font* AddFromFile( const std::string& Path, float PixelSize );
         Font* AddFromMemory( std::vector<unsigned char> Data, float PixelSize );
+        // A slanted copy of Base (synthetic italic) at the same size. Skew 0.2 ≈ 11°.
+        Font* AddOblique( Font* Base, float Skew = 0.2f );
+        // A family from files at one size: italics are optional (synthesized when missing).
+        FontFamily AddFamily( const std::string& Regular, const std::string& Bold, float PixelSize,
+                              const std::string& Italic = {}, const std::string& BoldItalic = {}, const std::string& Medium = {} );
 
         // Fallback fonts: searched, in order, for any codepoint a font doesn't have (emoji, CJK, symbols).
         // Color fonts (emoji) need FreeType; without it they're ignored.

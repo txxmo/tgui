@@ -41,6 +41,7 @@ Full guide in [`docs/`](docs/README.md):
 | [Controls reference](docs/widgets.md) | every widget and its API |
 | [App systems](docs/systems.md) | keyboard navigation, shortcuts, undo, profiles, inspector |
 | [Writing widgets](docs/custom-widgets.md) | subclassing, `DrawList`, events, animation |
+| [Rendering](docs/rendering.md) | custom shaders, gradients, blur, render-to-texture, SVG |
 | [Platforms & renderers](docs/backends.md) | `tg::App`, Win32 + D3D11/9, GLFW + GL3, overlays |
 | [Testing](docs/testing.md) | the headless test, scripted input, Wine |
 

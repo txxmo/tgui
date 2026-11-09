@@ -54,7 +54,9 @@ namespace tg
         Font* Bold = nullptr;  // headings / emphasis
         Font* Small = nullptr; // captions, axis labels
         Font* Title = nullptr; // big headings
-        Font* Italic = nullptr;   // italic body text (RichText *emphasis*); nullptr = Medium
+        Font* Italic = nullptr;   // italic body text (RichText *emphasis*); synthesized from Body by default
+        Font* BoldItalic = nullptr;
+        Font* MonoItalic = nullptr; // terminal italics
         Font* Mono = nullptr;     // monospace: terminals, code, logs (JetBrains Mono)
         Font* MonoBold = nullptr;
 

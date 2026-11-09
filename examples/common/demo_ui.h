@@ -109,6 +109,12 @@ struct DemoApp
     tg::Container *GridBox = nullptr, *WrapBox = nullptr, *StackRow = nullptr;
     tg::ThemeEditor* ThemeEd = nullptr;
 
+    // "Effects" tab
+    tg::Effect* GrayFx = nullptr;
+    tg::Backdrop* Glass = nullptr;
+    tg::CachedPanel* Cached = nullptr;
+    bool Gray = false;
+
     // "Terminal" tab
     tg::Terminal* Shell = nullptr;
     tg::Terminal* Log = nullptr;

@@ -26,9 +26,11 @@ add_library( tg STATIC
     src/history.cpp
     src/icons.cpp
     src/settings.cpp
+    src/svg.cpp
     src/context.cpp
     src/default_fonts.cpp
     src/draw.cpp
+    src/effects.cpp
     src/font.cpp
     src/input.cpp
     src/pty.cpp
@@ -137,7 +139,7 @@ if( TG_HARFBUZZ )
     target_link_libraries( tg PUBLIC harfbuzz::harfbuzz )
     target_compile_definitions( tg PUBLIC TG_HAS_HARFBUZZ=1 )
 endif()
-target_include_directories( tg PUBLIC include PRIVATE third_party/stb )
+target_include_directories( tg PUBLIC include PRIVATE third_party/stb third_party/nanosvg )
 if( MSVC )
     target_compile_options( tg PRIVATE /W4 /utf-8 )
     target_compile_definitions( tg PRIVATE _CRT_SECURE_NO_WARNINGS )

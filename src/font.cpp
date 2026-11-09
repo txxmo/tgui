@@ -337,6 +337,7 @@ namespace tg
 
     const Glyph& Font::Find( uint32_t Cp ) const
     {
+        if ( Synthetic ) return Synthetic->Find( Cp ); // oblique: the upright glyphs, drawn slanted
         auto It = Glyphs.find( Cp );
         if ( It != Glyphs.end() ) return It->second;
         if ( IsZeroWidth( Cp ) ) return Glyphs.emplace( Cp, Glyph{} ).first->second;
@@ -351,6 +352,7 @@ namespace tg
 
     const Glyph* Font::FindSequence( std::string_view Utf8 ) const
     {
+        if ( Synthetic ) return Synthetic->FindSequence( Utf8 );
         if ( !Owner || !FontAtlas::HasHarfBuzz() ) return nullptr;
         std::string Key( Utf8 );
         auto It = Sequences.find( Key );
@@ -382,6 +384,7 @@ namespace tg
 
     float Font::Kern( uint32_t A, uint32_t B ) const
     {
+        if ( Synthetic ) return Synthetic->Kern( A, B );
         if ( !Kerning || !A || !Info ) return 0;
         const Glyph& Ga = Find( A );
         const Glyph& Gb = Find( B );
@@ -482,6 +485,30 @@ namespace tg
         S->Out = F;
         Sources.push_back( std::move( S ) );
         return F;
+    }
+
+    Font* FontAtlas::AddOblique( Font* Base, float Skew )
+    {
+        if ( !Base ) return nullptr;
+        Fonts.push_back( std::make_unique<Font>() );
+        Font* F = Fonts.back().get();
+        F->Size = Base->Size;
+        F->Owner = this;
+        F->Source = Base->Source; // same face, same rasterization; drawn slanted
+        F->Skew = Skew;
+        F->Synthetic = Base;
+        return F;
+    }
+
+    FontFamily FontAtlas::AddFamily( const std::string& R, const std::string& B, float Px, const std::string& I, const std::string& BI, const std::string& M )
+    {
+        FontFamily Fam;
+        Fam.Regular = AddFromFile( R, Px );
+        Fam.Bold = B.empty() ? Fam.Regular : AddFromFile( B, Px );
+        Fam.Medium = M.empty() ? Fam.Regular : AddFromFile( M, Px );
+        Fam.Italic = I.empty() ? AddOblique( Fam.Regular ) : AddFromFile( I, Px );
+        Fam.BoldItalic = BI.empty() ? AddOblique( Fam.Bold ) : AddFromFile( BI, Px );
+        return Fam;
     }
 
     Font* FontAtlas::AddFromFile( const std::string& Path, float PixelSize )
@@ -804,6 +831,14 @@ namespace tg
                 F->LineHeight = std::round( Src.Size * 1.2f );
             }
         }
+
+        for ( auto& F : Fonts ) // oblique copies share their upright font's metrics
+            if ( F->Synthetic )
+            {
+                F->Ascent = F->Synthetic->Ascent;
+                F->LineHeight = F->Synthetic->LineHeight;
+                F->SubpixelSteps = F->Synthetic->SubpixelSteps;
+            }
 
         // bake the base set; grow right away if it doesn't fit (nothing references UVs yet)
         std::vector<uint32_t> Cps;

@@ -1424,6 +1424,107 @@ int main( int Argc, char** Argv )
         Settle( Ctx );
     }
 
+    // ---------------- effects (software renderer runs the shaders' C++ versions)
+    ClickTab( Ctx, App, 11 );
+    Settle( Ctx );
+    Shot( Ctx, "effects" );
+    {
+        tg::Vec2 V = Ctx.GetViewport();
+        auto Px = [ & ]( float X, float Y ) { return tg::Color::Unpack( Soft.Pixels[ size_t( Y * Scale ) * size_t( Soft.Width ) + size_t( X * Scale ) ] ); };
+        auto Near = []( tg::Color A, tg::Color B, int Tol ) { return std::abs( A.r - B.r ) <= Tol && std::abs( A.g - B.g ) <= Tol && std::abs( A.b - B.b ) <= Tol; };
+        // linear gradient tile: left edge ~ first stop, right edge ~ second
+        auto* Tile = Find<tg::Widget>( *App.Pages[ 11 ], 0 );
+        (void)Tile;
+        tg::Widget* Lin = nullptr;
+        std::vector<tg::Widget*> St = { App.Pages[ 11 ] };
+        while ( !St.empty() ) { tg::Widget* W = St.back(); St.pop_back(); if ( !Lin && W->Layout.Height.K == tg::Size::Kind::Fixed && W->Layout.Height.V == 90 ) Lin = W; for ( auto& K : W->Children() ) St.push_back( K.get() ); }
+        CHECK( Lin );
+        // first tile in tree order may be any of them; find the "Linear" one by sampling: left ~ 6EB7D4
+        tg::Rect B = Lin->Bounds;
+        tg::Color L0 = Px( B.x + 4, B.Center().y ), L1 = Px( B.Right() - 4, B.Center().y );
+        CHECK( !Near( L0, L1, 10 ) ); // a gradient, not flat
+        // grayscale effect: the primary button turns gray when the toggle is on
+        tg::Button* Deploy = Find<tg::Button>( *App.GrayFx );
+        CHECK( Deploy );
+        tg::Color Before = Px( Deploy->Bounds.x + 6, Deploy->Bounds.Center().y );
+        App.GrayFx->Params[ 0 ] = 1;
+        Ctx.RequestFrame();
+        Settle( Ctx );
+        Ctx.Render( { V.x * Scale, V.y * Scale } );
+        tg::Color After = Px( Deploy->Bounds.x + 6, Deploy->Bounds.Center().y );
+        CHECK( std::abs( Before.r - Before.b ) > 20 && std::abs( After.r - After.b ) < 6 && std::abs( After.g - After.b ) < 6 );
+        App.GrayFx->Params[ 0 ] = 0;
+        // frosted glass: inside the panel the hard edges behind are smeared (neighbouring pixels close)
+        tg::Rect G = App.Glass->Bounds;
+        int Jumps = 0;
+        for ( float x = G.x + 20; x < G.Right() - 20; x += 1 )
+        {
+            tg::Color A = Px( x, G.y + 6 ), C = Px( x + 1, G.y + 6 );
+            if ( std::abs( A.r - C.r ) + std::abs( A.g - C.g ) + std::abs( A.b - C.b ) > 60 ) Jumps++;
+        }
+        CHECK( Jumps == 0 );
+        // cached panel: rendered to a texture once; drawing again reuses it
+        CHECK( App.Cached->IsCached() );
+        size_t Verts = 0;
+        Ctx.RequestFrame();
+        const tg::DrawList& Dl = Ctx.Frame();
+        for ( auto& C : Dl.Cmds ) (void)C;
+        Verts = Dl.Vtx.size();
+        App.Cached->MarkDirty();
+        CHECK( !App.Cached->IsCached() );
+        Settle( Ctx );
+        CHECK( App.Cached->IsCached() && Verts > 0 );
+        // a custom shader with only a C++ version (runs on the software renderer)
+        static tg::ShaderDesc Invert{ {}, {}, []( tg::Color In, tg::Vec2 Uv, tg::Vec2, const float*, const std::function<tg::Color( tg::Vec2 )>& Tx ) {
+            tg::Color T = Tx( Uv );
+            return tg::Color( uint8_t( 255 - T.r * In.r / 255 ), uint8_t( 255 - T.g * In.g / 255 ), uint8_t( 255 - T.b * In.b / 255 ), uint8_t( T.a * In.a / 255 ) );
+        } };
+        tg::ShaderId Sid = Ctx.Shader( Invert );
+        CHECK( Sid != 0 && Ctx.Shader( Invert ) == Sid );
+        tg::DrawList Own;
+        Own.Reset( { 0, 0, 40, 40 }, 1, Ctx.Fonts.Texture, Ctx.Fonts.WhiteUV );
+        Own.PushShader( Sid );
+        Own.RectFilled( { 0, 0, 40, 40 }, tg::Color( 255, 0, 0 ) );
+        Own.PopShader();
+        tg::SoftRenderer Small;
+        tg::TextureId At = Small.CreateTexture( Ctx.Fonts.Width, Ctx.Fonts.Height, Ctx.Fonts.Pixels.data() );
+        Own.AtlasTexture = At;
+        for ( auto& C : Own.Cmds ) C.Texture = At;
+        tg::ShaderId S2 = Small.CreateShader( Invert );
+        for ( auto& C : Own.Cmds ) C.Shader = S2;
+        Small.Render( Own, { 40, 40 } );
+        tg::Color Mid = tg::Color::Unpack( Small.Pixels[ 20 * 40 + 20 ] );
+        CHECK( Mid.r < 10 && Mid.g > 245 && Mid.b > 245 ); // red inverted = cyan
+        // SVG: rasterized at the requested size
+        const std::string Dot = "<svg xmlns='http://www.w3.org/2000/svg' width='10' height='10'><circle cx='5' cy='5' r='4' fill='#ff0000'/></svg>";
+        float Sw2, Sh2;
+        CHECK( tg::SvgSize( Dot, Sw2, Sh2 ) && Sw2 == 10 && Sh2 == 10 );
+        auto SvgPx = tg::RasterizeSvgPixels( Dot, 40, 40 );
+        CHECK( SvgPx.size() == 1600 );
+        tg::Color Ctr = tg::Color::Unpack( SvgPx[ 20 * 40 + 20 ] ), Corner = tg::Color::Unpack( SvgPx[ 0 ] );
+        CHECK( Ctr.r > 240 && Ctr.g < 10 && Ctr.a > 240 && Corner.a == 0 );
+        auto& SvgW = App.Pages[ 11 ]->Add<tg::SvgView>( Dot, tg::Vec2{ 24, 24 } );
+        SvgW.Tinted = true;
+        Settle( Ctx );
+        CHECK( SvgW.Measure( 1000 ).x == 24 && SvgW.Measure( 1000 ).y == 24 );
+        App.Pages[ 11 ]->Remove( &SvgW );
+        // synthetic italics: the same glyphs, slanted (top shifted right of the bottom)
+        tg::Font* It = tg::GetTheme().Italic;
+        CHECK( It && It->Skew > 0 && It->Width( "Hello" ) == tg::GetTheme().Body->Width( "Hello" ) );
+        tg::DrawList Il;
+        Il.Reset( { 0, 0, 100, 40 }, 1, Ctx.Fonts.Texture, Ctx.Fonts.WhiteUV );
+        Il.Text( *It, { 10, 10 }, "I", tg::Color( 255, 255, 255 ) );
+        CHECK( Il.Vtx.size() == 4 && Il.Vtx[ 0 ].Pos.x > Il.Vtx[ 3 ].Pos.x ); // top-left right of bottom-left
+        tg::FontFamily Fam{ tg::GetTheme().Body, tg::GetTheme().Medium, tg::GetTheme().Bold, tg::GetTheme().Italic, tg::GetTheme().BoldItalic };
+        CHECK( Fam.Get( true, true ) == tg::GetTheme().BoldItalic && Fam.Get( false, false ) == tg::GetTheme().Body );
+        // gradient fallback math: ShadeLinear endpoints
+        tg::DrawList Gl;
+        Gl.Reset( { 0, 0, 100, 10 }, 1, 0, {} );
+        Gl.RectFilled( { 0, 0, 100, 10 }, tg::Color( 255, 255, 255 ) );
+        Gl.ShadeLinear( 0, { 0, 5 }, { 100, 5 }, tg::Color( 0, 0, 0 ), tg::Color( 200, 100, 50 ) );
+        CHECK( tg::Color::Unpack( Gl.Vtx.front().Col ).r < 5 );
+    }
+
     // ---------------- light theme
     tg::GetTheme().UseColors( tg::Theme::Light() );
     App.SettingsWin->Show();

@@ -23,6 +23,7 @@
 #include "tg/widgets/propertygrid.h"
 #include "tg/widgets/swatches.h"
 #include "tg/widgets/timepicker.h"
+#include "tg/svg.h"
 #include "tg/widgets/collapsible.h"
 #include "tg/widgets/extras.h"
 #include "tg/widgets/groupbox.h"
@@ -225,6 +226,7 @@ namespace tg
     tg::Swatches& Container::Swatches( tg::Color* V, std::vector<tg::Color> P ) { return Add<tg::Swatches>( V, std::move( P ) ); }
     tg::Eyedropper& Container::Eyedropper( tg::Color* V ) { return Add<tg::Eyedropper>( V ); }
     tg::ImageViewer& Container::ImageViewer( TextureId T, int W, int H ) { return Add<tg::ImageViewer>( T, W, H ); }
+    tg::SvgView& Container::Svg( std::string S, Vec2 Sz ) { return Add<tg::SvgView>( std::move( S ), Sz ); }
     tg::MenuBar& Container::MenuBar() { return Add<tg::MenuBar>(); }
     tg::TagInput& Container::Tags( std::vector<std::string>* V, std::string Ph ) { return Add<tg::TagInput>( V, std::move( Ph ) ); }
     tg::SearchBox& Container::Search( std::string Ph, std::string* V ) { return Add<tg::SearchBox>( std::move( Ph ), V ); }

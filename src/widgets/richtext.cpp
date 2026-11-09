@@ -55,6 +55,7 @@ namespace tg
             if ( !Cur.Text.empty() ) Runs.push_back( Cur );
             Cur = Run{};
             Cur.Strong = Strong;
+            Cur.Em = Em;
             Cur.K = !ColorStack.empty() ? Colored : Strong ? Bold : Em ? Italic : Plain;
             Cur.Col = ColorStack.empty() ? Paint( Tok::Text ) : ColorStack.back();
         };
@@ -138,8 +139,9 @@ namespace tg
     {
         const Theme& T = GetTheme();
         if ( R.K == Code ) return *T.Mono;
+        if ( ( R.Strong || R.K == Bold ) && R.Em && T.BoldItalic ) return *T.BoldItalic;
         if ( R.Strong || R.K == Bold ) return *T.Bold;
-        if ( R.K == Italic ) return T.Italic ? *T.Italic : *T.Medium;
+        if ( R.Em || R.K == Italic ) return T.Italic ? *T.Italic : *T.Medium;
         return Style.TextFont ? *Style.TextFont : *T.Body;
     }
 
