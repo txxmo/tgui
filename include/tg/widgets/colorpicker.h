@@ -19,7 +19,7 @@ namespace tg
     std::string ToHex( Color C, bool Alpha = false ); // "#RRGGBB" / "#RRGGBBAA"
     bool ParseHex( const std::string& S, Color& Out ); // accepts RGB, RRGGBB, RRGGBBAA, with or without '#'
 
-    void DrawChecker( DrawList& D, Rect R, float Cell = 5 );
+    void DrawChecker( DrawList& D, Rect R, float Cell = 5, float Radius = 0 ); // Radius: clipped to rounded corners
 
     struct ColorPanelStyle
     {

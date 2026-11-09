@@ -466,13 +466,13 @@ int main( int Argc, char** Argv )
     // global menu key (Insert) hides/shows the window, but not while a keybind is listening
     Ctx.OnKey( tg::Key::Insert, true, 0 ); Ctx.OnKey( tg::Key::Insert, false, 0 );
     Ctx.Frame();
-    CHECK( !App.SettingsWin->Visible );
+    CHECK( !App.SettingsWin->IsOpen() );
     Ctx.OnKey( tg::Key::Insert, true, 0 ); Ctx.OnKey( tg::Key::Insert, false, 0 );
     Settle( Ctx );
-    CHECK( App.SettingsWin->Visible );
+    CHECK( App.SettingsWin->IsOpen() );
     Click( Ctx, Kb );
     Ctx.OnKey( tg::Key::Insert, true, 0 ); Ctx.OnKey( tg::Key::Insert, false, 0 );
-    CHECK( App.SettingsWin->Visible && App.AimKey == tg::Key::Insert );
+    CHECK( App.SettingsWin->IsOpen() && App.AimKey == tg::Key::Insert );
     App.AimKey = tg::Key::Mouse5;
     Kb.SetMode( tg::BindMode::Hold );
     Settle( Ctx );
@@ -491,7 +491,7 @@ int main( int Argc, char** Argv )
     Shot( Ctx, "windows" );
     tg::Rect Sb = App.SettingsWin->Bounds;
     ClickAt( Ctx, { Sb.Right() - 18, Sb.y + 18 } ); // the X
-    CHECK( !App.SettingsWin->Visible );
+    CHECK( !App.SettingsWin->IsOpen() );
 
     // ---------------- "More" tab: new controls
     App.SettingsWin->Show();

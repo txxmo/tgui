@@ -21,15 +21,19 @@ namespace tg
         Rect Anchor;               // placed below this rect, or above if there's no room
         float MinWidth = 0;        // usually the anchor's width
         std::function<void()> OnClose;
+        bool Animated = true;      // slide + fade in from the anchor side, fade out when closed
+        float OpenTime = 0.18f, CloseTime = 0.12f;
 
-        void Close();
+        void Close(); // stops input now; animates out, then removes itself
         bool IsClosed() const { return Closed; }
 
         void Draw( DrawList& D ) override;
         Widget* HitTest( Vec2 P ) override;
+        void Finish(); // hide + remove now (no closing animation)
 
     private:
-        bool Closed = false;
+        bool Closed = false, Removing = false;
+        float OpenT = 0;
     };
 
     // Create a popup on Owner's context overlay, anchored to Anchor.

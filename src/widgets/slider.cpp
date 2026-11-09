@@ -39,7 +39,9 @@ namespace tg
         const SliderStyle& S = Style;
         Animate( HoverT, IsHovered() || IsPressed() ? 1.f : 0.f );
 
-        float t = Max != Min ? Clamp( ( GetValue() - Min ) / ( Max - Min ), 0, 1 ) : 0;
+        float Target = Max != Min ? Clamp( ( GetValue() - Min ) / ( Max - Min ), 0, 1 ) : 0;
+        if ( ShownT < 0 ) ShownT = Target;              // first frame: no animation from 0
+        float t = Animate( ShownT, Target, IsPressed() ? 30.f : 16.f ); // snappy while dragging, smooth for clicks / binds / code
         float Cy = Bounds.y + Bounds.h * 0.5f;
         float L = Bounds.x + S.KnobRadius, W = Bounds.w - S.KnobRadius * 2;
         Rect Track = { L, Cy - S.TrackHeight * 0.5f, W, S.TrackHeight };

@@ -91,4 +91,14 @@ namespace tg
 
     inline float Clamp( float v, float lo, float hi ) { return v < lo ? lo : v > hi ? hi : v; }
     inline float Lerp( float a, float b, float t ) { return a + ( b - a ) * t; }
+
+    // ---- easing curves for animations (t in 0..1)
+    inline float EaseOutCubic( float t ) { t = 1 - t; return 1 - t * t * t; }
+    inline float EaseInCubic( float t ) { return t * t * t; }
+    inline float EaseInOutCubic( float t ) { return t < 0.5f ? 4 * t * t * t : 1 - ( -2 * t + 2 ) * ( -2 * t + 2 ) * ( -2 * t + 2 ) * 0.5f; }
+    inline float EaseOutBack( float t, float Overshoot = 1.70158f ) // goes slightly past 1, then settles
+    {
+        float c3 = Overshoot + 1, u = t - 1;
+        return 1 + c3 * u * u * u + Overshoot * u * u;
+    }
 }

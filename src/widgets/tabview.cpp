@@ -95,9 +95,12 @@ namespace tg
 
         // the active highlight slides between tabs
         Rect A = TabRect( size_t( Active ) );
-        if ( SlideX < 0 ) SlideX = A.x;
-        Animate( SlideX, A.x, 18.f );
-        Rect Hl = { SlideX, A.y, A.w, A.h };
+        // animated in local coordinates: when the whole tab view moves (window drag, scroll), the
+        // highlight moves with it instead of trailing behind
+        float Lx = A.x - Bounds.x;
+        if ( SlideX < 0 ) SlideX = Lx;
+        Animate( SlideX, Lx, 18.f );
+        Rect Hl = { Bounds.x + SlideX, A.y, A.w, A.h };
         D.RectFilled( Hl, S.ActiveFill.Resolve(), S.Radius - 2 );
         D.RectFilled( { Hl.x + 10, Hl.Bottom() - 2, Hl.w - 20, 2 }, S.Underline.Resolve(), 1 );
 

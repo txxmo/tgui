@@ -42,6 +42,7 @@ namespace tg
 
     private:
         float Own = 0, HoverT = 0;
+        float ShownT = -1; // where the knob is drawn (0..1): glides to the value instead of jumping
         void SetFromMouse( float X );
     };
 }

@@ -16,6 +16,7 @@ namespace tg
         Paint TextColor = Tok::Text;
         float Radius = 6;
         Insets Padding = { 14, 8 };
+        bool Ripple = true;           // a circle spreads from where you clicked
     };
 
     class Button : public Widget
@@ -43,5 +44,7 @@ namespace tg
 
     private:
         float HoverT = 0, PressT = 0; // animation state, 0..1
+        float RippleT = 1;            // 0 -> 1 after each press
+        Vec2 RippleAt;
     };
 }

@@ -50,7 +50,7 @@ inline tg::Window& BuildOverlayMenu( tg::Context& Ctx, OverlayState& S )
     // Insert (or whatever the menu key is bound to) shows/hides the menu.
     Ctx.OnKeyEvent = [ &S ]( Key K, bool Down ) {
         if ( !Down || K != S.MenuKey || K == Key::None ) return false;
-        if ( S.Menu->Visible ) S.Menu->Close();
+        if ( S.Menu->IsOpen() ) S.Menu->Close();
         else S.Menu->Show();
         return true;
     };

@@ -233,6 +233,52 @@ namespace tg
         }
     }
 
+    void DrawList::TransformFrom( size_t V0, size_t C0, Vec2 Ctr, float S, float A, Vec2 Off )
+    {
+        float Cs = std::cos( A ) * S, Sn = std::sin( A ) * S;
+        for ( size_t i = V0; i < Vtx.size(); i++ )
+        {
+            Vec2 P = Vtx[ i ].Pos - Ctr;
+            Vtx[ i ].Pos = { Ctr.x + Off.x + P.x * Cs - P.y * Sn, Ctr.y + Off.y + P.x * Sn + P.y * Cs };
+        }
+        for ( size_t i = C0; i < Cmds.size(); i++ )
+        {
+            Rect& R = Cmds[ i ].Clip;
+            R = { Ctr.x + Off.x + ( R.x - Ctr.x ) * S, Ctr.y + Off.y + ( R.y - Ctr.y ) * S, R.w * S, R.h * S };
+        }
+    }
+
+    void DrawList::ConvexFillInRounded( const Vec2* Pts, int Count, Color c, Rect R, float Radius )
+    {
+        if ( Count < 3 || R.Empty() ) return;
+        PathRoundedRect( R, std::min( Radius, std::min( R.w, R.h ) * 0.5f ) );
+        std::vector<Vec2> ClipPoly = Path, Out( Pts, Pts + Count ), In;
+        // orientation of the clip polygon decides which side is "inside"
+        float Area = 0;
+        for ( size_t i = 0; i < ClipPoly.size(); i++ )
+        {
+            const Vec2 &P = ClipPoly[ i ], &Q = ClipPoly[ ( i + 1 ) % ClipPoly.size() ];
+            Area += P.x * Q.y - Q.x * P.y;
+        }
+        float Sign = Area >= 0 ? 1.f : -1.f;
+        // Sutherland–Hodgman: clip against each edge of the (convex) rounded rect
+        for ( size_t e = 0; e < ClipPoly.size() && !Out.empty(); e++ )
+        {
+            Vec2 A = ClipPoly[ e ], B = ClipPoly[ ( e + 1 ) % ClipPoly.size() ];
+            auto Side = [ & ]( Vec2 P ) { return Sign * ( ( B.x - A.x ) * ( P.y - A.y ) - ( B.y - A.y ) * ( P.x - A.x ) ); };
+            In.swap( Out );
+            Out.clear();
+            for ( size_t i = 0; i < In.size(); i++ )
+            {
+                Vec2 P = In[ i ], Q = In[ ( i + 1 ) % In.size() ];
+                float Sp = Side( P ), Sq = Side( Q );
+                if ( Sp >= 0 ) Out.push_back( P );
+                if ( ( Sp >= 0 ) != ( Sq >= 0 ) ) Out.push_back( P + ( Q - P ) * ( Sp / ( Sp - Sq ) ) );
+            }
+        }
+        if ( Out.size() >= 3 ) ConvexFill( Out.data(), int( Out.size() ), c );
+    }
+
     void DrawList::FadeFrom( size_t Start, float Alpha )
     {
         if ( Alpha >= 1 ) return;

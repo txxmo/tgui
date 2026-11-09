@@ -70,14 +70,22 @@ namespace tg
         return false;
     }
 
-    void DrawChecker( DrawList& D, Rect R, float Cell )
+    // Checkerboard behind translucent colors. With a radius it follows the rounded corners exactly
+    // (no square checker corners poking out of a rounded swatch).
+    void DrawChecker( DrawList& D, Rect R, float Cell, float Radius )
     {
-        D.RectFilled( R, Color( 200, 200, 200 ) );
-        D.PushClip( R );
+        D.RectFilled( R, Color( 200, 200, 200 ), Radius );
+        const Color Dark( 150, 150, 150 );
         for ( float y = R.y, Row = 0; y < R.Bottom(); y += Cell, Row++ )
             for ( float x = R.x + ( int( Row ) % 2 ) * Cell; x < R.Right(); x += Cell * 2 )
-                D.RectFilled( { x, y, Cell, Cell }, Color( 150, 150, 150 ) );
-        D.PopClip();
+            {
+                Rect C = Rect{ x, y, Cell, Cell }.Intersect( R );
+                if ( C.Empty() ) continue;
+                bool NearCorner = Radius > 0 && ( C.x < R.x + Radius || C.Right() > R.Right() - Radius ) && ( C.y < R.y + Radius || C.Bottom() > R.Bottom() - Radius );
+                if ( !NearCorner ) { D.RectFilled( C, Dark ); continue; }
+                Vec2 Q[ 4 ] = { C.Pos(), { C.Right(), C.y }, C.Max(), { C.x, C.Bottom() } };
+                D.ConvexFillInRounded( Q, 4, Dark, R, Radius );
+            }
     }
 
     // ------------------------------------------------------------ HsvArea: the square + bars, handles dragging
@@ -297,7 +305,7 @@ namespace tg
 
         Rect In = Bounds.Shrink( S.Padding );
         Rect Sw = { In.x, std::floor( In.y + ( In.h - S.SwatchSize ) * 0.5f ), S.SwatchSize, S.SwatchSize };
-        if ( C.a < 255 ) DrawChecker( D, Sw, 4.5f );
+        if ( C.a < 255 ) DrawChecker( D, Sw, 4.5f, 4 );
         D.RectFilled( Sw, C, 4 );
         D.RectStroke( Sw, Color( 0, 0, 0, 60 ), 4 );
         if ( ShowHex )
@@ -314,6 +322,8 @@ namespace tg
 
         Popup& P = OpenPopup( *this, Bounds );
         P.MinWidth = 0;
+        P.OpenTime = 0.26f; // a bigger panel: a slower, softer slide reads smoother
+        P.CloseTime = 0.16f;
         P.Layout.Padding = Insets( 12 );
         Open = &P;
         P.OnClose = [ this ] { Open = nullptr; Redraw(); };

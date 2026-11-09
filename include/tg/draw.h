@@ -86,6 +86,12 @@ namespace tg
 
         // Multiply the alpha of everything drawn since VtxStart (fade a whole subtree: tab transitions).
         void FadeFrom( size_t VtxStart, float Alpha );
+        // Scale / rotate / move everything drawn since VtxStart around Center (open/close animations).
+        // Clip rects of commands added since CmdStart follow the scale and offset (they can't rotate).
+        void TransformFrom( size_t VtxStart, size_t CmdStart, Vec2 Center, float Scale, float Angle = 0, Vec2 Offset = {} );
+        // Fill the part of a convex polygon (clockwise) that lies inside a rounded rect: ripples,
+        // checkerboards in rounded swatches.
+        void ConvexFillInRounded( const Vec2* Pts, int Count, Color c, Rect R, float Radius );
 
         // Recolor vertices [VtxStart, end) with a vertical gradient, keeping each vertex's alpha factor.
         void ShadeVertical( size_t VtxStart, float Y0, float Y1, Color Top, Color Bottom );

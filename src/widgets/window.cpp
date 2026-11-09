@@ -3,6 +3,7 @@
 #include "tg/draw.h"
 #include "tg/font.h"
 #include <algorithm>
+#include <vector>
 #include <cmath>
 
 namespace tg
@@ -35,6 +36,7 @@ namespace tg
 
     void Window::Show()
     {
+        Closing = false; // reopening mid-close just reverses
         Visible = true;
         BringToFront();
         Invalidate();
@@ -42,9 +44,10 @@ namespace tg
 
     void Window::Close()
     {
-        if ( !Visible ) return;
-        Visible = false;
+        if ( !Visible || Closing ) return;
+        Closing = true; // no input from now on; Draw() plays the animation and then hides it
         if ( OnClose ) OnClose();
+        if ( Chrome.OpenAnim == WindowStyle::Anim::None || !GetContext() ) { Visible = false; Closing = false; OpenT = 0; }
         Invalidate();
     }
 
@@ -80,8 +83,43 @@ namespace tg
         const Font& F = *GetTheme().Bold;
         Animate( CloseHoverT, OverClose && IsHovered() ? 1.f : 0.f, 20.f );
 
-        if ( S.Shadow ) D.Shadow( Bounds, S.Radius, Color( 0, 0, 0, 120 ), 14, { 0, 6 } );
-        D.RectFilled( Bounds, S.Fill.Resolve(), S.Radius );
+        // ---- open / close animation
+        Context* Cx = GetContext();
+        float Dt = Cx ? Cx->DeltaTime() : 1.f;
+        if ( S.OpenAnim == WindowStyle::Anim::None ) OpenT = Closing ? 0.f : 1.f;
+        else if ( !Closing ) OpenT = std::min( 1.f, OpenT + Dt / std::max( 0.01f, S.OpenTime ) );
+        else OpenT = std::max( 0.f, OpenT - Dt / std::max( 0.01f, S.CloseTime ) );
+        if ( Closing && OpenT <= 0 ) { Visible = false; Closing = false; Invalidate(); return; }
+        if ( Cx && OpenT < 1 ) Cx->RequestFrame();
+        const float T = OpenT;
+        const bool Animating = T < 1;
+        auto Sat = []( float X ) { return std::clamp( X, 0.f, 1.f ); };
+        // shape: Spin starts as a circle in the middle and unfolds into the window
+        float Morph = S.OpenAnim == WindowStyle::Anim::Spin ? EaseOutCubic( Sat( ( T - 0.12f ) / 0.7f ) ) : 1.f;
+        float Dm = std::min( Bounds.w, Bounds.h ) * 0.42f;
+        Rect Circle = { Bounds.Center().x - Dm * 0.5f, Bounds.Center().y - Dm * 0.5f, Dm, Dm };
+        auto Lerp = []( float A, float B, float K ) { return A + ( B - A ) * K; };
+        Rect Shape = { Lerp( Circle.x, Bounds.x, Morph ), Lerp( Circle.y, Bounds.y, Morph ), Lerp( Circle.w, Bounds.w, Morph ), Lerp( Circle.h, Bounds.h, Morph ) };
+        float Rr = Lerp( Dm * 0.5f, S.Radius, Morph );
+        size_t V0 = D.Vtx.size(), C0 = D.Cmds.size();
+
+        if ( S.Shadow ) D.Shadow( Shape, Rr, Color( 0, 0, 0, 120 ), 14, { 0, 6 } );
+        D.RectFilled( Shape, S.Fill.Resolve(), Rr );
+        if ( Animating && S.OpenAnim == WindowStyle::Anim::Spin )
+        {
+            D.RectStroke( Shape, S.Stroke.Resolve(), Rr );
+            // a spinning accent arc on the circle while it's still round
+            float Ring = 1 - Sat( T / 0.55f );
+            if ( Ring > 0 )
+            {
+                D.Path.clear();
+                float A0 = T * 9.f;
+                D.PathArc( Shape.Center(), Rr - 1, A0, A0 + 4.2f );
+                std::vector<Vec2> Arc = D.Path;
+                D.Polyline( Arc.data(), int( Arc.size() ), S.Accent.Resolve().Fade( Ring ), 2.5f );
+            }
+        }
+        const size_t VContent = D.Vtx.size();
 
         // title bar
         D.RectFilled( TitleR, S.TitleFill.Resolve(), S.Radius, CornersTop );
@@ -127,11 +165,34 @@ namespace tg
             }
         }
         D.RectStroke( Bounds, S.Stroke.Resolve(), S.Radius );
+
+        if ( Animating )
+        {
+            Vec2 Ctr = Bounds.Center();
+            switch ( S.OpenAnim )
+            {
+            case WindowStyle::Anim::Spin:
+            {
+                // contents fade in once the shape is mostly a window; the whole thing spins and pops in
+                D.FadeFrom( VContent, Sat( ( T - 0.5f ) / 0.45f ) );
+                float Sc = Lerp( 0.55f, 1.f, EaseOutBack( T, 1.1f ) ), Ang = ( 1 - EaseOutCubic( T ) ) * -1.1f;
+                D.TransformFrom( V0, C0, Ctr, Sc, Ang );
+                D.FadeFrom( V0, Sat( T * 3.f ) );
+                break;
+            }
+            case WindowStyle::Anim::Zoom:
+                D.TransformFrom( V0, C0, Ctr, Lerp( 0.9f, 1.f, EaseOutBack( T ) ) );
+                D.FadeFrom( V0, EaseOutCubic( T ) );
+                break;
+            case WindowStyle::Anim::Fade: D.FadeFrom( V0, EaseOutCubic( T ) ); break;
+            default: break;
+            }
+        }
     }
 
     Widget* Window::HitTest( Vec2 P )
     {
-        if ( !Visible || !Bounds.Contains( P ) ) return nullptr;
+        if ( !Visible || Closing || !Bounds.Contains( P ) ) return nullptr;
         if ( TitleR.Contains( P ) || ( Resizable && GripR.Contains( P ) ) ) return this;
         if ( Widget* H = Widget::HitTest( P ) ) return H;
         return this; // the window body eats clicks so they don't hit what's behind

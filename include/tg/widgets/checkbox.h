@@ -18,6 +18,7 @@ namespace tg
         Paint BoxHoverStroke = Tok::Accent;
         Paint Fill = Tok::Accent;         // box color when checked
         Paint Check = Tok::TextOnAccent;  // the tick
+        bool SpinIn = true;               // the tick spins and pops in (false: it only draws itself)
         Paint TextColor = Tok::Text;
         Paint TextColorOff = Tok::TextDim;
     };

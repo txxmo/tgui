@@ -22,6 +22,9 @@ namespace tg
         float MinWidth = 180, MinHeight = 90;
         bool CenterTitle = false;
         bool AccentLine = false;  // accent bar under the title (tgui)
+        // Open / close animation. Spin: a circle spins in and unfolds into the window (default).
+        enum class Anim : uint8_t { None, Fade, Zoom, Spin } OpenAnim = Anim::Spin;
+        float OpenTime = 0.42f, CloseTime = 0.24f;
         Paint Accent = Tok::Accent;
     };
 
@@ -40,8 +43,9 @@ namespace tg
 
         std::string Footer; // small dim text bottom-right, e.g. "v.2.5"
 
-        void Show();  // make visible + bring to front
-        void Close(); // hide (keeps the widgets; Show() brings it back)
+        void Show();  // make visible + bring to front (animates in)
+        void Close(); // hide (keeps the widgets; Show() brings it back). Animates out, then Visible = false
+        bool IsOpen() const { return Visible && !Closing; } // false as soon as Close() starts
         void SetPosition( Vec2 P );
         Vec2 GetPosition() const { return Layout.Offset; }
 
@@ -56,6 +60,8 @@ namespace tg
         enum class DragMode : uint8_t { None, Move, Resize } Drag = DragMode::None;
         Vec2 DragStart, StartOffset, StartSize;
         float CloseHoverT = 0;
+        float OpenT = 0;       // 0 closed .. 1 open (animated)
+        bool Closing = false;
         Rect TitleR, CloseR, GripR, BodyR;
         bool OverClose = false, OverGrip = false;
     };

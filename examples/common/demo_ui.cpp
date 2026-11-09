@@ -721,7 +721,7 @@ void DemoApp::Build( Context& C, Widget& Root )
     // Global hotkey, like the old tgui Insert key: show/hide the Test Window.
     C.OnKeyEvent = [ this ]( Key K, bool Down ) {
         if ( !Down || K != MenuKey || K == Key::None || !SettingsWin ) return false;
-        if ( SettingsWin->Visible ) SettingsWin->Close();
+        if ( SettingsWin->IsOpen() ) SettingsWin->Close();
         else SettingsWin->Show();
         return true;
     };

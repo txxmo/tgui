@@ -188,6 +188,21 @@ W.Add<PillCheckbox>( "Pill", &Value );
 
 Hover, press, check and open states ease in rather than snapping. Widgets keep small `0..1` animation values (`HoverT`, `CheckT`, ...) and blend between style colors with them. Speed is the third argument to `Animate( Value, Target, Speed )` in each widget's `Draw()`.
 
+The bigger motions, and how to tune or turn them off:
+
+| What | How it moves | Knob |
+|---|---|---|
+| Window open / close | **Spin**: a circle with a spinning accent arc unfolds into the window while it turns and pops in; closing plays it backwards, faster. Also **Zoom** (scale + fade), **Fade**, **None** | `Win.Chrome.OpenAnim = tg::WindowStyle::Anim::Zoom;` `OpenTime`, `CloseTime`. `Win.IsOpen()` is false as soon as closing starts |
+| Dropdowns, color pickers, date pickers, menus | unroll from the field (downward, or upward when they open above), slide 8px and fade in; fade out when closed | `Popup.Animated`, `OpenTime`, `CloseTime` |
+| Buttons | a ripple spreads from the click point, clipped to the button's rounded shape | `ButtonStyle::Ripple` |
+| Checkboxes | the tick spins a quarter turn and pops in while it draws itself | `CheckboxStyle::SpinIn` |
+| Sliders | the knob glides to the new value (clicks, key binds, code); quick while dragging | the speed in `Slider::Draw()` |
+| Tabs | the highlight slides between tabs and moves with the tab strip, so it stays put when you drag a window | |
+
+![Window spin-in, frame by frame](window_spin.png)
+
+Easing helpers for your own widgets live in `core.h`: `EaseOutCubic`, `EaseInCubic`, `EaseInOutCubic`, `EaseOutBack`. To animate a whole subtree, draw it, then `D.TransformFrom( VtxStart, CmdStart, Center, Scale, Angle, Offset )` and `D.FadeFrom( VtxStart, Alpha )`. That's how windows and popups do it.
+
 ## Light and dark
 
 ```cpp

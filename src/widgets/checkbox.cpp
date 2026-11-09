@@ -40,7 +40,7 @@ namespace tg
     {
         const CheckboxStyle& S = Style;
         const Font& F = *GetTheme().Body;
-        Animate( CheckT, IsChecked() ? 1.f : 0.f, 18.f );
+        Animate( CheckT, IsChecked() ? 1.f : 0.f, IsChecked() ? 11.f : 18.f ); // a bit slower in, so the spin reads
         Animate( HoverT, IsHovered() ? 1.f : 0.f );
 
         Rect Box = { Bounds.x, std::floor( Bounds.y + ( Bounds.h - S.BoxSize ) * 0.5f ), S.BoxSize, S.BoxSize };
@@ -60,7 +60,19 @@ namespace tg
             Vec2 C = { Box.x + Box.w * 0.75f, Box.y + Box.h * 0.33f };
             auto L = []( Vec2 P, Vec2 Q, float t ) { return P + ( Q - P ) * t; };
             Vec2 Pts[ 3 ] = { A, L( A, B, std::min( 1.f, CheckT / 0.4f ) ), L( B, C, std::max( 0.f, ( CheckT - 0.4f ) / 0.6f ) ) };
-            D.Polyline( Pts, CheckT < 0.4f ? 2 : 3, S.Check.Resolve(), S.CheckThickness );
+            if ( S.SpinIn )
+            {
+                // spin + pop: starts a quarter turn back and small, overshoots a little, settles
+                float E = EaseOutBack( CheckT, 2.2f ), Ang = ( 1 - CheckT ) * -1.6f, Sc = 0.35f + 0.65f * E;
+                Vec2 Mid = Box.Center();
+                float Cs = std::cos( Ang ) * Sc, Sn = std::sin( Ang ) * Sc;
+                for ( Vec2& P : Pts )
+                {
+                    Vec2 Q = P - Mid;
+                    P = { Mid.x + Q.x * Cs - Q.y * Sn, Mid.y + Q.x * Sn + Q.y * Cs };
+                }
+            }
+            D.Polyline( Pts, CheckT < 0.4f ? 2 : 3, S.Check.Resolve().Fade( std::min( 1.f, CheckT * 2.5f ) ), S.CheckThickness );
         }
 
         // 4) label: dim when off, bright when on or hovered (same idea as the old tgui checkbox)
