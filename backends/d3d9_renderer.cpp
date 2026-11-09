@@ -1,3 +1,9 @@
+#ifndef NOMINMAX
+#define NOMINMAX // <windows.h> (pulled in by the D3D headers) would turn std::min / std::max into macros
+#endif
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
 #include "d3d9_renderer.h"
 #include "tg/draw.h"
 #include <d3d9.h>

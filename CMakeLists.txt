@@ -102,6 +102,8 @@ if( UNIX AND NOT APPLE )
 endif()
 if( WIN32 )
     target_link_libraries( tg PUBLIC ole32 shell32 uuid )    # tg/os.h: file dialogs, tray, ShellExecute
+    # <windows.h> must not define min / max macros (they break std::min / std::max, here and in your code)
+    target_compile_definitions( tg PUBLIC NOMINMAX )
 endif()
 
 if( TG_FREETYPE )
