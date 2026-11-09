@@ -11,7 +11,7 @@ namespace tg
 {
     Toggle::Toggle( std::string T, bool* B ) : Text( std::move( T ) ), Bind( B )
     {
-        Interactive = true;
+        Interactive = true; Focusable = true; KeyActivates = true; // Tab to it, Enter / Space clicks
         OnT = IsOn() ? 1.f : 0.f;
     }
 

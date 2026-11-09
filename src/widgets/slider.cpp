@@ -11,7 +11,7 @@ namespace tg
 {
     Slider::Slider( float* B, float Mn, float Mx, float St ) : Bind( B ), Min( Mn ), Max( Mx ), Step( St )
     {
-        Interactive = true;
+        Interactive = true; Focusable = true; // arrows adjust
         Own = Mn;
     }
 
@@ -58,6 +58,21 @@ namespace tg
 
     bool Slider::OnEvent( const Event& E )
     {
+        if ( E.Type == EventType::KeyDown )
+        {
+            float St = Step > 0 ? Step : ( Max - Min ) / 100.f;
+            if ( E.Mods & ModShift ) St *= 10;
+            switch ( E.KeyCode )
+            {
+            case Key::Left: case Key::Down: SetValue( GetValue() - St ); return true;
+            case Key::Right: case Key::Up: SetValue( GetValue() + St ); return true;
+            case Key::Home: SetValue( Min ); return true;
+            case Key::End: SetValue( Max ); return true;
+            case Key::PageDown: SetValue( GetValue() - ( Max - Min ) / 10 ); return true;
+            case Key::PageUp: SetValue( GetValue() + ( Max - Min ) / 10 ); return true;
+            default: return false;
+            }
+        }
         switch ( E.Type )
         {
         case EventType::MouseDown:

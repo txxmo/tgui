@@ -11,7 +11,7 @@ namespace tg
 {
     MenuItem::MenuItem( std::string T, std::function<void()> Fn, std::string S ) : Text( std::move( T ) ), Shortcut( std::move( S ) ), OnClick( std::move( Fn ) )
     {
-        Interactive = true;
+        Interactive = true; KeyActivates = true; // Enter on it while highlighted with the arrow keys
     }
 
     Vec2 MenuItem::Measure( float )

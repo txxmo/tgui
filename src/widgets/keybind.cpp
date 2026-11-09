@@ -27,7 +27,7 @@ namespace tg
 
     Keybind::Keybind( std::string L, Key* B ) : Text( std::move( L ) ), Bind( B ), Style( Defaults() )
     {
-        Interactive = true;
+        Interactive = true; Focusable = true; KeyActivates = true; // Tab to it, Enter / Space clicks
         Focusable = true;
     }
 

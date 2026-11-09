@@ -10,6 +10,7 @@
 #include "input.h"
 #include "widget.h"
 #include "binds.h"
+#include "history.h"
 #include <functional>
 #include <memory>
 #include <string>
@@ -90,6 +91,27 @@ namespace tg
 
         // Key binds on controls (right-click a control -> "Add key bind"). See tg/binds.h.
         KeyBinds Binds{ *this };
+        // Undo / redo of control edits (Ctrl+Z / Ctrl+Y). See tg/history.h.
+        tg::History History{ *this };
+
+        // ---- keyboard navigation: Tab / Shift+Tab move focus, Enter / Space click, arrows adjust;
+        //      arrows + Enter in open menus and dropdowns. A focus ring shows while you use the keyboard.
+        bool TabNavigation = true;
+        void FocusNext( bool Backward = false );
+        bool FocusRingVisible() const { return FocusRing; }
+        Widget* KeyHot() const { return KeyHotW; } // popup item highlighted with the arrow keys
+        void Click( Widget& W );                   // a full click (down + up) on W, as if with the mouse
+
+        // ---- shortcuts: app-wide key combos. With Ctrl/Alt/Super they work everywhere; plain keys
+        //      don't fire while a text field has focus.   Ctx.Shortcut( "Ctrl+S", [] { Save(); } );
+        uint32_t Shortcut( const std::string& Combo, std::function<void()> Fn );
+        void RemoveShortcut( uint32_t Id );
+        static bool ParseShortcut( const std::string& Combo, Key& K, uint8_t& Mods );
+        static std::string ShortcutText( Key K, uint8_t Mods ); // "Ctrl+Shift+S"
+
+        // ---- developer tools: F12 = inspector (hover anything), Ctrl+F12 = performance stats
+        bool ShowInspector = false, ShowStats = false;
+        bool DevToolKeys = true;
 
         // Route every mouse button + key event to W until released (a Keybind waiting for a key).
         void Capture( Widget* W ) { CaptureW = W; RequestFrame(); }
@@ -151,6 +173,19 @@ namespace tg
         bool OpenContextMenu();
 
         uint64_t Frames = 0;
+        Widget* KeyHotW = nullptr;
+        bool FocusRing = false;
+        struct ShortcutEntry { uint32_t Id; Key K; uint8_t Mods; std::function<void()> Fn; };
+        std::vector<ShortcutEntry> Shortcuts;
+        uint32_t NextShortcut = 1;
+        bool RunShortcuts( Key K, uint8_t Mods );
+        void PopupKeys( Key K, bool& Handled );
+        // stats
+        double FrameCpu = 0, LayoutCpu = 0, FpsWindowStart = 0;
+        int FpsCount = 0;
+        float Fps = 0;
+        size_t LastVerts = 0, LastCmds = 0, LastIdx = 0;
+        void DrawDevTools();
         std::vector<std::pair<const void*, std::function<void()>>> FrameHooks, Pumps;
 
         struct PostQueue;

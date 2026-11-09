@@ -42,7 +42,7 @@ namespace tg
 
     Button::Button( std::string T, std::function<void()> Fn ) : Text( std::move( T ) ), OnClick( std::move( Fn ) ), Style( Defaults() )
     {
-        Interactive = true;
+        Interactive = true; Focusable = true; KeyActivates = true; // Tab to it, Enter / Space clicks
     }
 
     Vec2 Button::Measure( float )

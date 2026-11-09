@@ -25,7 +25,7 @@ namespace tg
 
     ListItem::ListItem( std::string T ) : Text( std::move( T ) ), Style( Defaults() )
     {
-        Interactive = true;
+        Interactive = true; KeyActivates = true; // Enter on it while highlighted with the arrow keys
     }
 
     Vec2 ListItem::Measure( float )

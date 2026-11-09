@@ -54,7 +54,7 @@ namespace tg
         return W->Ctx;
     }
 
-    bool Widget::IsHovered() const { auto* C = GetContext(); return C && C->Hovered() == this; }
+    bool Widget::IsHovered() const { auto* C = GetContext(); return C && ( C->Hovered() == this || C->KeyHot() == this ); }
     bool Widget::IsPressed() const { auto* C = GetContext(); return C && C->Pressed() == this; }
     bool Widget::IsFocused() const { auto* C = GetContext(); return C && C->Focused() == this; }
     void Widget::Invalidate() { if ( auto* C = GetContext() ) C->InvalidateLayout(); }

@@ -39,6 +39,7 @@ Full guide in [`docs/`](docs/README.md):
 | [Layout](docs/layout.md) | rows / columns / stacks, `Fit` / `Px` / `Grow` |
 | [Styling](docs/styling.md) | theme, per-type and per-instance styles, editing `Draw()` |
 | [Controls reference](docs/widgets.md) | every widget and its API |
+| [App systems](docs/systems.md) | keyboard navigation, shortcuts, undo, profiles, inspector |
 | [Writing widgets](docs/custom-widgets.md) | subclassing, `DrawList`, events, animation |
 | [Platforms & renderers](docs/backends.md) | `tg::App`, Win32 + D3D11/9, GLFW + GL3, overlays |
 | [Testing](docs/testing.md) | the headless test, scripted input, Wine |

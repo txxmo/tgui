@@ -269,7 +269,7 @@ namespace tg
 
     // ------------------------------------------------------------ ColorPicker (field + popup)
 
-    ColorPicker::ColorPicker( Color* B, bool A ) : Bind( B ), ShowAlpha( A ) { Interactive = true; }
+    ColorPicker::ColorPicker( Color* B, bool A ) : Bind( B ), ShowAlpha( A ) { Interactive = true; Focusable = true; KeyActivates = true; } // Tab to it, Enter / Space clicks
 
     ColorPicker::~ColorPicker()
     {

@@ -22,6 +22,9 @@ option( TG_BUILD_HEADLESS "Build the headless software-rendered test"   ${TG_TOP
 # ---------------------------------------------------------------- core library (no platform deps)
 add_library( tg STATIC
     src/binds.cpp
+    src/devtools.cpp
+    src/history.cpp
+    src/settings.cpp
     src/context.cpp
     src/default_fonts.cpp
     src/draw.cpp

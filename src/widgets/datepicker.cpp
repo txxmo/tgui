@@ -162,7 +162,7 @@ namespace tg
 
     // ------------------------------------------------------------ DatePicker
 
-    DatePicker::DatePicker( tg::Date* B ) : Bind( B ) { Interactive = true; }
+    DatePicker::DatePicker( tg::Date* B ) : Bind( B ) { Interactive = true; Focusable = true; KeyActivates = true; } // Tab to it, Enter / Space clicks
 
     DatePicker::~DatePicker()
     {

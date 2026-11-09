@@ -12,7 +12,7 @@ namespace tg
 
     RadioGroup::RadioGroup( std::vector<std::string> O, int* B, Dir D ) : Options( std::move( O ) ), Bind( B ), Direction( D )
     {
-        Interactive = true;
+        Interactive = true; Focusable = true; // arrows pick
     }
 
     void RadioGroup::SetIndex( int i )
@@ -80,6 +80,13 @@ namespace tg
 
     bool RadioGroup::OnEvent( const Event& E )
     {
+        if ( E.Type == EventType::KeyDown )
+        {
+            int N = int( Options.size() ), I = GetIndex();
+            if ( E.KeyCode == Key::Left || E.KeyCode == Key::Up ) { SetIndex( std::max( 0, I - 1 ) ); return true; }
+            if ( E.KeyCode == Key::Right || E.KeyCode == Key::Down ) { SetIndex( std::min( N - 1, I + 1 ) ); return true; }
+            return false;
+        }
         switch ( E.Type )
         {
         case EventType::MouseMove: { int H = ItemAt( E.Pos ); if ( H != HoverIdx ) { HoverIdx = H; Redraw(); } return false; }
@@ -96,7 +103,7 @@ namespace tg
 
     // ------------------------------------------------------------ Segmented
 
-    Segmented::Segmented( std::vector<std::string> O, int* B ) : Options( std::move( O ) ), Bind( B ) { Interactive = true; }
+    Segmented::Segmented( std::vector<std::string> O, int* B ) : Options( std::move( O ) ), Bind( B ) { Interactive = true; Focusable = true; }
 
     void Segmented::SetIndex( int i )
     {
@@ -144,6 +151,13 @@ namespace tg
 
     bool Segmented::OnEvent( const Event& E )
     {
+        if ( E.Type == EventType::KeyDown )
+        {
+            int N = int( Options.size() ), I = GetIndex();
+            if ( E.KeyCode == Key::Left || E.KeyCode == Key::Up ) { SetIndex( std::max( 0, I - 1 ) ); return true; }
+            if ( E.KeyCode == Key::Right || E.KeyCode == Key::Down ) { SetIndex( std::min( N - 1, I + 1 ) ); return true; }
+            return false;
+        }
         auto At = [ & ]( Vec2 P ) { for ( size_t i = 0; i < Options.size(); i++ ) if ( SegmentRect( i ).Contains( P ) ) return int( i ); return -1; };
         if ( E.Button != MouseButton::Left ) return false;
         if ( E.Type == EventType::MouseDown ) { PressIdx = At( E.Pos ); return true; }

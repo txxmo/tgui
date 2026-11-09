@@ -1,9 +1,11 @@
 #include "tg/context.h"
 #include "tg/renderer.h"
 #include "tg/theme.h"
+#include "tg/widgets/dialog.h"
 #include "tg/widgets/menu.h"
 #include "tg/widgets/popup.h"
 #include <algorithm>
+#include <cctype>
 #include <chrono>
 #include <mutex>
 
@@ -263,6 +265,7 @@ namespace tg
 
     void Context::OnMouseMove( Vec2 P )
     {
+        if ( KeyHotW && P != Mouse ) { KeyHotW = nullptr; RequestFrame(); } // the mouse takes over from arrow keys
         Mouse = P;
         UpdateHover();
         Event E; E.Type = EventType::MouseMove;
@@ -315,6 +318,17 @@ namespace tg
         }
         if ( Swallowed ) return;
         if ( Down && TipW ) { TipSuppressed = true; RequestFrame(); } // clicking hides the tooltip until you move elsewhere
+        if ( Down ) FocusRing = false; // the ring is for keyboard users
+        if ( B == MouseButton::Left && Down )
+        {
+            // undo: snapshot the control under the mouse and the owners of open dropdowns / pickers
+            std::vector<Widget*> Cand;
+            for ( Widget* W = HoverW; W; W = W->GetParent() )
+                if ( W->CanBind() && !W->BindIsAction() ) { Cand.push_back( W ); break; }
+            for ( auto& K : OverlayWidget->Children() )
+                if ( auto* P = dynamic_cast<Popup*>( K.get() ); P && !P->IsClosed() && P->Owner && P->Owner->CanBind() ) Cand.push_back( P->Owner );
+            History.Begin( Cand );
+        }
         if ( B == MouseButton::Back || B == MouseButton::Forward ) { Dispatch( HoverW, E ); return; }
         if ( Down )
         {
@@ -343,7 +357,7 @@ namespace tg
         else
         {
             bool Handled = Dispatch( B == MouseButton::Left && PressW ? PressW : HoverW, E );
-            if ( B == MouseButton::Left ) PressW = nullptr;
+            if ( B == MouseButton::Left ) { PressW = nullptr; History.End(); }
             if ( B == MouseButton::Right && !Handled ) OpenContextMenu();
         }
         RequestFrame();
@@ -374,6 +388,19 @@ namespace tg
             return;
         }
         if ( Swallowed ) return;
+        if ( Down && !Repeat && DevToolKeys && K == Key::F12 )
+        {
+            if ( Mods & ModCtrl ) ShowStats = !ShowStats;
+            else ShowInspector = !ShowInspector;
+            RequestFrame();
+            return;
+        }
+        if ( Down && HasPopups() )
+        {
+            bool Handled = false;
+            PopupKeys( K, Handled ); // arrows / Enter inside the newest menu or dropdown
+            if ( Handled ) { RequestFrame(); return; }
+        }
         if ( Down && K == Key::Escape && HasPopups() )
         {
             // Escape closes the newest popup first.
@@ -387,7 +414,204 @@ namespace tg
         E.KeyCode = K;
         E.Mods = Mods;
         E.Repeat = Repeat;
-        Dispatch( FocusW, E );
+        if ( !Down ) { Dispatch( FocusW, E ); return; }
+
+        bool Typing = FocusW && FocusW->WantsKeyboard();
+        if ( FocusW && FocusW->CanBind() && !FocusW->BindIsAction() ) History.Begin( { FocusW } );
+        bool Handled = Dispatch( FocusW, E );
+        History.End();
+        if ( Handled ) return;
+
+        // not used by the focused widget: navigation, activation, shortcuts, undo
+        if ( K == Key::Tab && TabNavigation && !( Mods & ( ModCtrl | ModAlt ) ) )
+        {
+            FocusNext( Mods & ModShift );
+            return;
+        }
+        if ( ( K == Key::Enter || K == Key::Space ) && FocusW && FocusW->KeyActivates && !Typing && !Mods )
+        {
+            Click( *FocusW );
+            return;
+        }
+        if ( !Repeat && RunShortcuts( K, Mods ) ) return;
+        if ( History.Enabled && !Typing && ( Mods & ModCtrl ) && !Repeat )
+        {
+            if ( K == Key::Z && !( Mods & ModShift ) ) { History.Undo(); return; }
+            if ( K == Key::Y || ( K == Key::Z && ( Mods & ModShift ) ) ) { History.Redo(); return; }
+        }
+    }
+
+    // ------------------------------------------------------------ keyboard navigation
+
+    static bool Shown( const Widget* W )
+    {
+        for ( ; W; W = W->GetParent() )
+            if ( !W->Visible ) return false;
+        return true;
+    }
+
+    void Context::FocusNext( bool Backward )
+    {
+        // inside the open dialog if there is one, else the main tree
+        Widget* Scope = RootWidget.get();
+        for ( auto& K : OverlayWidget->Children() )
+            if ( auto* D = dynamic_cast<Dialog*>( K.get() ); D && !D->IsClosed() ) Scope = D;
+        std::vector<Widget*> Stops, Stack = { Scope };
+        while ( !Stack.empty() )
+        {
+            Widget* W = Stack.back();
+            Stack.pop_back();
+            if ( !W->Visible || !W->Enabled ) continue;
+            if ( W != Scope && W->Focusable ) Stops.push_back( W );
+            auto& Kids = W->Children();
+            for ( auto It = Kids.rbegin(); It != Kids.rend(); ++It ) Stack.push_back( It->get() );
+        }
+        if ( Stops.empty() ) return;
+        auto It = std::find( Stops.begin(), Stops.end(), FocusW );
+        size_t N = Stops.size(), I;
+        if ( It == Stops.end() ) I = Backward ? N - 1 : 0;
+        else I = ( size_t( It - Stops.begin() ) + ( Backward ? N - 1 : 1 ) ) % N;
+        SetFocus( Stops[ I ] );
+        FocusRing = true;
+        RequestFrame();
+    }
+
+    void Context::Click( Widget& W )
+    {
+        Widget* OldHover = HoverW;
+        HoverW = &W;
+        PressW = &W;
+        Event E;
+        E.Type = EventType::MouseDown;
+        E.Pos = W.Bounds.Center();
+        E.Button = MouseButton::Left;
+        W.OnEvent( E );
+        E.Type = EventType::MouseUp;
+        Dispatch( &W, E );
+        PressW = nullptr;
+        HoverW = OldHover;
+        UpdateHover();
+        RequestFrame();
+    }
+
+    void Context::PopupKeys( Key K, bool& Handled )
+    {
+        Popup* Top = nullptr;
+        for ( auto& C : OverlayWidget->Children() )
+            if ( auto* P = dynamic_cast<Popup*>( C.get() ); P && !P->IsClosed() ) Top = P;
+        if ( !Top ) return;
+        if ( FocusW && FocusW->WantsKeyboard() && Top->Owner != FocusW ) return; // typing somewhere else
+        std::vector<Widget*> Items, Stack = { Top };
+        while ( !Stack.empty() )
+        {
+            Widget* W = Stack.back();
+            Stack.pop_back();
+            if ( !W->Visible || !W->Enabled ) continue;
+            if ( W != Top && W->KeyActivates ) Items.push_back( W );
+            auto& Kids = W->Children();
+            for ( auto It = Kids.rbegin(); It != Kids.rend(); ++It ) Stack.push_back( It->get() );
+        }
+        if ( Items.empty() ) return;
+        auto It = std::find( Items.begin(), Items.end(), KeyHotW );
+        bool Has = It != Items.end();
+        size_t I = Has ? size_t( It - Items.begin() ) : 0, N = Items.size();
+        switch ( K )
+        {
+        case Key::Down: KeyHotW = Items[ Has ? ( I + 1 ) % N : 0 ]; Handled = true; break;
+        case Key::Up: KeyHotW = Items[ Has ? ( I + N - 1 ) % N : N - 1 ]; Handled = true; break;
+        case Key::Home: KeyHotW = Items.front(); Handled = true; break;
+        case Key::End: KeyHotW = Items.back(); Handled = true; break;
+        case Key::Enter:
+        case Key::Space:
+            if ( !Has ) return;
+            {
+                Widget* W = KeyHotW;
+                KeyHotW = nullptr;
+                Click( *W );
+            }
+            Handled = true;
+            break;
+        default: break;
+        }
+    }
+
+    // ------------------------------------------------------------ shortcuts
+
+    bool Context::ParseShortcut( const std::string& Combo, Key& K, uint8_t& Mods )
+    {
+        Mods = 0;
+        K = Key::None;
+        std::vector<std::string> Parts;
+        std::string Cur;
+        for ( size_t i = 0; i < Combo.size(); i++ )
+        {
+            char C = Combo[ i ];
+            if ( C == '+' && !Cur.empty() ) { Parts.push_back( Cur ); Cur.clear(); }
+            else if ( C != ' ' ) Cur += C;
+        }
+        if ( !Cur.empty() ) Parts.push_back( Cur );
+        if ( Parts.empty() ) return false;
+        auto Lower = []( std::string S ) { for ( char& C : S ) C = char( std::tolower( (unsigned char)C ) ); return S; };
+        for ( size_t i = 0; i + 1 < Parts.size(); i++ )
+        {
+            std::string M = Lower( Parts[ i ] );
+            if ( M == "ctrl" || M == "control" ) Mods |= ModCtrl;
+            else if ( M == "shift" ) Mods |= ModShift;
+            else if ( M == "alt" || M == "option" ) Mods |= ModAlt;
+            else if ( M == "super" || M == "cmd" || M == "win" || M == "meta" ) Mods |= ModSuper;
+            else return false;
+        }
+        std::string N = Lower( Parts.back() );
+        static const std::pair<const char*, const char*> Alias[] = { { "escape", "esc" }, { "return", "enter" }, { "pageup", "pgup" },
+            { "pagedown", "pgdn" }, { "del", "delete" }, { "ins", "insert" }, { "comma", "," }, { "period", "." }, { "minus", "-" },
+            { "plus", "=" }, { "slash", "/" } };
+        for ( auto& [ A, B ] : Alias )
+            if ( N == A ) N = B;
+        for ( size_t i = 1; i < size_t( Key::Count ); i++ )
+            if ( Lower( KeyName( Key( i ) ) ) == N ) { K = Key( i ); return true; }
+        return false;
+    }
+
+    std::string Context::ShortcutText( Key K, uint8_t Mods )
+    {
+        std::string S;
+        if ( Mods & ModCtrl ) S += "Ctrl+";
+        if ( Mods & ModAlt ) S += "Alt+";
+        if ( Mods & ModShift ) S += "Shift+";
+        if ( Mods & ModSuper ) S += "Super+";
+        std::string N = KeyName( K );
+        if ( N.size() > 1 && std::isalpha( (unsigned char)N[ 0 ] ) && !( N[ 0 ] == 'F' && std::isdigit( (unsigned char)N[ 1 ] ) ) )
+            for ( size_t i = 1; i < N.size(); i++ ) N[ i ] = char( std::tolower( (unsigned char)N[ i ] ) ); // ENTER -> Enter
+        return S + N;
+    }
+
+    uint32_t Context::Shortcut( const std::string& Combo, std::function<void()> Fn )
+    {
+        Key K;
+        uint8_t M;
+        if ( !ParseShortcut( Combo, K, M ) ) return 0;
+        Shortcuts.push_back( { NextShortcut, K, M, std::move( Fn ) } );
+        return NextShortcut++;
+    }
+
+    void Context::RemoveShortcut( uint32_t Id )
+    {
+        Shortcuts.erase( std::remove_if( Shortcuts.begin(), Shortcuts.end(), [ Id ]( auto& S ) { return S.Id == Id; } ), Shortcuts.end() );
+    }
+
+    bool Context::RunShortcuts( Key K, uint8_t Mods )
+    {
+        Mods &= ModShift | ModCtrl | ModAlt | ModSuper;
+        bool Typing = FocusW && FocusW->WantsKeyboard();
+        for ( auto& S : Shortcuts )
+            if ( S.K == K && S.Mods == Mods && ( !Typing || ( Mods & ( ModCtrl | ModAlt | ModSuper ) ) ) )
+            {
+                auto Fn = S.Fn; // may remove itself
+                if ( Fn ) Fn();
+                RequestFrame();
+                return true;
+            }
+        return false;
     }
 
     void Context::OnText( uint32_t Cp )
@@ -415,7 +639,9 @@ namespace tg
         if ( CaptureW == W ) CaptureW = nullptr;
         if ( TipW == W ) TipW = nullptr;
         if ( FocusW == W ) FocusW = nullptr;
+        if ( KeyHotW == W ) KeyHotW = nullptr;
         Binds.Forget( W );
+        History.Forget( W );
     }
 
     Cursor Context::GetCursor() const
@@ -500,6 +726,7 @@ namespace tg
         if ( NextTimedFrame >= 0 && Now >= NextTimedFrame ) NextTimedFrame = -1;
         FrameRequested = false;
 
+        const double T0 = Clock();
         if ( LayoutDirty )
         {
             LayoutDirty = false;
@@ -510,12 +737,21 @@ namespace tg
             FrameRequested = false;
         }
 
+        LayoutCpu = Clock() - T0;
         Fonts.Maintain( R ); // grow the glyph atlas now if on-demand glyphs ran out of room last frame
         List.Reset( { 0, 0, Viewport.x, Viewport.y }, Scale, Fonts.Texture, Fonts.WhiteUV );
         List.RectFilled( { 0, 0, Viewport.x, Viewport.y }, GetTheme()[ Tok::Background ] );
         RootWidget->Draw( List );
         OverlayWidget->Draw( List );
+        if ( FocusRing && FocusW && Shown( FocusW ) && !FocusW->WantsKeyboard() )
+        {
+            Theme& Th = GetTheme();
+            Rect B = FocusW->Bounds;
+            List.RectStroke( { B.x - 3, B.y - 3, B.w + 6, B.h + 6 }, Th[ Tok::Accent ].Fade( 0.85f ), Th.Radius + 3, 2 );
+        }
         DrawTooltip();
+        FrameCpu = Clock() - T0;
+        if ( ShowInspector || ShowStats ) DrawDevTools();
         auto Hooks = FrameHooks; // hooks may add/remove hooks; they see the same FrameIndex() as Draw did
         for ( auto& [ K, Fn ] : Hooks ) Fn();
         Frames++;

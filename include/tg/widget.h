@@ -109,6 +109,8 @@ namespace tg
         // Deepest Interactive widget under P (or nullptr).
         virtual Widget* HitTest( Vec2 P );
         virtual Cursor GetCursor() const { return Cursor::Arrow; }
+        // Enter / Space on the focused widget (or Enter on a highlighted popup item) clicks it.
+        bool KeyActivates = false;
         // True while focused for typing (text fields, terminal): global hotkeys and key binds stand back.
         virtual bool WantsKeyboard() const { return false; }
 

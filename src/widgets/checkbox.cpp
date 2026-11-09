@@ -18,7 +18,7 @@ namespace tg
 
     Checkbox::Checkbox( std::string T, bool* B ) : Text( std::move( T ) ), Bind( B ), Style( Defaults() )
     {
-        Interactive = true;
+        Interactive = true; Focusable = true; KeyActivates = true; // Tab to it, Enter / Space clicks
         CheckT = IsChecked() ? 1.f : 0.f;
     }
 

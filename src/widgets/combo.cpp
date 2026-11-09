@@ -24,7 +24,7 @@ namespace tg
 
     DropdownBase::DropdownBase( std::vector<std::string> I ) : Style( Defaults() ), Items( std::move( I ) )
     {
-        Interactive = true;
+        Interactive = true; Focusable = true; KeyActivates = true; // Tab to it, Enter / Space clicks
     }
 
     DropdownBase::~DropdownBase()
@@ -110,6 +110,8 @@ namespace tg
 
     bool DropdownBase::OnEvent( const Event& E )
     {
+        if ( E.Type == EventType::KeyDown && !Open && ( E.KeyCode == Key::Up || E.KeyCode == Key::Down ) )
+            return StepSelection( E.KeyCode == Key::Down ? 1 : -1 ); // closed combo: arrows change the pick
         if ( E.Button != MouseButton::Left ) return false;
         if ( E.Type == EventType::MouseDown ) return true;
         if ( E.Type == EventType::MouseUp )

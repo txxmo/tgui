@@ -2,6 +2,8 @@
 // Doubles as the test suite (ctest) — no GPU or window needed.
 #include "../common/demo_ui.h"
 #include "soft_renderer.h"
+#include "tg/settings.h"
+#include <filesystem>
 #include <cstdio>
 #include <cmath>
 #include <cstdlib>
@@ -264,6 +266,125 @@ int main( int Argc, char** Argv )
         KB.Clear();
         App.Notifications = N0;
         App.Volume = V0;
+        Settle( Ctx );
+    }
+
+    // ---------------- keyboard navigation, shortcuts, undo, settings, dev tools
+    {
+        tg::Slider* Vol = nullptr;
+        for ( int i = 0; auto* S = Find<tg::Slider>( *App.Pages[ 2 ], i ); i++ )
+            if ( S->Bind == &App.Volume ) Vol = S;
+        // Tab walks focusable controls in order; Shift+Tab goes back
+        Ctx.SetFocus( nullptr );
+        Ctx.OnKey( tg::Key::Tab, true, 0 );
+        tg::Widget* First = Ctx.Focused();
+        CHECK( First && First->Focusable && Ctx.FocusRingVisible() );
+        Ctx.OnKey( tg::Key::Tab, true, 0 );
+        tg::Widget* Second = Ctx.Focused();
+        CHECK( Second && Second != First );
+        Ctx.OnKey( tg::Key::Tab, true, tg::ModShift );
+        CHECK( Ctx.Focused() == First );
+        // Space on a focused checkbox toggles it
+        Ctx.SetFocus( Notif );
+        bool Nb = App.Notifications;
+        Ctx.OnKey( tg::Key::Space, true, 0 );
+        CHECK( App.Notifications != Nb );
+        Settle( Ctx );
+        Ctx.OnKey( tg::Key::Tab, true, tg::ModShift );
+        Ctx.OnKey( tg::Key::Tab, true, 0 );                             // back on the checkbox, ring showing
+        Settle( Ctx );
+        Shot( Ctx, "focus_ring" );
+        // arrows on a focused slider
+        Ctx.SetFocus( Vol );
+        float V0 = App.Volume;
+        Ctx.OnKey( tg::Key::Right, true, 0 );
+        CHECK( App.Volume == V0 + 1 );
+        Ctx.OnKey( tg::Key::Left, true, tg::ModShift );
+        CHECK( App.Volume == V0 + 1 - 10 );
+        // combo: arrows while closed change it; Enter opens; arrows + Enter pick in the list
+        Ctx.SetFocus( App.RegionCombo );
+        int R0 = App.Region;
+        Ctx.OnKey( tg::Key::Down, true, 0 );
+        CHECK( App.Region == R0 + 1 );
+        Ctx.OnKey( tg::Key::Enter, true, 0 );
+        CHECK( App.RegionCombo->IsOpen() );
+        Ctx.OnKey( tg::Key::Down, true, 0 );
+        Ctx.OnKey( tg::Key::Down, true, 0 );
+        CHECK( Ctx.KeyHot() != nullptr );
+        Settle( Ctx );
+        Shot( Ctx, "combo_keys" );
+        Ctx.OnKey( tg::Key::Enter, true, 0 );
+        Settle( Ctx );
+        CHECK( !App.RegionCombo->IsOpen() && App.Region == 1 );
+        // shortcuts: modifiers work while typing; plain keys don't
+        int Saves = 0, Plain = 0;
+        tg::Key Pk;
+        uint8_t Pm;
+        CHECK( tg::Context::ParseShortcut( "ctrl+shift+s", Pk, Pm ) && Pk == tg::Key::S && Pm == ( tg::ModCtrl | tg::ModShift ) );
+        CHECK( tg::Context::ShortcutText( tg::Key::Enter, tg::ModCtrl ) == "Ctrl+Enter" );
+        uint32_t Sid = Ctx.Shortcut( "Ctrl+S", [ & ] { Saves++; } );
+        Ctx.Shortcut( "F5", [ & ] { Plain++; } );
+        Ctx.SetFocus( nullptr );
+        Ctx.OnKey( tg::Key::S, true, tg::ModCtrl );
+        Ctx.OnKey( tg::Key::F5, true, 0 );
+        CHECK( Saves == 1 && Plain == 1 );
+        Ctx.SetFocus( App.Composer );
+        Ctx.OnKey( tg::Key::S, true, tg::ModCtrl );
+        Ctx.OnKey( tg::Key::F5, true, 0 );
+        CHECK( Saves == 2 && Plain == 1 );
+        Ctx.RemoveShortcut( Sid );
+        Ctx.SetFocus( nullptr );
+        Ctx.OnKey( tg::Key::S, true, tg::ModCtrl );
+        CHECK( Saves == 2 );
+        // undo / redo: control edits are recorded by themselves
+        Ctx.History.Clear();
+        bool Before = App.Notifications;
+        Click( Ctx, *Notif );
+        CHECK( App.Notifications != Before && Ctx.History.CanUndo() );
+        Ctx.OnKey( tg::Key::Z, true, tg::ModCtrl );
+        CHECK( App.Notifications == Before && Ctx.History.CanRedo() );
+        Ctx.OnKey( tg::Key::Y, true, tg::ModCtrl );
+        CHECK( App.Notifications != Before );
+        Ctx.History.Undo();
+        float Vb = App.Volume;
+        Ctx.SetFocus( Vol );
+        for ( int i = 0; i < 5; i++ ) Ctx.OnKey( tg::Key::Right, true, 0, i > 0 ); // held key: one step
+        CHECK( App.Volume == Vb + 5 );
+        Ctx.SetFocus( nullptr );
+        Ctx.History.Undo();
+        CHECK( App.Volume == Vb );
+        int Custom = 0;
+        Ctx.History.Push( "custom", [ & ] { Custom--; }, [ & ] { Custom++; } );
+        Ctx.History.Undo();
+        Ctx.History.Redo();
+        CHECK( Custom == 0 && Ctx.History.UndoName() == "custom" );
+        Ctx.History.Clear();
+        // settings: every control's value as text, and named profiles
+        std::string Snap = tg::SaveValues( Ctx.Root() );
+        CHECK( Snap.find( "Volume\t" ) != std::string::npos );
+        float Vs = App.Volume;
+        bool Ns = App.Notifications;
+        App.Volume = 3;
+        App.Notifications = !Ns;
+        CHECK( tg::LoadValues( Snap, Ctx.Root() ) > 5 && App.Volume == Vs && App.Notifications == Ns );
+        std::string Dir = std::string( OutDir ) + "/profiles";
+        std::filesystem::remove_all( Dir );
+        tg::Profiles Pr( Ctx, Dir );
+        Ctx.Binds.Add( *Vol, tg::Key::G, tg::BindTrigger::Toggle, { { 77 } } );
+        CHECK( Pr.Save( "Ranked" ) && Pr.Exists( "Ranked" ) );
+        Ctx.Binds.Clear();
+        App.Volume = 9;
+        CHECK( Pr.Load( "Ranked" ) && App.Volume == Vs && Ctx.Binds.All().size() == 1 );
+        CHECK( Pr.List().size() == 1 && Pr.List()[ 0 ] == "Ranked" && Pr.Remove( "Ranked" ) && Pr.List().empty() );
+        Ctx.Binds.Clear();
+        // dev tools draw without disturbing anything
+        Ctx.OnKey( tg::Key::F12, true, 0 );
+        Ctx.OnKey( tg::Key::F12, true, tg::ModCtrl );
+        CHECK( Ctx.ShowInspector && Ctx.ShowStats );
+        Ctx.OnMouseMove( Vol->Bounds.Center() );
+        Settle( Ctx );
+        Shot( Ctx, "inspector" );
+        Ctx.ShowInspector = Ctx.ShowStats = false;
         Settle( Ctx );
     }
 

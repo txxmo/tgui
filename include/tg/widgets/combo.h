@@ -5,6 +5,7 @@
 #pragma once
 #include "../theme.h"
 #include "../widget.h"
+#include <algorithm>
 #include <functional>
 #include <string>
 #include <vector>
@@ -56,6 +57,7 @@ namespace tg
         std::vector<ListItem*> Rows; // valid while open
 
         virtual std::string DisplayText( float MaxWidth ) const = 0;
+        virtual bool StepSelection( int Delta ) { (void)Delta; return false; }
         virtual bool IsItemSelected( size_t i ) const = 0;
         virtual void OnItemClicked( size_t i ) = 0;
         virtual bool MultiSelect() const { return false; }
@@ -87,6 +89,12 @@ namespace tg
         std::string DisplayText( float MaxWidth ) const override;
         bool IsItemSelected( size_t i ) const override { return int( i ) == GetIndex(); }
         void OnItemClicked( size_t i ) override;
+        bool StepSelection( int D ) override
+        {
+            if ( Items.empty() ) return false;
+            SetIndex( std::clamp( GetIndex() + D, 0, int( Items.size() ) - 1 ) );
+            return true;
+        }
 
     private:
         int Own = -1;
