@@ -153,6 +153,8 @@ namespace tg
                     OnCtl->Release();
                     return S_OK;
                 } );
+            // WebView2 reads extra browser switches from this variable when the environment starts
+            if ( !WebView::BrowserArguments.empty() ) SetEnvironmentVariableW( L"WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS", Wide( WebView::BrowserArguments ).c_str() );
             HRESULT R = Create( nullptr, Dir.empty() ? nullptr : Dir.c_str(), nullptr, OnEnv );
             OnEnv->Release();
             if ( FAILED( R ) ) { Error = Describe( R ); return false; }
@@ -216,6 +218,24 @@ namespace tg
                 } );
             Wv->add_DocumentTitleChanged( OnTitle, &T );
             OnTitle->Release();
+            auto* OnPerm = MakeCallback<ICoreWebView2PermissionRequestedEventHandler, ICoreWebView2*, ICoreWebView2PermissionRequestedEventArgs*>(
+                [ this ]( ICoreWebView2*, ICoreWebView2PermissionRequestedEventArgs* A ) -> HRESULT {
+                    COREWEBVIEW2_PERMISSION_KIND K = COREWEBVIEW2_PERMISSION_KIND_UNKNOWN_PERMISSION;
+                    A->get_PermissionKind( &K );
+                    LPWSTR U = nullptr;
+                    A->get_Uri( &U );
+                    const char* Kind = K == COREWEBVIEW2_PERMISSION_KIND_MICROPHONE ? "microphone"
+                                     : K == COREWEBVIEW2_PERMISSION_KIND_CAMERA ? "camera"
+                                     : K == COREWEBVIEW2_PERMISSION_KIND_NOTIFICATIONS ? "notifications"
+                                     : K == COREWEBVIEW2_PERMISSION_KIND_GEOLOCATION ? "geolocation"
+                                     : K == COREWEBVIEW2_PERMISSION_KIND_CLIPBOARD_READ ? "clipboard"
+                                                                                         : "other";
+                    int D = Owner.BackendPermission( Kind, TakeString( U ) );
+                    if ( D >= 0 ) A->put_State( D ? COREWEBVIEW2_PERMISSION_STATE_ALLOW : COREWEBVIEW2_PERMISSION_STATE_DENY );
+                    return S_OK;
+                } );
+            Wv->add_PermissionRequested( OnPerm, &T );
+            OnPerm->Release();
             Apply();
             Owner.BackendReady();
         }

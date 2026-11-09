@@ -45,10 +45,19 @@ namespace tg
         const std::string& Url() const { return CurrentUrl; }
         const std::string& Title() const { return CurrentTitle; }
         bool Ready() const;          // the engine is up (creation is asynchronous on Windows)
+        // Start the engine now instead of on first draw: a page that works while hidden (a call engine,
+        // a background sync). Needs the widget in a Context's tree.
+        void Preload() { if ( !Started ) Start(); }
         static bool Supported();     // built with a backend for this OS
 
         // Windows: where WebView2 keeps cookies & cache. Default: %LOCALAPPDATA%\<exe name>\WebView2.
         std::string DataDir;
+        // The page asks for "microphone", "camera", "notifications", "geolocation", "clipboard" or "other".
+        // Return true to allow. Not set: the engine's default (WebView2 asks the user; WebKitGTK denies).
+        std::function<bool( const std::string& Kind, const std::string& Origin )> OnPermission;
+        // Extra engine switches for every WebView in this process; set before the first one starts.
+        // WebView2: Chromium flags, e.g. "--autoplay-policy=no-user-gesture-required". (Ignored elsewhere.)
+        static inline std::string BrowserArguments;
         bool DevTools = false;       // allow right-click > Inspect
         bool HideUnderPopups = true; // hide the page while a tg popup overlaps it (it would cover the popup)
 
@@ -61,6 +70,11 @@ namespace tg
         void BackendNavigated( const std::string& Url );
         void BackendTitle( const std::string& T );
         void BackendError( const std::string& E );
+        // 1 allow, 0 deny, -1 no handler (engine default)
+        int BackendPermission( const std::string& Kind, const std::string& Origin ) const
+        {
+            return OnPermission ? ( OnPermission( Kind, Origin ) ? 1 : 0 ) : -1;
+        }
         static const char* BridgeScript( const char* PostCall ); // defines window.tg in every page
 
     private:

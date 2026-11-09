@@ -77,6 +77,19 @@ namespace tg
                     static_cast<GtkWeb*>( Self )->Owner.BackendError( std::string( "couldn't load " ) + ( Uri ? Uri : "" ) + ": " + Err->message );
                 return FALSE;
             } ), this );
+            g_signal_connect( View, "permission-request", G_CALLBACK( +[]( WebKitWebView* V, WebKitPermissionRequest* R, gpointer Self ) -> gboolean {
+                std::string Kind = "other";
+                if ( WEBKIT_IS_USER_MEDIA_PERMISSION_REQUEST( R ) )
+                    Kind = webkit_user_media_permission_is_for_video_device( WEBKIT_USER_MEDIA_PERMISSION_REQUEST( R ) ) ? "camera" : "microphone";
+                else if ( WEBKIT_IS_NOTIFICATION_PERMISSION_REQUEST( R ) ) Kind = "notifications";
+                else if ( WEBKIT_IS_GEOLOCATION_PERMISSION_REQUEST( R ) ) Kind = "geolocation";
+                const char* U = webkit_web_view_get_uri( V );
+                int D = static_cast<GtkWeb*>( Self )->Owner.BackendPermission( Kind, U ? U : "" );
+                if ( D < 0 ) return FALSE; // default handling
+                if ( D ) webkit_permission_request_allow( R );
+                else webkit_permission_request_deny( R );
+                return TRUE;
+            } ), this );
             // clicking the page gives it the keyboard (a reparented toplevel doesn't get focus from the WM)
             g_signal_connect( View, "button-press-event", G_CALLBACK( +[]( GtkWidget*, GdkEvent*, gpointer Self ) -> gboolean {
                 auto* W = static_cast<GtkWeb*>( Self );
