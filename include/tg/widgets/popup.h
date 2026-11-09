@@ -15,7 +15,9 @@ namespace tg
         Popup();
         ~Popup() override;
 
-        Widget* Owner = nullptr;   // clicking the owner doesn't auto-close (it toggles instead)
+        Widget* Owner = nullptr;   // gets the focus back / OnClose
+        bool OwnerToggles = true;  // dropdowns: clicking the owner doesn't auto-close (it toggles instead).
+                                   // false for right-click menus: any click outside the popup closes it
         Rect Anchor;               // placed below this rect, or above if there's no room
         float MinWidth = 0;        // usually the anchor's width
         std::function<void()> OnClose;

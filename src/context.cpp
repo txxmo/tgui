@@ -230,6 +230,7 @@ namespace tg
             {
                 ClosePopups(); // one menu at a time
                 Menu& M = OpenMenu( *W, Mouse );
+                M.OwnerToggles = false; // the owner can be a whole tree/table: clicking it elsewhere must close the menu
                 W->ContextMenu( M );
                 return true;
             }
@@ -316,7 +317,7 @@ namespace tg
                 if ( !P || P->IsClosed() ) continue;
                 bool Inside = false;
                 for ( Widget* W = HoverW; W; W = W->GetParent() )
-                    if ( W == P || W == P->Owner ) { Inside = true; break; }
+                    if ( W == P || ( W == P->Owner && P->OwnerToggles ) ) { Inside = true; break; }
                 if ( !Inside ) P->Close();
             }
             for ( Widget* W = HoverW; W; W = W->GetParent() )

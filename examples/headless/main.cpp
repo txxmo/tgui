@@ -503,11 +503,31 @@ int main( int Argc, char** Argv )
         CHECK( Restart && Restart->Text == "Restart" );
         Click( Ctx, *Restart );
         CHECK( App.LastAction == "Restart vps-ams-02" && OpenPopup( Ctx ) == nullptr );
+        // reopen, then left-click elsewhere in the same tree (the menu's owner): it must close
+        auto RightClick = [ & ]( tg::Vec2 P ) {
+            Ctx.OnMouseMove( P );
+            Ctx.OnMouseButton( tg::MouseButton::Right, true );
+            Ctx.OnMouseButton( tg::MouseButton::Right, false );
+            Ctx.Frame();
+        };
+        RightClick( { B.x + 90, B.y + 4 + Rh * 2.5f } );
+        CHECK( OpenPopup( Ctx ) );
+        ClickAt( Ctx, { B.x + 30, B.y + 4 + Rh * 7.5f } );         // left of the menu, still on the tree
+        Settle( Ctx );
+        CHECK( OpenPopup( Ctx ) == nullptr );
+        // ...and outside the tree entirely
+        RightClick( { B.x + 90, B.y + 4 + Rh * 2.5f } );
+        CHECK( OpenPopup( Ctx ) );
+        ClickAt( Ctx, { 6, Ctx.GetViewport().y - 6 } );
+        Settle( Ctx );
+        CHECK( OpenPopup( Ctx ) == nullptr );
         // checkable item flips its bool
+        Ctx.OnMouseMove( { B.x + 90, B.y + 4 + Rh * 2.5f } );
         Ctx.OnMouseButton( tg::MouseButton::Right, true );
         Ctx.OnMouseButton( tg::MouseButton::Right, false );
         Ctx.Frame();
         M = dynamic_cast<tg::Menu*>( OpenPopup( Ctx ) );
+        CHECK( M );
         Settle( Ctx );
         Click( Ctx, *Find<tg::MenuItem>( *M, 2 ) );
         CHECK( App.Pinned );
