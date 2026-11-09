@@ -11,6 +11,7 @@ namespace tg
     {
         // Hook GLFW callbacks up to Ctx (uses the window user pointer).
         void Install( GLFWwindow* Window, Context& Ctx );
+        void Uninstall( GLFWwindow* Window ); // before destroying a window you installed
 
         // Keep viewport/DPI/cursor in sync. Call once per loop iteration before Frame().
         void Sync( GLFWwindow* Window, Context& Ctx );

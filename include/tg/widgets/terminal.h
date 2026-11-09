@@ -118,6 +118,7 @@ namespace tg
         bool OnEvent( const Event& E ) override;
         Cursor GetCursor() const override { return Cursor::IBeam; }
         bool WantsKeyboard() const override { return true; }
+        Rect CaretRect() const override { return CaretAt; }
 
     private:
         using Line = std::vector<TermCell>;
@@ -179,5 +180,6 @@ namespace tg
         void Send( std::string_view Bytes );
         Rect Inner() const { return Bounds.Shrink( Style.Padding ); }
         long FirstVisible() const { return AbsCount() - H - View; }
+        Rect CaretAt;
     };
 }

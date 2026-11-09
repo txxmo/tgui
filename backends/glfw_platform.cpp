@@ -3,6 +3,9 @@
 #include <GLFW/glfw3.h>
 #include <algorithm>
 #include <cstdint>
+#include <string>
+#include <unordered_map>
+#include <vector>
 // Native handle for WebView & co. X11 only when asked for (TG_GLFW_X11): GLFW may be built without it.
 #if defined( _WIN32 )
 #define GLFW_EXPOSE_NATIVE_WIN32
@@ -46,12 +49,14 @@ namespace tg::glfw
 
         GLFWcursor* Cursors[ 5 ] = {};
         GLFWwindow* ClipboardWindow = nullptr;
+        std::unordered_map<GLFWwindow*, Cursor> LastCursor; // per window (App::NewWindow)
     }
 
     void Install( GLFWwindow* W, Context& C )
     {
         glfwSetWindowUserPointer( W, &C );
-        ClipboardWindow = W;
+        if ( !ClipboardWindow ) ClipboardWindow = W;
+        LastCursor[ W ] = Cursor::Arrow;
 #if defined( _WIN32 )
         C.NativeWindow = glfwGetWin32Window( W );
 #elif defined( __APPLE__ )
@@ -73,18 +78,35 @@ namespace tg::glfw
         } );
         glfwSetCharCallback( W, []( GLFWwindow* W, unsigned int Cp ) { Ctx( W ).OnText( Cp ); } );
         glfwSetWindowRefreshCallback( W, []( GLFWwindow* W ) { Ctx( W ).RequestFrame(); } );
+        // files dropped from the file manager (GLFW reports the drop only, no hover)
+        glfwSetDropCallback( W, []( GLFWwindow* W, int N, const char** Paths ) {
+            std::vector<std::string> Ps( Paths, Paths + N );
+            double X, Y;
+            glfwGetCursorPos( W, &X, &Y );
+            Ctx( W ).OnFilesDrop( ToUI( W, X, Y ), std::move( Ps ) );
+        } );
 
         C.SetClipboard = []( const std::string& S ) { glfwSetClipboardString( ClipboardWindow, S.c_str() ); };
         C.GetClipboard = []() -> std::string { const char* S = glfwGetClipboardString( ClipboardWindow ); return S ? S : ""; };
         C.WakeUp = []() { glfwPostEmptyEvent(); };
 
-        Cursors[ int( Cursor::Arrow ) ] = glfwCreateStandardCursor( GLFW_ARROW_CURSOR );
-        Cursors[ int( Cursor::Hand ) ] = glfwCreateStandardCursor( GLFW_HAND_CURSOR );
-        Cursors[ int( Cursor::IBeam ) ] = glfwCreateStandardCursor( GLFW_IBEAM_CURSOR );
-        Cursors[ int( Cursor::ResizeH ) ] = glfwCreateStandardCursor( GLFW_HRESIZE_CURSOR );
-        Cursors[ int( Cursor::ResizeV ) ] = glfwCreateStandardCursor( GLFW_VRESIZE_CURSOR );
+        if ( !Cursors[ 0 ] )
+        {
+            Cursors[ int( Cursor::Arrow ) ] = glfwCreateStandardCursor( GLFW_ARROW_CURSOR );
+            Cursors[ int( Cursor::Hand ) ] = glfwCreateStandardCursor( GLFW_HAND_CURSOR );
+            Cursors[ int( Cursor::IBeam ) ] = glfwCreateStandardCursor( GLFW_IBEAM_CURSOR );
+            Cursors[ int( Cursor::ResizeH ) ] = glfwCreateStandardCursor( GLFW_HRESIZE_CURSOR );
+            Cursors[ int( Cursor::ResizeV ) ] = glfwCreateStandardCursor( GLFW_VRESIZE_CURSOR );
+        }
 
         Sync( W, C );
+    }
+
+    void Uninstall( GLFWwindow* W )
+    {
+        LastCursor.erase( W );
+        if ( ClipboardWindow == W ) ClipboardWindow = nullptr;
+        glfwSetWindowUserPointer( W, nullptr );
     }
 
     void Sync( GLFWwindow* W, Context& C )
@@ -96,7 +118,7 @@ namespace tg::glfw
         if ( Scale <= 0 ) Scale = 1;
         C.SetViewport( { Fw / Scale, Fh / Scale }, Scale );
 
-        static Cursor Last = Cursor::Arrow;
+        Cursor& Last = LastCursor[ W ];
         Cursor Want = C.GetCursor();
         if ( Want != Last ) { glfwSetCursor( W, Cursors[ int( Want ) ] ); Last = Want; }
     }

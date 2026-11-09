@@ -195,6 +195,10 @@ namespace tg
         }
 
         // caret
+        {
+            Vec2 P = PosOf( Caret );
+            CaretAt = { std::floor( O.x + P.x ), O.y + P.y + 1, 1.5f, F.LineHeight - 2 };
+        }
         if ( Foc && C && !ReadOnly )
         {
             const double Period = 1.06, Phase = std::fmod( C->Time() - BlinkStart, Period );

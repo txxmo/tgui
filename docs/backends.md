@@ -87,7 +87,8 @@ Ctx.Render( { float( BackBufferWidth ), float( BackBufferHeight ) } );
 | Function | |
 |---|---|
 | `win32::EnableDpiAwareness()` | per-monitor v2; call before creating windows |
-| `win32::Install( Hwnd, Ctx )` / `Shutdown()` | attach / detach (one window per process) |
+| `win32::Install( Hwnd, Ctx )` | attach; any number of windows, one Context each |
+| `win32::Uninstall( Hwnd )` / `Shutdown()` | detach one window / all of them |
 | `win32::HandleMessage( Hwnd, Msg, W, L )` | feed a message; `true` = tg used it |
 | `win32::Sync( Hwnd, Ctx )` | viewport, DPI scale, cursor; once per loop iteration |
 | `win32::WaitForWork( Ctx )` | sleep until input, a posted task or a timed redraw |
@@ -98,6 +99,8 @@ What it handles:
 - mouse buttons including side buttons (`Mouse4` / `Mouse5`), with capture so drags work outside the window
 - wheel and horizontal wheel, and UTF-16 text input including emoji surrogate pairs
 - cursors and the clipboard
+- files dragged in from Explorer (OLE drop target with hover highlight; `WM_DROPFILES` fallback)
+- IME composition at the caret (return 0 for `WM_IME_STARTCOMPOSITION` / `COMPOSITION` / `ENDCOMPOSITION` when it says it used them)
 
 ## GLFW + OpenGL 3.3
 

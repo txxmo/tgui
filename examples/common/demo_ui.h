@@ -105,6 +105,16 @@ struct DemoApp
     std::string Host = "vps-fra-01", LastLink, Dropped;
     void OpenCommands();
 
+    // "Desktop" tab
+    tg::Container* DesktopBar = nullptr;
+    tg::DockSpace* DockW = nullptr;
+    tg::Terminal* DockLog = nullptr;
+    float DockOpacity = 1;
+    bool DockWrap = false;
+    int DockTheme = 0;
+    std::string SavedDock;
+    std::function<void( tg::DockPanel& )> PopOut; // set by apps with OS windows (showcase: App::PopOut)
+
     // "Layout & theme" tab
     tg::Container *GridBox = nullptr, *WrapBox = nullptr, *StackRow = nullptr;
     tg::ThemeEditor* ThemeEd = nullptr;

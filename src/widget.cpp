@@ -31,6 +31,28 @@ namespace tg
         Invalidate();
     }
 
+    std::unique_ptr<Widget> Widget::Detach( Widget* W )
+    {
+        auto It = std::find_if( Kids.begin(), Kids.end(), [ W ]( auto& K ) { return K.get() == W; } );
+        if ( It == Kids.end() ) return nullptr;
+        if ( Context* C = GetContext() ) // hover / press / focus pointers into the subtree go away
+        {
+            std::vector<Widget*> St = { W };
+            while ( !St.empty() )
+            {
+                Widget* X = St.back();
+                St.pop_back();
+                C->ForgetTransient( X );
+                for ( auto& K : X->Kids ) St.push_back( K.get() );
+            }
+        }
+        std::unique_ptr<Widget> Out = std::move( *It );
+        Kids.erase( It );
+        Out->Parent = nullptr;
+        Invalidate();
+        return Out;
+    }
+
     void Widget::Clear()
     {
         Kids.clear();

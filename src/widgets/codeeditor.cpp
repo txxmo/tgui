@@ -589,6 +589,11 @@ namespace tg
             D.PopClip();
         }
         // carets (blink while focused)
+        if ( !Sels.empty() )
+        {
+            size_t L = LineOf( Sels.back().Caret );
+            CaretAt = { T.x - ScrollX + ColumnOf( Sels.back().Caret ) * CW - 1, T.y + L * LH - ScrollY + 1, 2, LH - 2 };
+        }
         if ( Focused && C )
         {
             bool On = std::fmod( C->Time() - BlinkStart, 1.0 ) < 0.6;

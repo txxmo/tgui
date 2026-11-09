@@ -18,9 +18,11 @@ namespace tg
 
     namespace win32
     {
-        // Attach Ctx to a window: clipboard, wake-up and cursor hooks. One window per process.
+        // Attach Ctx to a window: clipboard, wake-up, cursor, file drops (OLE), IME. Any number of
+        // windows, one Context each.
         void Install( void* Hwnd, Context& Ctx );
-        void Shutdown();
+        void Uninstall( void* Hwnd ); // before the window or its Context goes away
+        void Shutdown();              // every window
 
         // Feed one message. Returns true when tg consumed it (mouse over a tg widget, key while a
         // tg text field / keybind has focus...). For an overlay, skip the game's input when true.

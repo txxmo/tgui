@@ -2,6 +2,8 @@
 // Doubles as the test suite (ctest) — no GPU or window needed.
 #include "../common/demo_ui.h"
 #include "soft_renderer.h"
+#include "app_common.h"
+#include "tg/os.h"
 #include "tg/settings.h"
 #include <filesystem>
 #include <fstream>
@@ -1523,6 +1525,202 @@ int main( int Argc, char** Argv )
         Gl.RectFilled( { 0, 0, 100, 10 }, tg::Color( 255, 255, 255 ) );
         Gl.ShadeLinear( 0, { 0, 5 }, { 100, 5 }, tg::Color( 0, 0, 0 ), tg::Color( 200, 100, 50 ) );
         CHECK( tg::Color::Unpack( Gl.Vtx.front().Col ).r < 5 );
+    }
+
+    // ---------------- docking
+    {
+        ClickTab( Ctx, App, 12 );
+        tg::DockSpace& Dk = *App.DockW;
+        tg::DockPanel &Files = *Dk.Find( "files" ), &Code = *Dk.Find( "editor" ), &Notes = *Dk.Find( "notes" ), &Out = *Dk.Find( "output" ),
+                      &Props = *Dk.Find( "props" );
+        Settle( Ctx );
+        CHECK( Dk.SaveLayout().rfind( "split(", 0 ) == 0 );
+        Dk.Activate( Code );
+        Settle( Ctx );
+        CHECK( Files.Bounds.Right() <= Code.Bounds.x && Props.Bounds.x >= Code.Bounds.Right() && Out.Bounds.y >= Code.Bounds.Bottom() - 1 );
+        CHECK( Code.Visible && !Notes.Visible && Notes.Bounds.w > 0 );
+        // click the Notes tab: it comes to the front
+        Click( Ctx, *&Code ); // (focus somewhere harmless first)
+        ClickAt( Ctx, Dk.TabOf( Notes ).Center() );
+        Settle( Ctx );
+        CHECK( Notes.Visible && !Code.Visible );
+        // drag the Notes tab onto the right edge of the editor's panel: split
+        tg::Rect Body = Notes.Bounds;
+        Drag( Ctx, Dk.TabOf( Notes ).Center(), { Body.Right() - 12, Body.Center().y + 40 } );
+        Settle( Ctx );
+        CHECK( Notes.Visible && Code.Visible && !Dk.IsFloating( Notes ) );
+        CHECK( Notes.Bounds.x > Code.Bounds.x + 20 && std::fabs( Notes.Bounds.y - Code.Bounds.y ) < 1 );
+        // tear it off with Ctrl held (no docking): it floats
+        {
+            tg::Vec2 From = Dk.TabOf( Notes ).Center();
+            Ctx.OnMouseMove( From );
+            Ctx.OnMouseButton( tg::MouseButton::Left, true );
+            Ctx.OnKey( tg::Key::LeftCtrl, true, tg::ModCtrl );
+            for ( int i = 1; i <= 8; i++ ) Ctx.OnMouseMove( From + tg::Vec2{ -30.f * i, 40.f * i } );
+            Ctx.OnMouseButton( tg::MouseButton::Left, false );
+            Ctx.OnKey( tg::Key::LeftCtrl, false, 0 );
+            Settle( Ctx );
+        }
+        CHECK( Dk.IsFloating( Notes ) && Notes.Visible );
+        Shot( Ctx, "docking" );
+        // drag the floating window's title onto the editor's tab strip: it joins as a tab
+        tg::Rect Fl = Dk.TabOf( Notes );
+        Drag( Ctx, { Fl.Right() + 30, Fl.Center().y }, Dk.TabOf( Code ).Center() + tg::Vec2{ 0, 2 } );
+        Settle( Ctx );
+        CHECK( !Dk.IsFloating( Notes ) && Notes.Visible && !Code.Visible && Notes.Bounds.x == Code.Bounds.x );
+        // reorder within the strip
+        tg::Rect Tn = Dk.TabOf( Notes ), Tc = Dk.TabOf( Code );
+        CHECK( Tc.x < Tn.x );
+        Drag( Ctx, Tn.Center(), { Tc.x + 4, Tc.Center().y } );
+        Settle( Ctx );
+        CHECK( Dk.TabOf( Notes ).x < Dk.TabOf( Code ).x );
+        // close the output panel with its x, then show it again in the same place
+        Dk.Activate( Out );
+        Settle( Ctx );
+        tg::Rect To = Dk.TabOf( Out );
+        ClickAt( Ctx, { To.Right() - 14, To.Center().y } );
+        Settle( Ctx );
+        CHECK( !Dk.IsOpen( Out ) && !Out.Visible && Notes.Bounds.Bottom() > To.y );
+        Dk.Show( Out );
+        Settle( Ctx );
+        CHECK( Dk.IsOpen( Out ) && Out.Visible && Out.Bounds.y > Notes.Bounds.y + 40 );
+        // resize the explorer with its divider
+        float W0 = Files.Bounds.w;
+        Drag( Ctx, { Files.Bounds.Right() + 2.5f, Files.Bounds.Center().y }, { Files.Bounds.Right() + 82.5f, Files.Bounds.Center().y } );
+        Settle( Ctx );
+        CHECK( std::fabs( Files.Bounds.w - ( W0 + 80 ) ) < 3 );
+        // save -> change -> load gives the same layout back; garbage is rejected
+        std::string S = Dk.SaveLayout();
+        Dk.Float( Props, { 50, 50, 300, 200 } );
+        Dk.Close( Files );
+        Settle( Ctx );
+        CHECK( Dk.SaveLayout() != S && Dk.SaveLayout().find( ";float(" ) != std::string::npos );
+        CHECK( Dk.LoadLayout( S ) );
+        Settle( Ctx );
+        CHECK( Dk.SaveLayout() == S && Dk.IsOpen( Files ) && Files.Visible && !Dk.IsFloating( Props ) );
+        CHECK( !Dk.LoadLayout( "split(row,0.5,tabs(files|0)" ) && Dk.SaveLayout() == S );
+        CHECK( Dk.LoadLayout( "tabs(files,ghost,editor|1);float(10,10,200,150,tabs(notes|0))" ) );
+        Settle( Ctx );
+        CHECK( Code.Visible && !Files.Visible && Dk.IsFloating( Notes ) && !Dk.IsOpen( Out ) );
+        CHECK( Dk.LoadLayout( S ) );
+        Settle( Ctx );
+        // Detach: move a widget to another parent without destroying it
+        auto& Btn = App.DesktopBar->Button( "moving" );
+        auto Owned = App.DesktopBar->Detach( &Btn );
+        CHECK( Owned.get() == &Btn && Btn.GetParent() == nullptr );
+        Notes.AddChild( std::move( Owned ) );
+        CHECK( Btn.GetParent() == &Notes );
+        Notes.Remove( &Btn );
+        Settle( Ctx );
+    }
+
+    // ---------------- platform: files from the OS, IME, a second window's context, pop-out, clipboard images
+    {
+        tg::Container& Pg = *App.Pages[ 12 ];
+        auto& Zone = Pg.Add<tg::Box>();
+        Zone.Layout.Height = tg::Px( 60 );
+        std::vector<std::string> Got;
+        Zone.AcceptDrop = []( const tg::DragData& D ) { return D.Type == "files"; };
+        Zone.OnDrop = [ & ]( const tg::DragData& D, tg::Vec2 ) { Got = D.Paths; };
+        Settle( Ctx );
+        tg::Vec2 Zc = Zone.Bounds.Center();
+        CHECK( Ctx.OnFilesOver( Zc, { "/tmp/a.png", "/tmp/b.txt" } ) && Ctx.FilesOver() && Ctx.DropTarget() == &Zone );
+        CHECK( Ctx.Dragged() && Ctx.Dragged()->Label == "2 files" );
+        Ctx.OnFilesLeave();
+        CHECK( !Ctx.FilesOver() && !Ctx.IsDragging() );
+        CHECK( Ctx.OnFilesDrop( Zc, { "/tmp/a.png" } ) && Got.size() == 1 && Got[ 0 ] == "/tmp/a.png" && !Ctx.IsDragging() );
+        std::vector<std::string> Fallback;
+        CHECK( !Ctx.OnFilesDrop( { 5, 5 }, { "/x" } ) ); // nobody wants them
+        Ctx.OnFiles = [ & ]( const std::vector<std::string>& P, tg::Vec2 ) { Fallback = P; };
+        CHECK( Ctx.OnFilesDrop( { 5, 5 }, { "/x" } ) && Fallback.size() == 1 );
+        Ctx.OnFiles = nullptr;
+        Pg.Remove( &Zone );
+
+        // IME: the composition draws at the caret of the focused field
+        auto& Field = Pg.Input( "ime" );
+        Settle( Ctx );
+        Click( Ctx, Field );
+        Settle( Ctx );
+        tg::Rect Cr = Ctx.CaretRect();
+        CHECK( Cr.h > 0 && Field.Bounds.Contains( Cr.Center() ) );
+        size_t V0 = Ctx.Frame().Vtx.size();
+        Ctx.OnComposition( "\xE3\x81\xAB\xE3\x81\xBB\xE3\x82\x93", 3 ); // にほん, caret after the first
+        CHECK( Ctx.Composition().size() == 9 && Ctx.NeedsFrame() );
+        CHECK( Ctx.Frame().Vtx.size() > V0 );
+        Ctx.OnComposition( {} );
+        Ctx.OnText( 0x65E5 ); // committed: 日
+        CHECK( Field.GetText() == "\xE6\x97\xA5" && Ctx.Composition().empty() );
+        Ctx.SetFocus( nullptr );
+        Pg.Remove( &Field );
+
+        // a second window's Context, other renderer: draws text with a copy of the shared atlas
+        tg::SoftRenderer Soft2;
+        {
+            tg::Context Ctx2( Soft2, Ctx );
+            Ctx2.SetViewport( { 200, 60 }, 1 );
+            auto& L2 = Ctx2.Root().Add<tg::Label>( "Second window" );
+            (void)L2;
+            Ctx2.Frame();
+            Ctx2.Render( { 200, 60 } );
+            int Lit = 0;
+            tg::Color Bg = tg::GetTheme()[ tg::Tok::Background ];
+            for ( uint32_t Px : Soft2.Pixels )
+            {
+                tg::Color C = tg::Color::Unpack( Px );
+                Lit += std::abs( C.r - Bg.r ) + std::abs( C.g - Bg.g ) > 60;
+            }
+            CHECK( Lit > 50 );
+            // same renderer (one D3D device, several swapchains): uses the host's texture directly
+            tg::Context Ctx3( Soft, Ctx );
+            Ctx3.SetViewport( { 200, 60 }, 1 );
+            Ctx3.Root().Add<tg::Label>( "Third" );
+            const tg::DrawList& Dl = Ctx3.Frame();
+            CHECK( !Dl.Cmds.empty() && Dl.AtlasTexture == Ctx.Fonts.Texture );
+        }
+
+        // pop-out: a widget moves into another window's tree and comes back to the same spot
+        {
+            tg::Context Ctx4( Soft2, Ctx );
+            tg::Container* Area = nullptr;
+            tg::Widget* Layer = nullptr;
+            tg::detail::BuildRoot( Ctx4, Area, Layer );
+            tg::Widget& Bar = *App.DesktopBar;
+            tg::Widget* Parent = Bar.GetParent();
+            size_t Idx = 0;
+            while ( Parent->Children()[ Idx ].get() != &Bar ) Idx++;
+            auto Pop = tg::detail::PopOutInto( Bar, *Area );
+            CHECK( Bar.GetParent() == Area && Bar.GetContext() == &Ctx4 );
+            Ctx4.SetViewport( { 400, 200 }, 1 );
+            Ctx4.Frame();
+            Settle( Ctx );
+            tg::detail::PutBack( Pop, *Area );
+            CHECK( Bar.GetParent() == Parent && Parent->Children()[ Idx ].get() == &Bar && Bar.GetContext() == &Ctx );
+            Settle( Ctx );
+        }
+
+        // clipboard images (Windows: CF_DIB; Linux: needs xclip / wl-copy, skipped without)
+        tg::Bitmap Bm;
+        Bm.Width = 3;
+        Bm.Height = 2;
+        Bm.Pixels = { tg::Color( 255, 0, 0 ).Pack(), tg::Color( 0, 255, 0 ).Pack(), tg::Color( 0, 0, 255 ).Pack(),
+                      tg::Color( 10, 20, 30 ).Pack(), tg::Color( 40, 50, 60 ).Pack(), tg::Color( 255, 255, 255 ).Pack() };
+        if ( tg::os::SetClipboardImage( Bm ) )
+        {
+            tg::Bitmap Back;
+            bool Read = false;
+            for ( int i = 0; i < 20 && !Read; i++ ) // xclip serves the selection from a background process
+            {
+                Read = tg::os::GetClipboardImage( Back );
+                if ( !Read ) std::this_thread::sleep_for( std::chrono::milliseconds( 50 ) );
+            }
+            CHECK( Read && Back.Width == 3 && Back.Height == 2 && Back.Pixels == Bm.Pixels );
+            std::printf( "clipboard image round trip ok\n" );
+        }
+#ifdef _WIN32
+        tg::TrayIcon Tray( "tg headless" );
+        Tray.Items = { { "One", {} } };
+        std::printf( "tray icon: %s\n", Tray.Ok() ? "shown" : "not shown" );
+#endif
     }
 
     // ---------------- light theme

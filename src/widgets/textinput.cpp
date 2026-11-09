@@ -128,6 +128,7 @@ namespace tg
         else D.Text( F, { X, Y }, Disp, S.TextColor.Resolve() );
 
         // caret blinks at ~1Hz; schedule exactly the frames we need instead of redrawing nonstop
+        CaretAt = { std::floor( X + CaretX ), Y + 1, 1.5f, F.LineHeight - 2 };
         if ( Foc && C )
         {
             const double Period = 1.06, Phase = std::fmod( C->Time() - BlinkStart, Period );

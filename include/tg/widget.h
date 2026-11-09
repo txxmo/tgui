@@ -40,6 +40,7 @@ namespace tg
         std::string Text;           // payload as text (names, ids, paths)
         std::string Label;          // shown next to the cursor while dragging (default: Text)
         std::shared_ptr<void> Data; // anything else
+        std::vector<std::string> Paths; // Type "files": files dragged in from the OS (Explorer, Finder, ...)
     };
 
     // Column / Row: flex lines. Stack: children on top of each other. Free: absolute (Offset).
@@ -106,6 +107,8 @@ namespace tg
         void Clear();
         void BringToFront(); // draw last among siblings (and get hit first)
         void MoveChild( size_t From, size_t To ); // reorder children (relayouts; AnimateChildren makes them glide)
+        // Take a child out without destroying it (to AddChild it somewhere else, even in another window).
+        std::unique_ptr<Widget> Detach( Widget* Child );
         Widget* GetParent() const { return Parent; }
         const std::vector<std::unique_ptr<Widget>>& Children() const { return Kids; }
 
@@ -142,6 +145,8 @@ namespace tg
         bool KeyActivates = false;
         // True while focused for typing (text fields, terminal): global hotkeys and key binds stand back.
         virtual bool WantsKeyboard() const { return false; }
+        // Text widgets: where the caret is (UI units). IME candidate windows and composition text go here.
+        virtual Rect CaretRect() const { return {}; }
 
         // ---- key binds: right-click a control -> "Add key bind". Controls opt in by overriding these.
         virtual bool CanBind() const { return false; }

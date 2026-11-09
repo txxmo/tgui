@@ -37,6 +37,7 @@ add_library( tg STATIC
     src/theme.cpp
     src/variants.cpp
     src/widget.cpp
+    src/os.cpp
     src/widgets/bars.cpp
     src/widgets/box.cpp
     src/widgets/button.cpp
@@ -74,6 +75,7 @@ add_library( tg STATIC
     src/widgets/slider.cpp
     src/widgets/steps.cpp
     src/widgets/splitter.cpp
+    src/widgets/dock.cpp
     src/widgets/swatches.cpp
     src/widgets/table.cpp
     src/widgets/tabview.cpp
@@ -95,6 +97,9 @@ find_package( Threads REQUIRED )
 target_link_libraries( tg PUBLIC Threads::Threads )          # Pty reader threads
 if( UNIX AND NOT APPLE )
     target_link_libraries( tg PUBLIC util )                  # forkpty
+endif()
+if( WIN32 )
+    target_link_libraries( tg PUBLIC ole32 shell32 uuid )    # tg/os.h: file dialogs, tray, ShellExecute
 endif()
 
 if( TG_FREETYPE )
@@ -158,7 +163,7 @@ if( WIN32 )
     add_library( tg_win32 STATIC backends/win32_platform.cpp )      # Win32 messages -> tg input
     add_library( tg::win32 ALIAS tg_win32 )
     target_include_directories( tg_win32 PUBLIC backends )
-    target_link_libraries( tg_win32 PUBLIC tg )
+    target_link_libraries( tg_win32 PUBLIC tg imm32 ole32 shell32 )
 
     add_library( tg_d3d11 STATIC backends/d3d11_renderer.cpp )      # Direct3D 11 renderer
     add_library( tg::d3d11 ALIAS tg_d3d11 )

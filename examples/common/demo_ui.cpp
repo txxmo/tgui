@@ -831,6 +831,109 @@ public:
     }
 };
 
+// Desktop: a docking workspace (drag tabs around) plus the OS integration demos.
+static void BuildDesktop( DemoApp& App, Container& Page )
+{
+    DemoApp* A = &App;
+    auto& Bar = Page.Row( 8 );
+    Bar.Layout.CrossAlign = Align::Center;
+    App.DesktopBar = &Bar;
+    auto& Dk = Page.Dock();
+    App.DockW = &Dk;
+    auto& Files = Dk.AddPanel( Icon::FolderOpen + "  Explorer", "files" );
+    auto& Code = Dk.AddPanel( Icon::FileCode + "  main.cpp", "editor" );
+    auto& Notes = Dk.AddPanel( Icon::StickyNote + "  Notes", "notes" );
+    auto& Out = Dk.AddPanel( Icon::SquareTerminal + "  Output", "output" );
+    auto& Props = Dk.AddPanel( Icon::SlidersHorizontal + "  Properties", "props" );
+    Files.Closable = false;
+    Dk.Dock( Files, &Code, DockSide::Left, 0.22f );
+    Dk.Dock( Out, &Code, DockSide::Bottom, 0.3f );
+    Dk.Dock( Props, &Code, DockSide::Right, 0.26f );
+
+    auto& T = Files.Tree();
+    T.Layout.Height = Grow();
+    // files dragged in from Explorer / Finder / the file manager land in the tree
+    Files.AcceptDrop = []( const DragData& D ) { return D.Type == "files"; };
+    Files.OnDrop = [ A, &T ]( const DragData& D, Vec2 ) {
+        auto& Got = T.Add( "dropped" );
+        for ( auto& P : D.Paths ) Got.Add( P );
+        A->DockLog->Write( "dropped " + std::to_string( D.Paths.size() ) + " file(s)\r\n" );
+    };
+    Files.Tooltip = "Drop files here from your file manager";
+    auto& Src = T.Add( "src" );
+    Src.Add( "main.cpp" );
+    Src.Add( "dock.cpp" );
+    Src.Add( "widget.cpp" );
+    T.Add( "include" ).Add( "tg.h" );
+    T.Add( "CMakeLists.txt" );
+    auto& Ed = Code.Add<CodeEditor>( "// drag the tabs: onto a panel's edge to split it,\n// its middle to stack, the outer rim for a full side,\n// or anywhere else to float. Ctrl while dragging: no docking.\nint main()\n{\n    return 0;\n}\n", CodeLang::Cpp );
+    Ed.Layout.Height = Grow();
+    Code.Layout.Padding = Insets( 0 );
+    Notes.Rich( "**Notes** — a third tab in the middle. Middle-click or × closes; reopen from the buttons above." );
+    Notes.TextArea( "Write something…" ).Layout.Height = Grow();
+    App.DockLog = &Out.Terminal();
+    App.DockLog->Layout.Height = Grow();
+    App.DockLog->Write( "\x1b[32mready\x1b[0m  docking demo\r\n" );
+    Out.Layout.Padding = Insets( 6 );
+    Props.Slider( "Opacity", &App.DockOpacity, 0, 1 );
+    Props.Toggle( "Word wrap", &App.DockWrap );
+    Props.Combo( "Theme", { "Dark", "Light" }, &App.DockTheme );
+    Dk.OnLayoutChange = [ A ] { A->DockLog->Write( "layout: " + A->DockW->SaveLayout() + "\r\n" ); };
+
+    for ( DockPanel* P : Dk.Panels() )
+        if ( P->Closable )
+            Bar.Button( P->Title, [ A, P ] { A->DockW->Show( *P ); } ).Tooltip = "Show / reopen this panel";
+    Bar.Button( Icon::Save + "  Save layout", [ A ] { A->SavedDock = A->DockW->SaveLayout(); A->DockLog->Write( "saved\r\n" ); } );
+    Bar.Button( Icon::RotateCcw + "  Restore", [ A ] { if ( !A->SavedDock.empty() ) A->DockW->LoadLayout( A->SavedDock ); } );
+    if ( App.PopOut ) // only in apps with real OS windows (the showcase)
+        Bar.Button( Icon::ExternalLink + "  Pop out notes", [ A, &Notes ] { if ( A->DockW->IsOpen( Notes ) ) A->PopOut( Notes ); } ).Tooltip =
+            "Move the Notes panel into its own OS window; close that window to bring it back";
+
+    // ---- the desktop around the window (tg/os.h)
+    auto& Os = Page.Row( 8 );
+    Os.Layout.CrossAlign = Align::Center;
+    Page.MoveChild( Page.Children().size() - 1, 1 );
+    auto Log = [ A ]( const std::string& S ) { A->DockLog->Write( S + "\r\n" ); };
+    Os.Button( Icon::FolderOpen + "  Open files\xE2\x80\xA6", [ A, Log ] {
+        os::FileDialog D{ "Open files", { { "Images", "*.png;*.jpg;*.svg" }, { "All files", "*" } } };
+        D.Multiple = true;
+        D.Owner = A->Ctx->NativeWindow;
+        os::OpenFilesAsync( *A->Ctx, D, [ Log ]( std::vector<std::string> P ) {
+            if ( P.empty() ) Log( "open: cancelled" );
+            for ( auto& F : P ) Log( "open: " + F );
+        } );
+    } );
+    Os.Button( Icon::Save + "  Save as\xE2\x80\xA6", [ A, Log ] {
+        os::FileDialog D{ "Export", { { "CSV", "*.csv" } }, {}, "report.csv" };
+        D.Owner = A->Ctx->NativeWindow;
+        os::SaveFileAsync( *A->Ctx, D, [ Log ]( std::string P ) { Log( P.empty() ? "save: cancelled" : "save: " + P ); } );
+    } );
+    Os.Button( Icon::Folder + "  Folder\xE2\x80\xA6", [ A, Log ] {
+        os::FileDialog D{ "Pick a folder" };
+        D.Owner = A->Ctx->NativeWindow;
+        os::PickFolderAsync( *A->Ctx, D, [ Log ]( std::string P ) { Log( P.empty() ? "folder: cancelled" : "folder: " + P ); } );
+    } );
+    Os.Button( Icon::Bell + "  Notify", [ Log ] { Log( os::Notify( "tg", "Hello from the Desktop tab" ) ? "notification sent" : "no notification service" ); } );
+    Os.Button( Icon::Copy + "  Copy image", [ Log ] {
+        Bitmap B;
+        B.Width = 96;
+        B.Height = 64;
+        for ( int y = 0; y < B.Height; y++ )
+            for ( int x = 0; x < B.Width; x++ ) B.Pixels.push_back( Color( uint8_t( x * 255 / 95 ), uint8_t( y * 255 / 63 ), 200 ).Pack() );
+        Log( os::SetClipboardImage( B ) ? "copied a 96x64 gradient" : "clipboard images not available here" );
+    } );
+    Os.Button( Icon::ClipboardPaste + "  Paste image", [ A, Log, &Notes ] {
+        Bitmap B;
+        if ( !os::GetClipboardImage( B ) ) { Log( "no image on the clipboard" ); return; }
+        TextureId T = A->Ctx->GetRenderer().CreateTexture( B.Width, B.Height, B.Pixels.data() );
+        auto& Im = Notes.Add<Image>( T, B.Width, B.Height );
+        Im.Layout.Height = Px( std::min( 160.f, float( B.Height ) ) );
+        Im.Style.Letterbox = Color( 0, 0, 0, 0 );
+        Log( "pasted " + std::to_string( B.Width ) + "x" + std::to_string( B.Height ) + " into Notes" );
+    } );
+    Os.Caption( os::DialogsAvailable() ? "drop files on the Explorer  \xC2\xB7  IME input works in every text field" : "(no zenity / kdialog: file dialogs unavailable)" );
+}
+
 static void BuildEffects( DemoApp& App, Container& Page )
 {
     DemoApp* A = &App;
@@ -936,7 +1039,7 @@ void DemoApp::Build( Context& C, Widget& Root )
     // ---- tabs across the top, one page each
     auto& Body = Root.Add<Container>( Dir::Column, 0, Insets( 16, 14, 16, 16 ) );
     Body.Layout.Height = Grow();
-    const char* Names[] = { "Dashboard", "Chat", "Controls", "Tables", "Windows", "More", "Forms", "Charts", "Terminal", "More widgets", "Layout & theme", "Effects" };
+    const char* Names[] = { "Dashboard", "Chat", "Controls", "Tables", "Windows", "More", "Forms", "Charts", "Terminal", "More widgets", "Layout & theme", "Effects", "Desktop" };
     for ( const char* N : Names ) Pages.push_back( &Body.Tab( N ) );
     Tabs = Body.Tabs();
     Tabs->OnChange = [ this ]( int i ) {
@@ -956,6 +1059,7 @@ void DemoApp::Build( Context& C, Widget& Root )
     BuildWidgetsPlus( *this, *Pages[ 9 ] );
     BuildLayoutTheme( *this, *Pages[ 10 ] );
     BuildEffects( *this, *Pages[ 11 ] );
+    BuildDesktop( *this, *Pages[ 12 ] );
     C.Shortcut( "Ctrl+K", [ this ] { OpenCommands(); } );
 
     // Global hotkey, like the old tgui Insert key: show/hide the Test Window.

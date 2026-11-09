@@ -1,12 +1,32 @@
 // tg::App on GLFW + OpenGL 3. Swap this file to put App on another platform/renderer.
 #include "tg/app.h"
+#include "app_common.h"
 #include "gl3_renderer.h"
 #include "glfw_platform.h"
 #include <GLFW/glfw3.h>
 #include <cstdio>
+#include <vector>
 
 namespace tg
 {
+    // A second (third, ...) OS window: shares the main window's GL objects and fonts.
+    struct GlfwWindow final : OsWindow
+    {
+        GLFWwindow* Win = nullptr;
+        GL3Renderer Gl;
+        std::unique_ptr<Context> Ctx;
+        Container* MainArea = nullptr;
+        Widget* WindowLayer = nullptr;
+        bool Closing = false;
+        detail::PoppedOut Popped;
+
+        Container& Main() override { return *MainArea; }
+        Context& GetContext() override { return *Ctx; }
+        void SetTitle( const std::string& T ) override { if ( Win ) glfwSetWindowTitle( Win, T.c_str() ); }
+        void Close() override { Closing = true; }
+        bool IsOpen() const override { return !Closing && Win && !glfwWindowShouldClose( Win ); }
+    };
+
     struct App::Impl
     {
         AppConfig Cfg;
@@ -17,6 +37,46 @@ namespace tg
         Widget* WindowLayer = nullptr;
         int Cascade = 0;
         bool Good = false;
+        std::vector<std::unique_ptr<GlfwWindow>> Extra;
+
+        void DrawWindow( GLFWwindow* W, Context& C )
+        {
+            glfwMakeContextCurrent( W );
+            glfw::Sync( W, C );
+            if ( !C.NeedsFrame() ) return;
+            C.Frame();
+            int Fw, Fh;
+            glfwGetFramebufferSize( W, &Fw, &Fh );
+            if ( Fw <= 0 || Fh <= 0 ) return;
+            C.Render( { float( Fw ), float( Fh ) } );
+            glfwSwapBuffers( W );
+        }
+
+        void Reap() // windows closed this iteration: put popped-out widgets back, then destroy
+        {
+            for ( size_t i = 0; i < Extra.size(); )
+            {
+                GlfwWindow& X = *Extra[ i ];
+                if ( !X.Closing && X.Win && !glfwWindowShouldClose( X.Win ) ) { i++; continue; }
+                X.Closing = true;
+                if ( X.OnClose ) X.OnClose();
+                detail::PutBack( X.Popped, *X.MainArea );
+                Ctx->RequestFrame();
+                if ( X.Win )
+                {
+                    glfw::Uninstall( X.Win );
+                    glfwMakeContextCurrent( X.Win );
+                }
+                X.Ctx.reset();
+                if ( X.Win )
+                {
+                    X.Gl.Shutdown();
+                    glfwDestroyWindow( X.Win );
+                }
+                Extra.erase( Extra.begin() + long( i ) );
+                glfwMakeContextCurrent( Win );
+            }
+        }
     };
 
     App::App( const std::string& Title, int W, int H ) : App( AppConfig{ Title, W, H } ) {}
@@ -46,18 +106,24 @@ namespace tg
         glfwGetWindowContentScale( P->Win, &Scale, &Dummy );
         if ( !P->Ctx->LoadDefaultFonts( Scale > 0 ? Scale : 1 ) ) return;
         glfw::Install( P->Win, *P->Ctx );
-
-        // Root = Stack[ main area, floating window layer ]
-        Widget& Root = P->Ctx->Root();
-        Root.Layout.Direction = Dir::Stack;
-        P->MainArea = &Root.Add<Container>( Dir::Column, 0 );
-        P->WindowLayer = &Root.Add<Widget>();
-        P->WindowLayer->Layout.Direction = Dir::Free;
+        detail::BuildRoot( *P->Ctx, P->MainArea, P->WindowLayer );
         P->Good = true;
     }
 
     App::~App()
     {
+        for ( auto& X : P->Extra ) // popped-out widgets go home first (their owners live in the main tree)
+        {
+            detail::PutBack( X->Popped, *X->MainArea );
+            if ( !X->Win ) continue;
+            glfw::Uninstall( X->Win );
+            glfwMakeContextCurrent( X->Win );
+            X->Ctx.reset();
+            X->Gl.Shutdown();
+            glfwDestroyWindow( X->Win );
+        }
+        P->Extra.clear();
+        if ( P->Win ) glfwMakeContextCurrent( P->Win );
         P->Ctx.reset(); // widgets + font texture go before the GL context
         P->Gl.Shutdown();
         if ( P->Win ) glfwDestroyWindow( P->Win );
@@ -70,6 +136,7 @@ namespace tg
     Renderer& App::GetRenderer() { return P->Gl; }
     void App::SetContinuous( bool On ) { P->Cfg.Continuous = On; }
     void App::Quit() { if ( P->Win ) glfwSetWindowShouldClose( P->Win, 1 ); }
+    size_t App::WindowCount() const { return 1 + P->Extra.size(); }
 
     tg::Window& App::Window( std::string Title, Vec2 Pos, Vec2 Size )
     {
@@ -81,6 +148,39 @@ namespace tg
         return P->WindowLayer->Add<tg::Window>( std::move( Title ), Pos, Size );
     }
 
+    OsWindow& App::NewWindow( std::string Title, int Width, int Height )
+    {
+        auto X = std::make_unique<GlfwWindow>();
+        // share = the main window: textures and buffers are visible to both GL contexts
+        X->Win = glfwCreateWindow( Width, Height, Title.c_str(), nullptr, P->Win );
+        if ( X->Win )
+        {
+            glfwMakeContextCurrent( X->Win );
+            glfwSwapInterval( 0 ); // only the main window waits for vblank: two waits would halve the frame rate
+            X->Gl.Init( []( const char* N ) { return (void*)glfwGetProcAddress( N ); } );
+            X->Ctx = std::make_unique<Context>( X->Gl, *P->Ctx );
+            glfw::Install( X->Win, *X->Ctx );
+            glfwMakeContextCurrent( P->Win );
+        }
+        else // couldn't open a window: keep the API usable, nothing shows
+        {
+            X->Ctx = std::make_unique<Context>( P->Gl, *P->Ctx );
+            X->Closing = true;
+        }
+        detail::BuildRoot( *X->Ctx, X->MainArea, X->WindowLayer );
+        P->Extra.push_back( std::move( X ) );
+        return *P->Extra.back();
+    }
+
+    OsWindow& App::PopOut( Widget& W, std::string Title, int Width, int Height )
+    {
+        Vec2 S = detail::PopOutSize( W, Width, Height );
+        auto& X = static_cast<GlfwWindow&>( NewWindow( std::move( Title ), int( S.x ), int( S.y ) ) );
+        X.Popped = detail::PopOutInto( W, *X.MainArea );
+        P->Ctx->RequestFrame();
+        return X;
+    }
+
     int App::Run()
     {
         if ( !P->Good ) return 1;
@@ -88,16 +188,20 @@ namespace tg
         while ( !glfwWindowShouldClose( P->Win ) )
         {
             if ( P->Cfg.Continuous ) Ctx.RequestFrame();
-            glfw::WaitForWork( Ctx );
-            glfw::Sync( P->Win, Ctx );
-            if ( OnUpdate ) OnUpdate();
-            if ( !Ctx.NeedsFrame() ) continue;
+            // sleep until any window has something to do
+            double T = Ctx.SecondsUntilNextFrame();
+            for ( auto& X : P->Extra ) T = std::min( T, X->Ctx->SecondsUntilNextFrame() );
+            if ( T <= 0 ) glfwPollEvents();
+            else glfwWaitEventsTimeout( std::min( T, 0.5 ) );
+            Ctx.RunPumps();
+            for ( auto& X : P->Extra ) X->Ctx->RunPumps();
+            P->Reap();
 
-            Ctx.Frame();
-            int Fw, Fh;
-            glfwGetFramebufferSize( P->Win, &Fw, &Fh );
-            Ctx.Render( { float( Fw ), float( Fh ) } );
-            glfwSwapBuffers( P->Win );
+            if ( OnUpdate ) OnUpdate();
+            P->DrawWindow( P->Win, Ctx );
+            for ( auto& X : P->Extra )
+                if ( X->Win ) P->DrawWindow( X->Win, *X->Ctx );
+            glfwMakeContextCurrent( P->Win );
         }
         return 0;
     }

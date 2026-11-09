@@ -6,10 +6,15 @@
 #endif
 #include <windows.h>
 #include <windowsx.h>
+#include <imm.h>
+#include <ole2.h>
+#include <shellapi.h>
 
 #include "win32_platform.h"
 #include "tg/context.h"
 #include <string>
+#include <unordered_map>
+#include <vector>
 
 #ifndef WM_DPICHANGED
 #define WM_DPICHANGED 0x02E0
@@ -22,11 +27,22 @@ namespace tg::win32
 {
     namespace
     {
-        HWND Wnd = nullptr;
-        Context* Ctx = nullptr;
-        Cursor CurCursor = Cursor::Arrow;
-        wchar_t HighSurrogate = 0;
-        int ButtonsDown = 0;
+        struct DropTarget;
+        struct State
+        {
+            Context* Ctx = nullptr;
+            Cursor CurCursor = Cursor::Arrow;
+            wchar_t HighSurrogate = 0;
+            int ButtonsDown = 0;
+            DropTarget* Drop = nullptr;
+            bool Ole = false;
+        };
+        std::unordered_map<HWND, State> States; // one per window (App::NewWindow, pop-outs)
+        State* Find( HWND H )
+        {
+            auto It = States.find( H );
+            return It == States.end() ? nullptr : &It->second;
+        }
 
         float ScaleOf( HWND H )
         {
@@ -120,11 +136,136 @@ namespace tg::win32
             }
         }
 
-        void ApplyCursor() { SetCursor( LoadCursorW( nullptr, CursorName( CurCursor ) ) ); }
+        void ApplyCursor( Cursor C ) { SetCursor( LoadCursorW( nullptr, CursorName( C ) ) ); }
 
         // Is the mouse over something tg cares about? (for overlays deciding who gets input)
-        bool OverUI() { return Ctx && ( Ctx->Hovered() || Ctx->Pressed() || Ctx->HasPopups() ); }
-        bool WantsKeys() { return Ctx && ( Ctx->Focused() || Ctx->Captured() ); }
+        bool OverUI( Context& C ) { return C.Hovered() || C.Pressed() || C.HasPopups() || C.FilesOver(); }
+        bool WantsKeys( Context& C ) { return C.Focused() || C.Captured(); }
+        bool Typing( Context& C ) { return C.Focused() && C.Focused()->WantsKeyboard(); }
+
+        std::string Narrow( const wchar_t* W, int Len = -1 )
+        {
+            int N = WideCharToMultiByte( CP_UTF8, 0, W, Len, nullptr, 0, nullptr, nullptr );
+            std::string S( size_t( N > 0 ? N : 0 ), '\0' );
+            if ( N > 0 ) WideCharToMultiByte( CP_UTF8, 0, W, Len, S.data(), N, nullptr, nullptr );
+            if ( Len < 0 && !S.empty() ) S.pop_back();
+            return S;
+        }
+
+        std::vector<std::string> DropPaths( HDROP D )
+        {
+            std::vector<std::string> Out;
+            UINT N = DragQueryFileW( D, 0xFFFFFFFF, nullptr, 0 );
+            for ( UINT i = 0; i < N; i++ )
+            {
+                UINT Len = DragQueryFileW( D, i, nullptr, 0 );
+                std::wstring W( Len, L'\0' );
+                DragQueryFileW( D, i, W.data(), Len + 1 );
+                Out.push_back( Narrow( W.c_str() ) );
+            }
+            return Out;
+        }
+
+        // OLE drop target: files dragged over the window highlight the widget that would take them.
+        struct DropTarget : IDropTarget
+        {
+            LONG Refs = 1;
+            HWND Wnd;
+            std::vector<std::string> Paths;
+            explicit DropTarget( HWND H ) : Wnd( H ) {}
+
+            HRESULT STDMETHODCALLTYPE QueryInterface( REFIID Id, void** Out ) override
+            {
+                if ( Id == IID_IUnknown || Id == IID_IDropTarget ) { *Out = static_cast<IDropTarget*>( this ); AddRef(); return S_OK; }
+                *Out = nullptr;
+                return E_NOINTERFACE;
+            }
+            ULONG STDMETHODCALLTYPE AddRef() override { return ULONG( InterlockedIncrement( &Refs ) ); }
+            ULONG STDMETHODCALLTYPE Release() override
+            {
+                LONG R = InterlockedDecrement( &Refs );
+                if ( !R ) delete this;
+                return ULONG( R );
+            }
+
+            Vec2 At( POINTL P )
+            {
+                POINT Q = { P.x, P.y };
+                ScreenToClient( Wnd, &Q );
+                float S = ScaleOf( Wnd );
+                return { Q.x / S, Q.y / S };
+            }
+            static std::vector<std::string> Read( IDataObject* D )
+            {
+                std::vector<std::string> Out;
+                FORMATETC Fe = { CF_HDROP, nullptr, DVASPECT_CONTENT, -1, TYMED_HGLOBAL };
+                STGMEDIUM Sm = {};
+                if ( D && SUCCEEDED( D->GetData( &Fe, &Sm ) ) )
+                {
+                    if ( HDROP H = (HDROP)GlobalLock( Sm.hGlobal ) )
+                    {
+                        Out = DropPaths( H );
+                        GlobalUnlock( Sm.hGlobal );
+                    }
+                    ReleaseStgMedium( &Sm );
+                }
+                return Out;
+            }
+            Context* Ctx()
+            {
+                State* St = Find( Wnd );
+                return St ? St->Ctx : nullptr;
+            }
+            HRESULT STDMETHODCALLTYPE DragEnter( IDataObject* D, DWORD, POINTL P, DWORD* Eff ) override
+            {
+                Paths = Read( D );
+                Context* C = Ctx();
+                *Eff = C && !Paths.empty() && C->OnFilesOver( At( P ), Paths ) ? DROPEFFECT_COPY : DROPEFFECT_NONE;
+                return S_OK;
+            }
+            HRESULT STDMETHODCALLTYPE DragOver( DWORD, POINTL P, DWORD* Eff ) override
+            {
+                Context* C = Ctx();
+                *Eff = C && !Paths.empty() && C->OnFilesOver( At( P ), Paths ) ? DROPEFFECT_COPY : DROPEFFECT_NONE;
+                return S_OK;
+            }
+            HRESULT STDMETHODCALLTYPE DragLeave() override
+            {
+                if ( Context* C = Ctx() ) C->OnFilesLeave();
+                Paths.clear();
+                return S_OK;
+            }
+            HRESULT STDMETHODCALLTYPE Drop( IDataObject* D, DWORD, POINTL P, DWORD* Eff ) override
+            {
+                auto Ps = Read( D );
+                if ( Ps.empty() ) Ps = Paths;
+                Context* C = Ctx();
+                *Eff = C && !Ps.empty() && C->OnFilesDrop( At( P ), Ps ) ? DROPEFFECT_COPY : DROPEFFECT_NONE;
+                Paths.clear();
+                return S_OK;
+            }
+        };
+
+        // Put the IME's composition / candidate windows at the caret of the focused text widget.
+        void PlaceIme( HWND H, Context& C )
+        {
+            Rect R = C.CaretRect();
+            if ( R.h <= 0 ) return;
+            HIMC Imc = ImmGetContext( H );
+            if ( !Imc ) return;
+            float S = ScaleOf( H );
+            COMPOSITIONFORM Cf = {};
+            Cf.dwStyle = CFS_POINT;
+            Cf.ptCurrentPos = { LONG( R.x * S ), LONG( R.y * S ) };
+            ImmSetCompositionWindow( Imc, &Cf );
+            CANDIDATEFORM Cand = {};
+            Cand.dwIndex = 0;
+            Cand.dwStyle = CFS_EXCLUDE;
+            Cand.ptCurrentPos = { LONG( R.x * S ), LONG( R.Bottom() * S ) };
+            Cand.rcArea = { LONG( R.x * S ), LONG( R.y * S ), LONG( ( R.x + 1 ) * S ), LONG( R.Bottom() * S ) };
+            ImmSetCandidateWindow( Imc, &Cand );
+            ImmReleaseContext( H, Imc );
+        }
     }
 
     void EnableDpiAwareness()
@@ -139,13 +280,24 @@ namespace tg::win32
 
     float GetDpiScale( void* H ) { return ScaleOf( (HWND)H ); }
 
-    void Install( void* H, Context& C )
+    void Install( void* Hv, Context& C )
     {
-        Wnd = (HWND)H;
-        Ctx = &C;
-        C.NativeWindow = H;
-        C.WakeUp = [] { if ( Wnd ) PostMessageW( Wnd, WM_NULL, 0, 0 ); };
-        C.SetClipboard = []( const std::string& S ) {
+        HWND Wnd = (HWND)Hv;
+        State& St = States[ Wnd ];
+        St = State{};
+        St.Ctx = &C;
+        C.NativeWindow = Hv;
+        C.WakeUp = [ Wnd ] { PostMessageW( Wnd, WM_NULL, 0, 0 ); };
+        // files from Explorer: OLE drop target (hover feedback), or plain WM_DROPFILES if OLE isn't available
+        HRESULT Ole = OleInitialize( nullptr );
+        St.Ole = SUCCEEDED( Ole );
+        if ( St.Ole )
+        {
+            St.Drop = new DropTarget( Wnd );
+            if ( FAILED( RegisterDragDrop( Wnd, St.Drop ) ) ) { St.Drop->Release(); St.Drop = nullptr; }
+        }
+        if ( !St.Drop ) DragAcceptFiles( Wnd, TRUE );
+        C.SetClipboard = [ Wnd ]( const std::string& S ) {
             if ( !OpenClipboard( Wnd ) ) return;
             EmptyClipboard();
             int N = MultiByteToWideChar( CP_UTF8, 0, S.c_str(), -1, nullptr, 0 );
@@ -157,7 +309,7 @@ namespace tg::win32
             }
             CloseClipboard();
         };
-        C.GetClipboard = []() -> std::string {
+        C.GetClipboard = [ Wnd ]() -> std::string {
             std::string Out;
             if ( !OpenClipboard( Wnd ) ) return Out;
             if ( HANDLE D = GetClipboardData( CF_UNICODETEXT ) )
@@ -170,29 +322,47 @@ namespace tg::win32
             CloseClipboard();
             return Out;
         };
-        Sync( H, C );
+        Sync( Hv, C );
+    }
+
+    void Uninstall( void* Hv )
+    {
+        HWND H = (HWND)Hv;
+        State* St = Find( H );
+        if ( !St ) return;
+        if ( St->Ctx ) { St->Ctx->WakeUp = nullptr; St->Ctx->SetClipboard = nullptr; St->Ctx->GetClipboard = nullptr; }
+        if ( St->Drop )
+        {
+            RevokeDragDrop( H );
+            St->Drop->Release();
+        }
+        if ( St->Ole ) OleUninitialize();
+        States.erase( H );
     }
 
     void Shutdown()
     {
-        if ( Ctx ) { Ctx->WakeUp = nullptr; Ctx->SetClipboard = nullptr; Ctx->GetClipboard = nullptr; }
-        Ctx = nullptr;
-        Wnd = nullptr;
+        std::vector<HWND> All;
+        for ( auto& [ H, St ] : States ) All.push_back( H );
+        for ( HWND H : All ) Uninstall( H );
     }
 
     bool HandleMessage( void* Hv, uint32_t Msg, uintptr_t W, intptr_t L )
     {
         HWND H = (HWND)Hv;
-        if ( !Ctx || H != Wnd ) return false;
-        Context& C = *Ctx;
+        State* St = Find( H );
+        if ( !St || !St->Ctx ) return false;
+        Context& C = *St->Ctx;
+        int& ButtonsDown = St->ButtonsDown;
+        wchar_t& HighSurrogate = St->HighSurrogate;
 
         auto Button = [ & ]( MouseButton B, bool Down ) {
             if ( Down ) { if ( !ButtonsDown++ ) SetCapture( H ); }
             else if ( ButtonsDown > 0 && !--ButtonsDown ) ReleaseCapture();
-            bool Was = OverUI();
+            bool Was = OverUI( C );
             C.OnMouseMove( ToUI( H, L ) );
             C.OnMouseButton( B, Down );
-            return Was || OverUI();
+            return Was || OverUI( C );
         };
 
         switch ( Msg )
@@ -202,7 +372,7 @@ namespace tg::win32
             TRACKMOUSEEVENT T = { sizeof( T ), TME_LEAVE, H, 0 };
             TrackMouseEvent( &T );
             C.OnMouseMove( ToUI( H, L ) );
-            return OverUI();
+            return OverUI( C );
         }
         case WM_MOUSELEAVE:
             C.OnMouseMove( { -100000, -100000 } );
@@ -224,7 +394,7 @@ namespace tg::win32
         case WM_MOUSEHWHEEL:
         {
             float D = float( GET_WHEEL_DELTA_WPARAM( W ) ) / WHEEL_DELTA;
-            bool Over = OverUI();
+            bool Over = OverUI( C );
             C.OnMouseWheel( Msg == WM_MOUSEWHEEL ? Vec2{ 0, D } : Vec2{ -D, 0 } );
             return Over;
         }
@@ -233,29 +403,85 @@ namespace tg::win32
         {
             bool Down = Msg == WM_KEYDOWN || Msg == WM_SYSKEYDOWN;
             bool Repeat = Down && ( L & ( 1 << 30 ) );
-            bool Wanted = WantsKeys();
+            bool Wanted = WantsKeys( C );
             C.OnKey( MapVK( W, L ), Down, Mods(), Repeat );
             return Wanted;
         }
         case WM_CHAR:
         {
             wchar_t Ch = wchar_t( W );
-            if ( Ch >= 0xD800 && Ch <= 0xDBFF ) { HighSurrogate = Ch; return WantsKeys(); }
+            if ( Ch >= 0xD800 && Ch <= 0xDBFF ) { HighSurrogate = Ch; return WantsKeys( C ); }
             uint32_t Cp = Ch;
             if ( Ch >= 0xDC00 && Ch <= 0xDFFF && HighSurrogate ) Cp = 0x10000 + ( ( HighSurrogate - 0xD800 ) << 10 ) + ( Ch - 0xDC00 );
             HighSurrogate = 0;
-            bool Wanted = WantsKeys();
+            bool Wanted = WantsKeys( C );
             if ( Cp >= 32 ) C.OnText( Cp );
             return Wanted;
         }
         case WM_SETCURSOR:
-            if ( LOWORD( L ) == HTCLIENT ) { ApplyCursor(); return true; }
+            if ( LOWORD( L ) == HTCLIENT ) { ApplyCursor( St->CurCursor ); return true; }
             return false;
         case WM_KILLFOCUS:
             ButtonsDown = 0;
+            C.OnComposition( {} );
             return false;
         case WM_PAINT:
             C.RequestFrame();
+            return false;
+        case WM_DROPFILES: // (only when OLE drag & drop couldn't be registered)
+        {
+            HDROP D = (HDROP)W;
+            POINT P = {};
+            DragQueryPoint( D, &P );
+            float S = ScaleOf( H );
+            C.OnFilesDrop( { P.x / S, P.y / S }, DropPaths( D ) );
+            DragFinish( D );
+            return true;
+        }
+        // ---- IME: tg draws the text being composed at the caret; the candidate list follows the caret
+        case WM_IME_STARTCOMPOSITION:
+            if ( !Typing( C ) ) return false;
+            PlaceIme( H, C );
+            return true; // (no system composition window)
+        case WM_IME_COMPOSITION:
+        {
+            if ( !Typing( C ) ) return false;
+            HIMC Imc = ImmGetContext( H );
+            if ( !Imc ) return false;
+            if ( L & GCS_RESULTSTR ) // committed: type it
+            {
+                LONG Bytes = ImmGetCompositionStringW( Imc, GCS_RESULTSTR, nullptr, 0 );
+                std::wstring R( size_t( Bytes > 0 ? Bytes : 0 ) / sizeof( wchar_t ), L'\0' );
+                if ( Bytes > 0 ) ImmGetCompositionStringW( Imc, GCS_RESULTSTR, R.data(), DWORD( Bytes ) );
+                C.OnComposition( {} );
+                for ( size_t i = 0; i < R.size(); i++ )
+                {
+                    uint32_t Cp = R[ i ];
+                    if ( Cp >= 0xD800 && Cp <= 0xDBFF && i + 1 < R.size() ) Cp = 0x10000 + ( ( Cp - 0xD800 ) << 10 ) + ( R[ ++i ] - 0xDC00 );
+                    if ( Cp >= 32 ) C.OnText( Cp );
+                }
+            }
+            if ( L & GCS_COMPSTR )
+            {
+                LONG Bytes = ImmGetCompositionStringW( Imc, GCS_COMPSTR, nullptr, 0 );
+                std::wstring Cs( size_t( Bytes > 0 ? Bytes : 0 ) / sizeof( wchar_t ), L'\0' );
+                if ( Bytes > 0 ) ImmGetCompositionStringW( Imc, GCS_COMPSTR, Cs.data(), DWORD( Bytes ) );
+                int Cur = -1;
+                if ( L & GCS_CURSORPOS )
+                {
+                    LONG Wc = ImmGetCompositionStringW( Imc, GCS_CURSORPOS, nullptr, 0 );
+                    if ( Wc >= 0 && size_t( Wc ) <= Cs.size() ) Cur = int( Narrow( Cs.c_str(), int( Wc ) ).size() );
+                }
+                C.OnComposition( Narrow( Cs.c_str(), int( Cs.size() ) ), Cur );
+            }
+            ImmReleaseContext( H, Imc );
+            PlaceIme( H, C );
+            return true;
+        }
+        case WM_IME_ENDCOMPOSITION:
+            C.OnComposition( {} );
+            return Typing( C );
+        case WM_IME_SETCONTEXT:
             return false;
         default:
             return false;
@@ -270,13 +496,14 @@ namespace tg::win32
         float S = ScaleOf( H );
         C.SetViewport( { ( R.right - R.left ) / S, ( R.bottom - R.top ) / S }, S );
 
+        State* St = Find( H );
         Cursor Want = C.GetCursor();
-        if ( Want != CurCursor )
+        if ( St && Want != St->CurCursor )
         {
-            CurCursor = Want;
+            St->CurCursor = Want;
             POINT P;
             GetCursorPos( &P );
-            if ( WindowFromPoint( P ) == H ) ApplyCursor();
+            if ( WindowFromPoint( P ) == H ) ApplyCursor( Want );
         }
     }
 

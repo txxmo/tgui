@@ -26,6 +26,19 @@ namespace tg
         bool Light = false;      // start with the light palette
     };
 
+    // Another OS window of the same App: its own widget tree and Context, sharing fonts and theme.
+    class OsWindow
+    {
+    public:
+        virtual ~OsWindow() = default;
+        virtual Container& Main() = 0;
+        virtual Context& GetContext() = 0;
+        virtual void SetTitle( const std::string& Title ) = 0;
+        virtual void Close() = 0;          // closes it at the end of this loop iteration
+        virtual bool IsOpen() const = 0;
+        std::function<void()> OnClose;     // the user (or Close()) closed it; the object goes away right after
+    };
+
     class App
     {
     public:
@@ -47,13 +60,23 @@ namespace tg
         Context& GetContext();
         Renderer& GetRenderer();
 
+        // More OS windows. Each has its own Main() area; widgets, popups and windows work as usual inside.
+        //   auto& W = App.NewWindow( "Inspector", 420, 600 );
+        //   W.Main().Heading( "Inspector" );
+        OsWindow& NewWindow( std::string Title, int Width = 640, int Height = 480 );
+        // Move W (with everything under it) into its own OS window; closing that window puts it back
+        // where it was. Width/Height 0 = W's current size.
+        OsWindow& PopOut( Widget& W, std::string Title, int Width = 0, int Height = 0 );
+        size_t WindowCount() const; // open OS windows, the main one included
+
         std::function<void()> OnUpdate; // runs on the UI thread each loop iteration, before drawing
         void SetContinuous( bool On );
         void Quit();
         int Run();
 
+        struct Impl; // (backend internals)
+
     private:
-        struct Impl;
         std::unique_ptr<Impl> P;
     };
 }

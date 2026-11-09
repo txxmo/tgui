@@ -51,6 +51,7 @@ namespace tg
         void Draw( DrawList& D ) override;
         bool OnEvent( const Event& E ) override;
         bool WantsKeyboard() const override { return true; } // letters are text, not hotkeys / binds
+        Rect CaretRect() const override { return CaretAt; }
         Cursor GetCursor() const override { return Cursor::IBeam; }
 
     private:
@@ -73,5 +74,6 @@ namespace tg
         void EraseSelection();
         void Changed();
         void KeepCaretVisible();
+        Rect CaretAt;
     };
 }

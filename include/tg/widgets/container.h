@@ -39,6 +39,7 @@ namespace tg
     class TreeView;
     class Collapsible;
     class Splitter;
+    class DockSpace;
     class Spinner;
     class Badge;
     class Link;
@@ -108,6 +109,7 @@ namespace tg
         tg::TreeView& Tree();
         tg::Collapsible& Collapsible( std::string Title, bool* Open = nullptr );
         tg::Splitter& Split( Dir Direction = Dir::Row, float Ratio = 0.5f );
+        tg::DockSpace& Dock(); // IDE-style docking panels (tg/widgets/dock.h)
         tg::Spinner& Spinner( float Size = 18 );
         tg::Badge& Badge( std::string Text, Paint Fill = Tok::Accent );
         tg::Link& Link( std::string Text, std::function<void()> OnClick = {} );

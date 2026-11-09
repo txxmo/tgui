@@ -30,6 +30,7 @@
 #include "tg/widgets/number.h"
 #include "tg/widgets/rangeslider.h"
 #include "tg/widgets/splitter.h"
+#include "tg/widgets/dock.h"
 #include "tg/widgets/treeview.h"
 #include "tg/widgets/keybind.h"
 #include "tg/widgets/slider.h"
@@ -194,6 +195,7 @@ namespace tg
         return C;
     }
     tg::Splitter& Container::Split( Dir D, float Ratio ) { return Add<tg::Splitter>( D, Ratio ); }
+    tg::DockSpace& Container::Dock() { return Add<tg::DockSpace>(); }
     tg::Spinner& Container::Spinner( float Size ) { return Add<tg::Spinner>( Size ); }
     tg::Badge& Container::Badge( std::string Text, Paint Fill ) { return Add<tg::Badge>( std::move( Text ), Fill ); }
     tg::Link& Container::Link( std::string Text, std::function<void()> Fn ) { return Add<tg::Link>( std::move( Text ), std::move( Fn ) ); }

@@ -16,7 +16,22 @@ int main( int Argc, char** Argv )
     tg::Context& Ctx = App.GetContext();
 
     DemoApp Demo;
+    // Desktop tab: "Pop out notes" moves a docked panel into its own OS window and back
+    Demo.PopOut = [ & ]( tg::DockPanel& P ) {
+        Demo.DockW->Close( P );
+        auto& W = App.PopOut( P, "Notes", 520, 420 );
+        tg::DockPanel* Pp = &P;
+        W.OnClose = [ &Demo, &Ctx, Pp ] { Ctx.Post( [ &Demo, Pp ] { Demo.DockW->Show( *Pp ); } ); }; // after it's back home
+    };
     Demo.Build( Ctx, App.Main() );
+
+    // tray icon with a menu (Windows; elsewhere TrayIcon::Supported() is false and this does nothing)
+    tg::TrayIcon Tray( "tg showcase" );
+    Tray.Items = { { "Desktop tab", [ & ] { Demo.Tabs->Select( 12 ); } },
+                   { "Send a notification", [ & ] { Tray.Balloon( "tg showcase", "Hello from the tray" ); } },
+                   {},
+                   { "Quit", [ & ] { App.Quit(); } } };
+    Tray.OnClick = [ & ] { Demo.Tabs->Select( 12 ); };
     for ( int i = 1; i + 1 < Argc; i++ ) // tg_showcase --tab 11   (open on a tab)
         if ( !std::strcmp( Argv[ i ], "--tab" ) ) Demo.Tabs->Select( std::atoi( Argv[ i + 1 ] ) );
 

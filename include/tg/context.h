@@ -118,6 +118,28 @@ namespace tg
         void CancelDrag();
         float DragThreshold = 6;
 
+        // ---- files dragged in from the OS. Widgets take them like any drop, Type "files":
+        //   Zone.AcceptDrop = []( const tg::DragData& D ) { return D.Type == "files"; };
+        //   Zone.OnDrop = [&]( const tg::DragData& D, tg::Vec2 ) { for ( auto& P : D.Paths ) Open( P ); };
+        // Platform side: OnFilesOver while the drag moves over the window (Win32; GLFW only reports the
+        // drop), OnFilesLeave when it leaves, OnFilesDrop on release (true = someone took them).
+        bool OnFilesOver( Vec2 Pos, const std::vector<std::string>& Paths );
+        void OnFilesLeave();
+        bool OnFilesDrop( Vec2 Pos, std::vector<std::string> Paths );
+        std::function<void( const std::vector<std::string>& Paths, Vec2 Pos )> OnFiles; // no widget wanted them
+        bool FilesOver() const { return DragOn && ExternalDrag; }
+
+        // ---- IME (Chinese / Japanese / Korean ...): the platform reports the text being composed; tg draws
+        //      it at the focused widget's caret until it's committed (as OnText) or cancelled ("").
+        void OnComposition( std::string Text, int CursorBytes = -1 );
+        const std::string& Composition() const { return Compose; }
+        Rect CaretRect() const; // focused text widget's caret in UI units (candidate window placement); empty if none
+
+        // ---- several OS windows: a second Context for another window (its own renderer) that uses this
+        //      one's fonts. The host must outlive it.   Context Second( SecondRenderer, MainCtx );
+        Context( Renderer& R, Context& ShareFontsWith );
+        FontAtlas& Atlas() { return FontHost ? FontHost->Fonts : Fonts; }
+
         // ---- developer tools: F12 = inspector (hover anything), Ctrl+F12 = performance stats
         bool ShowInspector = false, ShowStats = false;
         bool DevToolKeys = true;
@@ -129,6 +151,7 @@ namespace tg
 
         // Called by the tree when a widget is destroyed so we never keep dangling pointers.
         void Forget( Widget* W );
+        void ForgetTransient( Widget* W ); // hover / press / focus / capture only (the widget moves, it isn't gone)
 
         // ---- app hooks ----
         std::function<void( const std::string& )> SetClipboard;
@@ -204,7 +227,14 @@ namespace tg
         double TimerNow() const;
         void RunTimers();
         Widget* KeyHotW = nullptr;
-        bool DragOn = false;
+        bool DragOn = false, ExternalDrag = false;
+        std::string Compose;
+        int ComposeCursor = -1;
+        void DrawComposition();
+        Context* FontHost = nullptr;
+        TextureId SharedTex = 0;
+        uint64_t SharedGen = 0;
+        int SharedW = 0, SharedH = 0;
         DragData DragNow;
         Widget *DragSrc = nullptr, *DropW = nullptr;
         Vec2 PressAt;

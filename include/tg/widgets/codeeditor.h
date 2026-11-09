@@ -70,6 +70,7 @@ namespace tg
         bool OnEvent( const Event& E ) override;
         Cursor GetCursor() const override { return Cursor::IBeam; }
         bool WantsKeyboard() const override { return true; }
+        Rect CaretRect() const override { return CaretAt; }
 
     private:
         struct Sel { size_t Caret = 0, Anchor = 0; float WantCol = -1; };
@@ -103,5 +104,6 @@ namespace tg
         void ToggleComment();
         void Indent( bool Out );
         void AddNextOccurrence();
+        Rect CaretAt;
     };
 }

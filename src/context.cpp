@@ -67,11 +67,18 @@ namespace tg
         Fonts.RequestFrame = [ this ] { FrameRequested = true; };
     }
 
+    Context::Context( Renderer& Rend, Context& Host ) : Context( Rend )
+    {
+        FontHost = &Host;
+        Scale = Host.Scale;
+    }
+
     Context::~Context()
     {
         OverlayWidget.reset(); // popups first: they notify their owners, which live in the root
         RootWidget.reset();
         if ( Fonts.Texture ) R.DestroyTexture( Fonts.Texture );
+        if ( SharedTex ) R.DestroyTexture( SharedTex );
     }
 
     // Mono fonts (embedded) + the system emoji font (FreeType builds) for every font setup.
@@ -138,8 +145,8 @@ namespace tg
 
     void Context::SetViewport( Vec2 Size, float S )
     {
-        if ( S != Scale && Fonts.Texture )
-            Fonts.Build( R, S ); // re-rasterize for the new DPI
+        if ( S != Scale && Fonts.Texture && !FontHost )
+            Fonts.Build( R, S ); // re-rasterize for the new DPI (a window sharing fonts uses its host's)
         if ( Size == Viewport && S == Scale ) return;
         Viewport = Size;
         Scale = S;
@@ -194,7 +201,9 @@ namespace tg
         Widget* Start = HitTestAll( P );
         if ( Start )
             if ( Widget* D = DeepestIn( Start, P ) ) return D;
-        if ( Widget* D = DeepestIn( OverlayWidget.get(), P ); D && D != OverlayWidget.get() ) return D;
+        // (a non-interactive overlay layer hit only on its own empty area — the toast stack — is see-through)
+        if ( Widget* D = DeepestIn( OverlayWidget.get(), P ); D && D != OverlayWidget.get() && !( D->GetParent() == OverlayWidget.get() && !D->Interactive ) )
+            return D;
         return DeepestIn( RootWidget.get(), P );
     }
 
@@ -584,10 +593,101 @@ namespace tg
 
     void Context::CancelDrag()
     {
-        DragOn = false;
+        DragOn = ExternalDrag = false;
         DragNow = DragData{};
         DragSrc = DropW = nullptr;
         RequestFrame();
+    }
+
+    // ------------------------------------------------------------ files from the OS
+
+    bool Context::OnFilesOver( Vec2 Pos, const std::vector<std::string>& Paths )
+    {
+        Mouse = Pos;
+        if ( !DragOn || !ExternalDrag )
+        {
+            if ( DragOn ) CancelDrag();
+            DragOn = ExternalDrag = true;
+            DragNow = DragData{};
+            DragNow.Type = "files";
+        }
+        if ( !Paths.empty() && DragNow.Paths != Paths )
+        {
+            DragNow.Paths = Paths;
+            DragNow.Text.clear();
+            for ( auto& P : Paths ) DragNow.Text += ( DragNow.Text.empty() ? "" : "\n" ) + P;
+            if ( Paths.size() == 1 )
+            {
+                size_t Sl = Paths[ 0 ].find_last_of( "/\\" );
+                DragNow.Label = Sl == std::string::npos ? Paths[ 0 ] : Paths[ 0 ].substr( Sl + 1 );
+            }
+            else DragNow.Label = std::to_string( Paths.size() ) + " files";
+        }
+        DropW = nullptr;
+        for ( Widget* W = DeepestAt( Mouse ); W; W = W->GetParent() )
+            if ( W->AcceptDrop && W->OnDrop && W->AcceptDrop( DragNow ) ) { DropW = W; break; }
+        RequestFrame();
+        return DropW != nullptr || OnFiles != nullptr;
+    }
+
+    void Context::OnFilesLeave()
+    {
+        if ( DragOn && ExternalDrag ) CancelDrag();
+    }
+
+    bool Context::OnFilesDrop( Vec2 Pos, std::vector<std::string> Paths )
+    {
+        OnFilesOver( Pos, Paths );
+        Widget* T = DropW;
+        DragData D = std::move( DragNow );
+        CancelDrag();
+        if ( T && T->OnDrop )
+        {
+            T->OnDrop( D, Pos );
+            return true;
+        }
+        if ( OnFiles )
+        {
+            OnFiles( D.Paths, Pos );
+            return true;
+        }
+        return false;
+    }
+
+    // ------------------------------------------------------------ IME
+
+    void Context::OnComposition( std::string Text, int Cur )
+    {
+        Compose = std::move( Text );
+        ComposeCursor = Cur;
+        RequestFrame();
+    }
+
+    Rect Context::CaretRect() const
+    {
+        if ( !FocusW ) return {};
+        Rect C = FocusW->CaretRect();
+        if ( C.w <= 0 && C.h <= 0 ) return {};
+        return C;
+    }
+
+    void Context::DrawComposition()
+    {
+        Theme& Th = GetTheme();
+        Rect C = CaretRect();
+        const Font& F = *Th.Body;
+        if ( C.h <= 0 ) C = { Mouse.x, Mouse.y, 1, F.LineHeight };
+        float W = F.Width( Compose );
+        Rect B = { C.x - 3, C.y + ( C.h - F.LineHeight ) * 0.5f - 2, W + 6, F.LineHeight + 4 };
+        B.x = std::min( B.x, Viewport.x - B.w - 2 );
+        List.RectFilled( B, Th[ Tok::Raised ], 4 );
+        List.Text( F, { B.x + 3, B.y + 2 }, Compose, Th[ Tok::Text ] );
+        List.RectFilled( { B.x + 3, B.Bottom() - 3, W, 1 }, Th[ Tok::Accent ] ); // the usual underline
+        if ( ComposeCursor >= 0 && size_t( ComposeCursor ) <= Compose.size() )
+        {
+            float X = B.x + 3 + F.Width( std::string_view( Compose ).substr( 0, size_t( ComposeCursor ) ) );
+            List.RectFilled( { X, B.y + 2, 1, F.LineHeight }, Th[ Tok::Text ] );
+        }
     }
 
     void Context::DrawDrag()
@@ -703,6 +803,17 @@ namespace tg
         FocusW = W;
         if ( FocusW ) { E.Type = EventType::FocusIn; FocusW->OnEvent( E ); }
         RequestFrame();
+    }
+
+    void Context::ForgetTransient( Widget* W )
+    {
+        if ( HoverW == W ) HoverW = nullptr;
+        if ( PressW == W ) PressW = nullptr;
+        if ( CaptureW == W ) CaptureW = nullptr;
+        if ( TipW == W ) TipW = nullptr;
+        if ( FocusW == W ) FocusW = nullptr;
+        if ( KeyHotW == W ) KeyHotW = nullptr;
+        if ( DropW == W ) DropW = nullptr;
     }
 
     void Context::Forget( Widget* W )
@@ -893,8 +1004,24 @@ namespace tg
         }
 
         LayoutCpu = Clock() - T0;
-        Fonts.Maintain( R ); // grow the glyph atlas now if on-demand glyphs ran out of room last frame
-        List.Reset( { 0, 0, Viewport.x, Viewport.y }, Scale, Fonts.Texture, Fonts.WhiteUV );
+        TextureId AtlasTex = Fonts.Texture;
+        if ( FontHost ) // our copy of the host's atlas, in our renderer
+        {
+            FontAtlas& A = FontHost->Fonts;
+            if ( &FontHost->R == &R ) AtlasTex = A.Texture; // same renderer (one D3D device, several swapchains)
+            else if ( !SharedTex || SharedW != A.Width || SharedH != A.Height )
+            {
+                if ( SharedTex ) R.DestroyTexture( SharedTex );
+                SharedTex = A.Width ? R.CreateTexture( A.Width, A.Height, A.Pixels.data() ) : 0;
+                SharedW = A.Width;
+                SharedH = A.Height;
+                SharedGen = A.Generation;
+            }
+            if ( &FontHost->R != &R ) AtlasTex = SharedTex;
+            if ( A.WantsGrow() ) FontHost->RequestFrame(); // the host grows it; we pick it up next frame
+        }
+        else Fonts.Maintain( R ); // grow the glyph atlas now if on-demand glyphs ran out of room last frame
+        List.Reset( { 0, 0, Viewport.x, Viewport.y }, Scale, AtlasTex, Atlas().WhiteUV );
         List.Time = float( Now );
         List.RectFilled( { 0, 0, Viewport.x, Viewport.y }, GetTheme()[ Tok::Background ] );
         RootWidget->Draw( List );
@@ -907,6 +1034,7 @@ namespace tg
         }
         DrawTooltip();
         if ( DragOn ) DrawDrag();
+        if ( !Compose.empty() ) DrawComposition();
         FrameCpu = Clock() - T0;
         if ( ShowInspector || ShowStats ) DrawDevTools();
         auto Hooks = FrameHooks; // hooks may add/remove hooks; they see the same FrameIndex() as Draw did
@@ -917,7 +1045,18 @@ namespace tg
 
     void Context::Render( Vec2 Fb )
     {
-        Fonts.Upload( R ); // glyphs rasterized on demand this frame (emoji, CJK...)
+        if ( FontHost )
+        {
+            FontAtlas& A = FontHost->Fonts;
+            if ( &FontHost->R == &R ) A.Upload( R ); // glyphs we rasterized go up before we draw with them
+            else if ( SharedTex && A.Generation != SharedGen && A.Width == SharedW && A.Height == SharedH )
+            {
+                R.UpdateTexture( SharedTex, A.Width, A.Height, A.Pixels.data() );
+                SharedGen = A.Generation;
+            }
+            if ( &FontHost->R != &R && ( A.Width != SharedW || A.Height != SharedH ) ) RequestFrame(); // it grew: next frame re-creates
+        }
+        else Fonts.Upload( R ); // glyphs rasterized on demand this frame (emoji, CJK...)
         for ( auto& O : PendingOffscreen ) R.RenderTo( O.Target, *O.List, O.Size, Scale ); // cached panels first
         PendingOffscreen.clear();
         R.Render( List, Fb, Scale );

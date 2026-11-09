@@ -149,6 +149,8 @@ namespace tg
         TextureId Texture = 0;
         Vec2 WhiteUV;
         size_t GlyphCount() const { return Loaded; }
+        bool WantsGrow() const { return WantGrow; }
+        uint64_t Generation = 0; // bumps whenever Pixels change (other windows re-upload their copy)
         bool HasColorFallback() const;
 
     private:

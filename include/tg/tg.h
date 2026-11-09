@@ -48,6 +48,8 @@
 #include "widgets/searchbox.h"
 #include "widgets/slider.h"
 #include "widgets/splitter.h"
+#include "widgets/dock.h"
+#include "os.h"
 #include "widgets/steps.h"
 #include "widgets/swatches.h"
 #include "widgets/table.h"

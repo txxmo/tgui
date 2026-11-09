@@ -674,6 +674,21 @@ Adv.Checkbox( "Verbose logging", &Verbose );
 
 Click the header to fold the section open or closed; the height animates. `IsOpen()`, `SetOpen()`, `OnToggle( bool )`, `Bind`. `Frame`: `HeaderHeight`, `Radius`, colors.
 
+### DockSpace
+
+IDE-style docking: tabs in a tree of splits that the user can drag around, float, split, close, reopen, and save or restore as a string.
+
+```cpp
+auto& Dock = Page.Dock();
+auto& Files = Dock.AddPanel( "Files" );
+auto& Code = Dock.AddPanel( "Editor" );
+Dock.Dock( Files, &Code, tg::DockSide::Left, 0.25f );
+```
+
+See [Desktop integration](desktop.md#docking-dockspace) for the mouse controls and the full API.
+
+<img src="docking.png" width="640">
+
 ### Splitter
 
 ```cpp

@@ -758,6 +758,7 @@ namespace tg
             for ( int y = 0; y < B.H; y++ )
                 std::memcpy( &Pixels[ size_t( R.y + Reserved + 1 + y ) * Width + R.x + 1 ], &B.Px[ size_t( y ) * B.W ], size_t( B.W ) * 4 );
             Dirty = true;
+            Generation++;
         }
 
         Glyph& G = Out;
@@ -865,6 +866,7 @@ namespace tg
         if ( Texture ) R.DestroyTexture( Texture );
         Texture = R.CreateTexture( Width, Height, Pixels.data() );
         Dirty = false;
+        Generation++;
         return true;
     }
 
@@ -876,6 +878,7 @@ namespace tg
         if ( Texture ) R.DestroyTexture( Texture );
         Texture = R.CreateTexture( Width, Height, Pixels.data() );
         Dirty = false;
+        Generation++;
     }
 
     void FontAtlas::Upload( Renderer& R )

@@ -1223,6 +1223,7 @@ namespace tg
         if ( CursorVisible && View == 0 )
         {
             Rect Cr = { In.x + Cx * CellW, In.y + Cy * CellH, CellW, CellH };
+            CaretAt = Cr;
             const TermCell& Ce = Screen[ size_t( Cy ) ][ size_t( Cx ) ];
             if ( Focused )
             {
