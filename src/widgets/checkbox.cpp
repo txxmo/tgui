@@ -1,5 +1,8 @@
 // Checkbox. Want a different look? Everything visual is in Draw() below, top to bottom.
 #include "tg/widgets/checkbox.h"
+#include "tg/widgets/choice.h"
+#include "tg/widgets/container.h"
+#include "tg/binds.h"
 #include "tg/draw.h"
 #include "tg/font.h"
 #include <algorithm>
@@ -76,4 +79,19 @@ namespace tg
         }
         return false;
     }
+
+    // ---- key binds: on / off
+    static void OnOffEditor( Container& Into, BindValue& V )
+    {
+        if ( !BindHas( V ) ) V.V.assign( 1, 1.0 );
+        auto& S = Into.Segmented( { "On", "Off" } );
+        S.SetIndex( V.V[ 0 ] >= 0.5 ? 0 : 1 );
+        S.OnChange = [ &V ]( int i ) { V.V = { i == 0 ? 1.0 : 0.0 }; };
+    }
+
+    BindValue Checkbox::BindGet() const { return { { IsChecked() ? 1.0 : 0.0 } }; }
+    BindValue Checkbox::BindDefault() const { return { { IsChecked() ? 0.0 : 1.0 } }; } // a bind usually flips it
+    void Checkbox::BindSet( const BindValue& V ) { if ( BindHas( V ) ) SetChecked( V.V[ 0 ] >= 0.5 ); }
+    void Checkbox::BindEditor( Container& Into, BindValue& V ) { OnOffEditor( Into, V ); }
+    std::string Checkbox::BindText( const BindValue& V ) const { return BindHas( V ) && V.V[ 0 ] >= 0.5 ? "on" : "off"; }
 }

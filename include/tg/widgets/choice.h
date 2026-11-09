@@ -40,6 +40,12 @@ namespace tg
         void Draw( DrawList& D ) override;
         bool OnEvent( const Event& E ) override;
         Cursor GetCursor() const override { return Cursor::Hand; }
+        // key binds (right-click -> "Add key bind")
+        bool CanBind() const override { return true; }
+        BindValue BindGet() const override;
+        void BindSet( const BindValue& V ) override;
+        void BindEditor( Container& Into, BindValue& V ) override;
+        std::string BindText( const BindValue& V ) const override;
 
     private:
         int Own = 0, HoverIdx = -1, PressIdx = -1;
@@ -76,6 +82,12 @@ namespace tg
         void Draw( DrawList& D ) override;
         bool OnEvent( const Event& E ) override;
         Cursor GetCursor() const override { return Cursor::Hand; }
+        // key binds (right-click -> "Add key bind")
+        bool CanBind() const override { return true; }
+        BindValue BindGet() const override;
+        void BindSet( const BindValue& V ) override;
+        void BindEditor( Container& Into, BindValue& V ) override;
+        std::string BindText( const BindValue& V ) const override;
 
     private:
         int Own = 0, PressIdx = -1;

@@ -36,6 +36,11 @@ namespace tg
         float GetValue() const { return Bind ? *Bind : Own; }
         void SetValue( float V );
         void StepBy( float Steps );
+        bool CanBind() const override { return true; }
+        BindValue BindGet() const override;
+        void BindSet( const BindValue& V ) override;
+        void BindEditor( Container& Into, BindValue& V ) override;
+        std::string BindText( const BindValue& V ) const override;
         TextInput& Field() { return *Text; }
 
         Vec2 Measure( float AvailWidth ) override;

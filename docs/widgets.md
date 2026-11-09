@@ -168,6 +168,56 @@ W.Date( "Expires", &Expires );
 
 The popup is a month calendar (Monday first): ‹ › or the wheel change the month, today is outlined, and a "Today" shortcut sits underneath. `tg::Date` has `Year`, `Month`, `Day`, `Today()`, `DaysInMonth()`, `Weekday()` and `ToString()` ("2026-11-07"). `Calendar` is the grid alone, for embedding.
 
+### Key binds on any control
+
+Right-click a checkbox, toggle, slider, number field, combo, multicombo, radio group, segmented control, color picker or button, and choose **Add key bind...**. The person using your app picks:
+
+- **a key**: any keyboard key or mouse button, side buttons included.
+- **a trigger:**
+
+| Trigger | What happens |
+|---|---|
+| Hold | while the key is held the control has the bound value; letting go puts the old value back |
+| Toggle | press: the bound value; press again: back to what it was |
+| Off hold | the bound value all the time, *except* while the key is held |
+| Press | each press sets the value; nothing is put back |
+
+- **the value** the control takes, edited with a control of the same kind:
+
+| Control | Bound value |
+|---|---|
+| Checkbox, Toggle | on or off |
+| Slider, NumberInput | a number ("when the key is down, volume = 20") |
+| Combo, RadioGroup, Segmented | one option |
+| MultiCombo | each item on, off, or left alone. Only the items the bind touches are put back |
+| ColorPicker | a color |
+| Button | the key clicks it |
+
+![Key bind editor](bind_editor.png)
+
+Binds change controls the same way a click does: your bound variables (`bool*`, `float*`...) update and `OnChange` runs. The right-click menu lists a control's binds (click one to edit it) and can remove them. A control can have several binds. Binds don't fire while someone is typing in a text field or the terminal.
+
+You don't have to write any code for this, but you can drive it, save it and restore it:
+
+```cpp
+Ctx.Binds.Add( AimCheckbox, tg::Key::Mouse5, tg::BindTrigger::Hold, { { 1 } } );
+Ctx.Binds.Add( FovSlider, tg::Key::Z, tg::BindTrigger::Toggle, { { 30 } } );
+
+Ctx.Binds.OnEdit = [&] { WriteFile( "binds.txt", Ctx.Binds.Save() ); }; // after any change made in the UI
+Ctx.Binds.Load( ReadFile( "binds.txt" ), Ctx.Root() );                  // at startup; matched by label
+```
+
+| API | |
+|---|---|
+| `Ctx.Binds.Add( W, Key, Trigger, Value )`, `Update`, `Remove( Id )`, `RemoveAll( W )`, `Clear()`, `For( W )`, `All()` | |
+| `Save()` / `Load( Text, Root )` | one line per bind: label, key, trigger, values. `Load` replaces the current binds and finds controls by their label |
+| `OnEdit` | called after the user adds, edits or removes a bind |
+| `Enabled` | `false` turns the feature off (no menu items, keys do nothing) |
+| `W.Bindable = false` | no bind menu on one control |
+| `Describe( B )`, `OpenEditor( W )` | "F · hold → 20"; open the editor yourself |
+
+**Your own widgets** opt in by overriding `CanBind()`, `BindGet()`, `BindSet()` and optionally `BindEditor()`, `BindText()`, `BindName()` and `BindDefault()`. `src/widgets/checkbox.cpp` is about a dozen lines. A `BindValue` is a list of doubles; NaN means "leave this part alone".
+
 ### Keybind
 
 ```cpp

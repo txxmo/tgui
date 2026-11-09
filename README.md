@@ -156,6 +156,7 @@ Groups.Group( "Example Group 2" ).Button( "Print", [] { ... } );
 | Dialog | `tg::Confirm( Ctx, title, msg, { "Cancel", "Delete" }, fn )` | modal; Enter / Escape; custom bodies via `OpenDialog` |
 | Toast | `tg::Toast( Ctx, "Saved", tg::Tok::Success )` | notifications that fade out |
 | Spinner / Badge / Link | `W.Spinner()`, `W.Badge( "LIVE", tg::Tok::Danger )`, `W.Link( "docs", fn )` | |
+| Key binds on anything | right-click a control → **Add key bind** | hold / toggle / off hold / press; checkbox on/off, slider value, combo option, multicombo items, color, button click; `Ctx.Binds.Save()` / `Load()` |
 | Keybind | `W.Keybind( "Aim key", &key )` | click, press any key or mouse button (incl. side buttons); Escape unbinds; right-click for hold / toggle / always; `IsActive()` |
 | ProgressBar | `W.Progress( 0.4f )` | optional warn/hot thresholds |
 | Table | `W.Table( { "Name", "CPU", "Memory" } )` | sortable headers (numbers sort as numbers), drag-to-resize columns, None/Single/Multi row select, custom cells, only visible rows drawn |

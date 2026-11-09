@@ -226,14 +226,18 @@ namespace tg
     bool Context::OpenContextMenu()
     {
         for ( Widget* W = DeepestAt( Mouse ); W; W = W->GetParent() )
-            if ( W->ContextMenu )
+        {
+            bool Bind = Binds.Enabled && W->Bindable && W->CanBind();
+            if ( W->ContextMenu || Bind )
             {
                 ClosePopups(); // one menu at a time
                 Menu& M = OpenMenu( *W, Mouse );
                 M.OwnerToggles = false; // the owner can be a whole tree/table: clicking it elsewhere must close the menu
-                W->ContextMenu( M );
+                if ( W->ContextMenu ) W->ContextMenu( M );
+                if ( Bind ) Binds.AddMenuItems( *W, M ); // "Add key bind..." on every bindable control
                 return true;
             }
+        }
         return false;
     }
 
@@ -274,9 +278,13 @@ namespace tg
         if ( i >= size_t( Key::Count ) ) return false;
         if ( Down && !KeyState[ i ] ) PressCount[ i ]++;
         KeyState[ i ] = Down;
-        if ( CaptureW || !OnKeyEvent ) return false;
+        if ( CaptureW ) return false; // a Keybind is listening: it gets the key, nothing fires
         bool IsMouse = K >= Key::Mouse1 && K <= Key::Mouse5;
-        if ( !IsMouse && FocusW ) return false; // typing in a text field: letters are text, not hotkeys
+        // typing in a text field / terminal: letters are text, not hotkeys. Key releases always go through
+        // so a Hold bind never gets stuck because focus moved while the key was down.
+        if ( !IsMouse && Down && FocusW && FocusW->WantsKeyboard() ) return false;
+        Binds.OnKey( K, Down );
+        if ( !OnKeyEvent ) return false;
         return OnKeyEvent( K, Down );
     }
 
@@ -407,6 +415,7 @@ namespace tg
         if ( CaptureW == W ) CaptureW = nullptr;
         if ( TipW == W ) TipW = nullptr;
         if ( FocusW == W ) FocusW = nullptr;
+        Binds.Forget( W );
     }
 
     Cursor Context::GetCursor() const

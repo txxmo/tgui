@@ -50,6 +50,7 @@ namespace tg
         void Arrange( Rect R ) override;
         void Draw( DrawList& D ) override;
         bool OnEvent( const Event& E ) override;
+        bool WantsKeyboard() const override { return true; } // letters are text, not hotkeys / binds
         Cursor GetCursor() const override { return Cursor::IBeam; }
 
     private:

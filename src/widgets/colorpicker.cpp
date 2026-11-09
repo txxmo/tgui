@@ -1,4 +1,8 @@
 #include "tg/widgets/colorpicker.h"
+#include <memory>
+#include "tg/widgets/choice.h"
+#include "tg/widgets/container.h"
+#include "tg/binds.h"
 #include "tg/draw.h"
 #include "tg/font.h"
 #include "tg/widgets/box.h"
@@ -317,5 +321,26 @@ namespace tg
         Panel.SetColor( GetColor() );
         Panel.OnChange = [ this ]( Color C ) { SetColor( C ); };
         return true;
+    }
+
+    // ---- key binds: a color
+    BindValue ColorPicker::BindGet() const { Color C = GetColor(); return { { double( C.r ), double( C.g ), double( C.b ), double( C.a ) } }; }
+    void ColorPicker::BindSet( const BindValue& V )
+    {
+        if ( V.V.size() >= 4 && BindHas( V ) ) SetColor( Color( uint8_t( V.V[ 0 ] ), uint8_t( V.V[ 1 ] ), uint8_t( V.V[ 2 ] ), uint8_t( V.V[ 3 ] ) ) );
+    }
+    void ColorPicker::BindEditor( Container& Into, BindValue& V )
+    {
+        if ( V.V.size() < 4 ) V = BindGet();
+        auto C = std::make_shared<Color>( Color( uint8_t( V.V[ 0 ] ), uint8_t( V.V[ 1 ] ), uint8_t( V.V[ 2 ] ), uint8_t( V.V[ 3 ] ) ) );
+        auto& P = Into.ColorPicker( "Color", C.get(), ShowAlpha );
+        P.OnChange = [ C, &V ]( Color X ) { V.V = { double( X.r ), double( X.g ), double( X.b ), double( X.a ) }; };
+    }
+    std::string ColorPicker::BindText( const BindValue& V ) const
+    {
+        if ( V.V.size() < 4 ) return "";
+        char B[ 16 ];
+        std::snprintf( B, sizeof( B ), "#%02X%02X%02X", unsigned( V.V[ 0 ] ), unsigned( V.V[ 1 ] ), unsigned( V.V[ 2 ] ) );
+        return B;
     }
 }

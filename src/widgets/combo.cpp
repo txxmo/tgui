@@ -1,4 +1,9 @@
 #include "tg/widgets/combo.h"
+#include <memory>
+#include "tg/widgets/choice.h"
+#include "tg/widgets/container.h"
+#include "tg/widgets/label.h"
+#include "tg/binds.h"
 #include "tg/draw.h"
 #include "tg/font.h"
 #include "tg/widgets/listitem.h"
@@ -192,5 +197,54 @@ namespace tg
         for ( int i : Idx ) Joined += ( Joined.empty() ? "" : ", " ) + Items[ i ];
         if ( GetTheme().Body->Width( Joined ) <= MaxWidth ) return Joined;
         return std::to_string( Idx.size() ) + " selected";
+    }
+
+    // ---- key binds: Combo = an option; MultiCombo = each item on / off / left alone
+    BindValue Combo::BindGet() const { return { { double( GetIndex() ) } }; }
+    void Combo::BindSet( const BindValue& V ) { if ( BindHas( V ) ) SetIndex( int( V.V[ 0 ] ) ); }
+    void Combo::BindEditor( Container& Into, BindValue& V )
+    {
+        auto I = std::make_shared<int>( BindHas( V ) ? int( V.V[ 0 ] ) : GetIndex() );
+        V.V = { double( *I ) };
+        auto& C = Into.Combo( "Option", Items, I.get() );
+        C.OnChange = [ I, &V ]( int i ) { V.V = { double( i ) }; };
+    }
+    std::string Combo::BindText( const BindValue& V ) const
+    {
+        int i = BindHas( V ) ? int( V.V[ 0 ] ) : -1;
+        return i >= 0 && i < int( Items.size() ) ? Items[ size_t( i ) ] : "none";
+    }
+
+    BindValue MultiCombo::BindGet() const
+    {
+        BindValue V;
+        for ( size_t i = 0; i < Items.size(); i++ ) V.V.push_back( IsSelected( i ) ? 1 : 0 );
+        return V;
+    }
+    BindValue MultiCombo::BindDefault() const { return { std::vector<double>( Items.size(), NAN ) }; }
+    void MultiCombo::BindSet( const BindValue& V )
+    {
+        for ( size_t i = 0; i < Items.size(); i++ )
+            if ( BindHas( V, i ) ) SetSelected( i, V.V[ i ] >= 0.5 );
+    }
+    void MultiCombo::BindEditor( Container& Into, BindValue& V )
+    {
+        V.V.resize( Items.size(), NAN );
+        for ( size_t i = 0; i < Items.size(); i++ )
+        {
+            auto& Row = Into.Row( 10 );
+            Row.Layout.CrossAlign = Align::Center;
+            Row.Text( Items[ i ] ).Layout.Width = Grow();
+            auto& S = Row.Segmented( { "Leave", "On", "Off" } );
+            S.SetIndex( !BindHas( V, i ) ? 0 : V.V[ i ] >= 0.5 ? 1 : 2 );
+            S.OnChange = [ &V, i ]( int k ) { V.V[ i ] = k == 0 ? NAN : k == 1 ? 1.0 : 0.0; };
+        }
+    }
+    std::string MultiCombo::BindText( const BindValue& V ) const
+    {
+        std::string S;
+        for ( size_t i = 0; i < Items.size(); i++ )
+            if ( BindHas( V, i ) ) S += ( S.empty() ? "" : " " ) + std::string( V.V[ i ] >= 0.5 ? "+" : "\xE2\x88\x92" ) + Items[ i ];
+        return S.empty() ? "no change" : S;
     }
 }

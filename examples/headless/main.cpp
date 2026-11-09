@@ -142,6 +142,131 @@ int main( int Argc, char** Argv )
     CHECK( App.Notifications != Was );
     Shot( Ctx, "controls" );
 
+    // ---------------- key binds on controls
+    {
+        tg::KeyBinds& KB = Ctx.Binds;
+        tg::Slider* Vol = nullptr;
+        for ( int i = 0; auto* S = Find<tg::Slider>( *App.Pages[ 2 ], i ); i++ )
+            if ( S->Bind == &App.Volume ) Vol = S;
+        CHECK( Vol && Vol->BindName() == "Volume" && Notif->BindName() == "Desktop notifications" );
+        CHECK( App.RegionCombo->BindName() == "Region" && App.AlertCombo->BindName() == "Alerts" );
+        auto Press = [ & ]( tg::Key K ) { Ctx.OnKey( K, true, 0 ); };
+        auto Release = [ & ]( tg::Key K ) { Ctx.OnKey( K, false, 0 ); };
+        Ctx.SetFocus( nullptr );
+        bool N0 = App.Notifications;
+        // hold: on while held, back on release
+        auto& Hb = KB.Add( *Notif, tg::Key::F, tg::BindTrigger::Hold, { { N0 ? 0.0 : 1.0 } } );
+        Press( tg::Key::F );
+        CHECK( App.Notifications != N0 && Hb.Active );
+        Release( tg::Key::F );
+        CHECK( App.Notifications == N0 && !Hb.Active );
+        // toggle on a slider: press -> 80, press -> back
+        float V0 = App.Volume;
+        KB.Add( *Vol, tg::Key::G, tg::BindTrigger::Toggle, { { 80 } } );
+        Press( tg::Key::G ); Release( tg::Key::G );
+        CHECK( App.Volume == 80 );
+        Press( tg::Key::G ); Release( tg::Key::G );
+        CHECK( App.Volume == V0 );
+        // off hold: active right away, off while held
+        int R0 = App.Region;
+        KB.Add( *App.RegionCombo, tg::Key::H, tg::BindTrigger::OffHold, { { 3 } } );
+        CHECK( App.Region == 3 );
+        Press( tg::Key::H );
+        CHECK( App.Region == R0 );
+        Release( tg::Key::H );
+        CHECK( App.Region == 3 );
+        // multicombo: switch item 1 on and item 0 off, leave the rest; only those come back
+        std::vector<bool> A0 = App.Alerts;
+        KB.Add( *App.AlertCombo, tg::Key::J, tg::BindTrigger::Hold, { { 0, 1, NAN, NAN, NAN } } );
+        Press( tg::Key::J );
+        CHECK( !App.Alerts[ 0 ] && App.Alerts[ 1 ] && App.Alerts[ 2 ] == A0[ 2 ] );
+        App.Alerts[ 3 ] = !App.Alerts[ 3 ];                         // the user changes an untouched item meanwhile
+        Release( tg::Key::J );
+        CHECK( App.Alerts[ 0 ] == A0[ 0 ] && App.Alerts[ 1 ] == A0[ 1 ] && App.Alerts[ 3 ] != A0[ 3 ] );
+        App.Alerts[ 3 ] = A0[ 3 ];
+        // press: sets once, nothing put back; mouse buttons work as keys
+        KB.Add( *Vol, tg::Key::Mouse5, tg::BindTrigger::Press, { { 20 } } );
+        Ctx.OnMouseButton( tg::MouseButton::Forward, true );
+        Ctx.OnMouseButton( tg::MouseButton::Forward, false );
+        CHECK( App.Volume == 20 );
+        // buttons: the key clicks them
+        int Pings = 0;
+        auto& Ping = App.Pages[ 2 ]->Add<tg::Button>( "Ping", [ & ] { Pings++; } );
+        KB.Add( Ping, tg::Key::K, tg::BindTrigger::Hold, {} );
+        Press( tg::Key::K ); Release( tg::Key::K );
+        CHECK( Pings == 1 );
+        // typing in a text field doesn't fire binds
+        Ctx.SetFocus( App.Composer );
+        Press( tg::Key::K ); Release( tg::Key::K );
+        CHECK( Pings == 1 );
+        Ctx.SetFocus( nullptr );
+        // save / load by label
+        std::string Saved = KB.Save();
+        CHECK( KB.All().size() == 6 );
+        CHECK( KB.Load( Saved, Ctx.Root() ) == 6 && KB.Save() == Saved );
+        CHECK( App.Region == 3 );                                   // the loaded off-hold bind is active again
+        // removing an active bind puts the value back; destroyed controls drop their binds
+        KB.RemoveAll( *App.RegionCombo );
+        CHECK( App.Region == R0 && KB.All().size() == 5 );
+        App.Pages[ 2 ]->Remove( &Ping );
+        Ctx.Frame();
+        CHECK( KB.All().size() == 4 );
+
+        // the UI: right-click -> "Add key bind..." -> pick a key, trigger, value -> Save
+        App.Volume = V0;
+        Ctx.OnMouseMove( Notif->Bounds.Center() );
+        Ctx.OnMouseButton( tg::MouseButton::Right, true );
+        Ctx.OnMouseButton( tg::MouseButton::Right, false );
+        Ctx.Frame();
+        auto* Mn = dynamic_cast<tg::Menu*>( OpenPopup( Ctx ) );
+        CHECK( Mn );
+        Settle( Ctx );
+        Shot( Ctx, "bind_menu" );
+        tg::MenuItem* AddItem = nullptr;
+        for ( int i = 0; auto* It = Find<tg::MenuItem>( *Mn, i ); i++ )
+            if ( It->Text.rfind( "Add another key bind", 0 ) == 0 || It->Text.rfind( "Add key bind", 0 ) == 0 ) AddItem = It;
+        CHECK( AddItem );
+        Click( Ctx, *AddItem );
+        Settle( Ctx );
+        tg::Dialog* Dlg = nullptr;
+        for ( auto& K : Ctx.Overlay().Children() )
+            if ( auto* D = dynamic_cast<tg::Dialog*>( K.get() ); D && !D->IsClosed() ) Dlg = D;
+        CHECK( Dlg );
+        auto* Kw = Find<tg::Keybind>( *Dlg );
+        CHECK( Kw );
+        Click( Ctx, *Kw );                                           // listen...
+        CHECK( Kw->IsListening() );
+        Press( tg::Key::L ); Release( tg::Key::L );                 // ...for L
+        CHECK( Kw->GetKey() == tg::Key::L );
+        tg::Segmented* Trig = nullptr;
+        for ( int i = 0; auto* Sg = Find<tg::Segmented>( *Dlg, i ); i++ )
+            if ( Sg->Options.size() == 4 ) Trig = Sg;
+        CHECK( Trig );
+        ClickAt( Ctx, Trig->Bounds.Center() + tg::Vec2{ -Trig->Bounds.w * 0.125f, 0 } ); // "Toggle" (2nd of 4)
+        CHECK( Trig->GetIndex() == 1 );
+        Settle( Ctx );
+        Shot( Ctx, "bind_editor" );
+        tg::Button* SaveB = nullptr;
+        for ( int i = 0; auto* B = Find<tg::Button>( *Dlg, i ); i++ )
+            if ( B->Text == "Save" ) SaveB = B;
+        int Edits = 0;
+        KB.OnEdit = [ & ] { Edits++; };
+        Click( Ctx, *SaveB );
+        Settle( Ctx );
+        auto Nb = KB.For( *Notif );
+        CHECK( Nb.size() == 2 && Nb[ 1 ]->K == tg::Key::L && Nb[ 1 ]->Trigger == tg::BindTrigger::Toggle && Edits == 1 );
+        bool Before = App.Notifications;
+        Press( tg::Key::L ); Release( tg::Key::L );
+        CHECK( App.Notifications == Nb[ 1 ]->Value.V[ 0 ] >= 0.5 );
+        Press( tg::Key::L ); Release( tg::Key::L );
+        CHECK( App.Notifications == Before );
+        KB.OnEdit = nullptr;
+        KB.Clear();
+        App.Notifications = N0;
+        App.Volume = V0;
+        Settle( Ctx );
+    }
+
     // ---------------- combo: open, pick the 3rd item, closes
     Click( Ctx, *App.RegionCombo );
     CHECK( App.RegionCombo->IsOpen() );

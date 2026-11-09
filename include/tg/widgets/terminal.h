@@ -117,6 +117,7 @@ namespace tg
         void Draw( DrawList& D ) override;
         bool OnEvent( const Event& E ) override;
         Cursor GetCursor() const override { return Cursor::IBeam; }
+        bool WantsKeyboard() const override { return true; }
 
     private:
         using Line = std::vector<TermCell>;

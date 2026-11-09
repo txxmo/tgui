@@ -77,6 +77,11 @@ namespace tg
         int GetIndex() const { return Bind ? *Bind : Own; }
         void SetIndex( int i );
         const std::string* GetSelectedText() const;
+        bool CanBind() const override { return true; }
+        BindValue BindGet() const override;
+        void BindSet( const BindValue& V ) override;
+        void BindEditor( Container& Into, BindValue& V ) override;
+        std::string BindText( const BindValue& V ) const override;
 
     protected:
         std::string DisplayText( float MaxWidth ) const override;
@@ -98,6 +103,13 @@ namespace tg
         bool IsSelected( size_t i ) const;
         void SetSelected( size_t i, bool On );
         std::vector<int> SelectedIndices() const;
+        // a bind can switch any item on or off and leave the rest alone
+        bool CanBind() const override { return true; }
+        BindValue BindGet() const override;
+        BindValue BindDefault() const override;
+        void BindSet( const BindValue& V ) override;
+        void BindEditor( Container& Into, BindValue& V ) override;
+        std::string BindText( const BindValue& V ) const override;
 
     protected:
         std::string DisplayText( float MaxWidth ) const override;

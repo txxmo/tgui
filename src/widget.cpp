@@ -1,6 +1,7 @@
 #include "tg/widget.h"
 #include "tg/context.h"
 #include "tg/draw.h"
+#include "tg/widgets/label.h"
 #include <algorithm>
 #include <cmath>
 
@@ -58,6 +59,26 @@ namespace tg
     bool Widget::IsFocused() const { auto* C = GetContext(); return C && C->Focused() == this; }
     void Widget::Invalidate() { if ( auto* C = GetContext() ) C->InvalidateLayout(); }
     void Widget::Redraw() { if ( auto* C = GetContext() ) C->RequestFrame(); }
+
+    void Widget::BindEditor( Container&, BindValue& ) {}
+    std::string Widget::BindText( const BindValue& ) const { return {}; }
+
+    // Controls made by the helpers sit next to their label ("Volume" above a slider, "Region" left of a
+    // combo) inside a small wrapper: use the first label in the parent's subtree.
+    std::string Widget::BindName() const
+    {
+        const Widget* P = GetParent();
+        if ( !P ) return {};
+        std::vector<const Widget*> Queue;
+        for ( auto& K : P->Children() )
+            if ( K.get() != this ) Queue.push_back( K.get() );
+        for ( size_t i = 0; i < Queue.size(); i++ )
+        {
+            if ( auto* L = dynamic_cast<const Label*>( Queue[ i ] ); L && !L->GetText().empty() ) return L->GetText();
+            for ( auto& K : Queue[ i ]->Children() ) Queue.push_back( K.get() );
+        }
+        return {};
+    }
 
     float Widget::Animate( float& V, float Target, float Speed )
     {

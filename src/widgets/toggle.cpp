@@ -1,4 +1,7 @@
 #include "tg/widgets/toggle.h"
+#include "tg/widgets/choice.h"
+#include "tg/widgets/container.h"
+#include "tg/binds.h"
 #include "tg/draw.h"
 #include "tg/font.h"
 #include <algorithm>
@@ -57,4 +60,19 @@ namespace tg
         }
         return false;
     }
+
+    // ---- key binds: on / off
+    static void OnOffEditor( Container& Into, BindValue& V )
+    {
+        if ( !BindHas( V ) ) V.V.assign( 1, 1.0 );
+        auto& S = Into.Segmented( { "On", "Off" } );
+        S.SetIndex( V.V[ 0 ] >= 0.5 ? 0 : 1 );
+        S.OnChange = [ &V ]( int i ) { V.V = { i == 0 ? 1.0 : 0.0 }; };
+    }
+
+    BindValue Toggle::BindGet() const { return { { IsOn() ? 1.0 : 0.0 } }; }
+    BindValue Toggle::BindDefault() const { return { { IsOn() ? 0.0 : 1.0 } }; } // a bind usually flips it
+    void Toggle::BindSet( const BindValue& V ) { if ( BindHas( V ) ) SetOn( V.V[ 0 ] >= 0.5 ); }
+    void Toggle::BindEditor( Container& Into, BindValue& V ) { OnOffEditor( Into, V ); }
+    std::string Toggle::BindText( const BindValue& V ) const { return BindHas( V ) && V.V[ 0 ] >= 0.5 ? "on" : "off"; }
 }

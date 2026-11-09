@@ -36,6 +36,10 @@ namespace tg
         void Draw( DrawList& D ) override;
         bool OnEvent( const Event& E ) override;
         Cursor GetCursor() const override { return Cursor::Hand; }
+        bool CanBind() const override { return true; }
+        bool BindIsAction() const override { return true; } // a key press clicks it
+        void BindSet( const BindValue& ) override { if ( Enabled && OnClick ) OnClick(); }
+        std::string BindName() const override { return Text; }
 
     private:
         float HoverT = 0, PressT = 0; // animation state, 0..1

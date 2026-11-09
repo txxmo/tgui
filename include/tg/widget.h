@@ -24,6 +24,14 @@ namespace tg
     class Context;
     class DrawList;
     class Menu;
+    class Container;
+
+    // The value a key bind puts on a control (see tg/binds.h). Checkbox: {1} / {0}. Slider: {75}.
+    // Combo: {index}. MultiCombo: one entry per item, NaN = leave that item alone. Color: {r, g, b, a}.
+    struct BindValue
+    {
+        std::vector<double> V;
+    };
 
     enum class Dir : uint8_t { Column, Row, Stack, Free };
     enum class Align : uint8_t { Start, Center, End, Stretch };
@@ -101,6 +109,19 @@ namespace tg
         // Deepest Interactive widget under P (or nullptr).
         virtual Widget* HitTest( Vec2 P );
         virtual Cursor GetCursor() const { return Cursor::Arrow; }
+        // True while focused for typing (text fields, terminal): global hotkeys and key binds stand back.
+        virtual bool WantsKeyboard() const { return false; }
+
+        // ---- key binds: right-click a control -> "Add key bind". Controls opt in by overriding these.
+        virtual bool CanBind() const { return false; }
+        virtual BindValue BindGet() const { return {}; }               // current value
+        virtual BindValue BindDefault() const { return BindGet(); }    // what a new bind starts with in the editor
+        virtual void BindSet( const BindValue& V ) { (void)V; }       // apply (fires OnChange like a user edit)
+        virtual void BindEditor( Container& Into, BindValue& V );     // controls to pick the bound value
+        virtual std::string BindText( const BindValue& V ) const;     // "on", "75", "High" (for menus)
+        virtual std::string BindName() const;                         // its label; default: the label next to it
+        virtual bool BindIsAction() const { return false; }           // buttons: a key press clicks it
+        bool Bindable = true;                                         // false: no bind menu on this control
 
         // Cached Measure(): call this (not Measure) when laying out children.
         Vec2 MeasureCached( float AvailWidth );

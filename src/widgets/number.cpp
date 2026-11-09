@@ -1,4 +1,8 @@
 #include "tg/widgets/number.h"
+#include <memory>
+#include "tg/widgets/choice.h"
+#include "tg/widgets/container.h"
+#include "tg/binds.h"
 #include "tg/context.h"
 #include "tg/draw.h"
 #include "tg/font.h"
@@ -140,4 +144,17 @@ namespace tg
             return false;
         }
     }
+
+    // ---- key binds: a number
+    BindValue NumberInput::BindGet() const { return { { GetValue() } }; }
+    void NumberInput::BindSet( const BindValue& V ) { if ( BindHas( V ) ) SetValue( float( V.V[ 0 ] ) ); }
+    void NumberInput::BindEditor( Container& Into, BindValue& V )
+    {
+        auto F = std::make_shared<float>( BindHas( V ) ? float( V.V[ 0 ] ) : GetValue() );
+        V.V = { *F };
+        auto& S = Into.Number( "Value", F.get(), Min, Max, Step, Format.c_str() );
+        auto Show = S.OnChange;
+        S.OnChange = [ F, Show, &V ]( float X ) { if ( Show ) Show( X ); V.V = { X }; };
+    }
+    std::string NumberInput::BindText( const BindValue& V ) const { return BindHas( V ) ? BindNumber( V.V[ 0 ], Step ) : ""; }
 }

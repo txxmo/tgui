@@ -9,6 +9,7 @@
 #include "font.h"
 #include "input.h"
 #include "widget.h"
+#include "binds.h"
 #include <functional>
 #include <memory>
 #include <string>
@@ -86,6 +87,9 @@ namespace tg
         // and keyboard keys not while a text field has focus).
         // Return true to swallow it. Example: toggle a menu with Insert, like the old tgui.
         std::function<bool( Key K, bool Down )> OnKeyEvent;
+
+        // Key binds on controls (right-click a control -> "Add key bind"). See tg/binds.h.
+        KeyBinds Binds{ *this };
 
         // Route every mouse button + key event to W until released (a Keybind waiting for a key).
         void Capture( Widget* W ) { CaptureW = W; RequestFrame(); }

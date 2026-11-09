@@ -1,4 +1,6 @@
 #include "tg/widgets/choice.h"
+#include "tg/widgets/container.h"
+#include "tg/binds.h"
 #include "tg/draw.h"
 #include "tg/font.h"
 #include <algorithm>
@@ -152,5 +154,32 @@ namespace tg
             return true;
         }
         return false;
+    }
+
+    // ---- key binds: an option
+    static void ChoiceEditor( Container& Into, BindValue& V, const std::vector<std::string>& Options, int Current )
+    {
+        if ( !BindHas( V ) ) V.V = { double( Current ) };
+        auto& S = Into.Segmented( Options );
+        S.SetIndex( int( V.V[ 0 ] ) );
+        S.OnChange = [ &V ]( int i ) { V.V = { double( i ) }; };
+    }
+
+    BindValue RadioGroup::BindGet() const { return { { double( GetIndex() ) } }; }
+    void RadioGroup::BindSet( const BindValue& V ) { if ( BindHas( V ) ) SetIndex( int( V.V[ 0 ] ) ); }
+    void RadioGroup::BindEditor( Container& Into, BindValue& V ) { ChoiceEditor( Into, V, Options, GetIndex() ); }
+    std::string RadioGroup::BindText( const BindValue& V ) const
+    {
+        int i = BindHas( V ) ? int( V.V[ 0 ] ) : -1;
+        return i >= 0 && i < int( Options.size() ) ? Options[ size_t( i ) ] : "";
+    }
+
+    BindValue Segmented::BindGet() const { return { { double( GetIndex() ) } }; }
+    void Segmented::BindSet( const BindValue& V ) { if ( BindHas( V ) ) SetIndex( int( V.V[ 0 ] ) ); }
+    void Segmented::BindEditor( Container& Into, BindValue& V ) { ChoiceEditor( Into, V, Options, GetIndex() ); }
+    std::string Segmented::BindText( const BindValue& V ) const
+    {
+        int i = BindHas( V ) ? int( V.V[ 0 ] ) : -1;
+        return i >= 0 && i < int( Options.size() ) ? Options[ size_t( i ) ] : "";
     }
 }
