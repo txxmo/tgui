@@ -123,7 +123,8 @@ namespace tg
     void WebView::Sync()
     {
         Context* C = GetContext();
-        if ( !B || !C ) return;
+        if ( !B ) return;
+        if ( !C ) { if ( Shown ) B->Place( {}, {}, false ); Shown = false; return; } // detached: kept alive, hidden
         bool Visible = DrawnFrame == C->FrameIndex() && Bounds.w > 0 && Bounds.h > 0;
         if ( Visible && HideUnderPopups )
             for ( auto& K : C->Overlay().Children() )
