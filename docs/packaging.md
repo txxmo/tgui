@@ -43,7 +43,7 @@ vcpkg install tg --overlay-ports=<tg>/packaging/vcpkg/ports
 vcpkg install "tg[freetype,harfbuzz]" --overlay-ports=...
 ```
 
-- Features: `app` (default; pulls `glfw3` on non-Windows), `freetype`, `harfbuzz`.
+- Features: `app` (default; pulls `glfw3` on non-Windows), `freetype`, `harfbuzz`, `vulkan`.
 - The port downloads tag `v<version>` from GitHub. Fill in `SHA512` for a release; vcpkg prints the right value on the first try.
 - To build from a local checkout, set `TG_SOURCE_DIR` and add it to `VCPKG_KEEP_ENV_VARS`.
 
@@ -71,6 +71,7 @@ python3 tools/amalgamate.py -o tg_single.h          # or: cmake --build build --
 #define TG_BACKEND_SOFT          // software renderer
 #define TG_BACKEND_GLFW_GL3      // GLFW + OpenGL 3        (link glfw, GL)
 #define TG_BACKEND_WIN32         // Win32 + D3D11 + D3D9   (link d3d11 d3d9 d3dcompiler dxgi imm32 ole32 shell32 uuid)
+#define TG_BACKEND_VULKAN        // Vulkan renderer        (link vulkan; + TG_VULKAN_SHADERC and shaderc for custom shaders)
 #define TG_APP                   // tg::App on top of the chosen backend
 #include "tg_single.h"
 ```
@@ -98,6 +99,7 @@ This is the same tree as `cmake --install`.
 | `headless` | Every page of the demo driven by scripted input: clicks, drags, typing, binds, undo, docking, file drops, IME, and so on. There are hundreds of `CHECK`s. See [Testing](testing.md). |
 | `golden` | Small scenes (controls, text, charts, table, docking, gradients, light theme) rendered in software and compared with `tests/golden/ref/*.png`. |
 | `golden_single_header` | The same scenes, built from `tg_single.h`. |
+| `golden_vulkan` | The same scenes through the Vulkan renderer (`-DTG_VULKAN=ON`), with a slightly looser tolerance because GPUs filter a little differently. |
 
 Golden images:
 - A pixel counts as different when any channel is more than 40 off. A scene fails when more than 0.4% of its pixels differ.

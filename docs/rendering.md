@@ -102,11 +102,13 @@ tg::Font* Slanted = Ctx.Fonts.AddOblique( MyFont, 0.2f );
 
 ## What each renderer supports
 
-| | GL3 | Direct3D 11 | Direct3D 9 | Software |
-|---|---|---|---|---|
-| Custom shaders | GLSL | HLSL (d3dcompiler_47) | no (fallback) | C++ |
-| Backdrop blur | yes | yes (no MSAA back buffers) | no | yes |
-| Render targets | yes | yes | no (draws normally) | yes |
-| Frame capture (eyedropper) | yes | yes | no | yes |
+| | GL3 | Direct3D 11 | Direct3D 9 | Vulkan | Software |
+|---|---|---|---|---|---|
+| Custom shaders | GLSL | HLSL (d3dcompiler_47) | no (fallback) | the same GLSL, compiled at runtime with shaderc (when found) | C++ |
+| Backdrop blur | yes | yes (no MSAA back buffers) | no | no (the panel's tint only) | yes |
+| Render targets | yes | yes | no (draws normally) | yes | yes |
+| Frame capture (eyedropper) | yes | yes | no | headless mode | yes |
+
+There's no Metal renderer. On macOS, use GLFW + OpenGL 3, or Vulkan through MoltenVK.
 
 Your own renderer can opt in to each of these by overriding `CanShade`, `CreateShader`, `CanBackdrop`, `CreateRenderTarget` / `RenderTo` and `CanCapture`. See [Platforms & renderers](backends.md).

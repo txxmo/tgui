@@ -14,6 +14,9 @@
 #include "soft_renderer.h"
 #include "tg/tg.h"
 #endif
+#if defined( TG_GOLDEN_VULKAN ) // the same scenes through the Vulkan renderer (headless, read back)
+#include "vk_renderer.h"
+#endif
 #include <cmath>
 #include <cstdio>
 #include <cstdlib>
@@ -170,15 +173,31 @@ int main( int Argc, char** Argv )
     bool Update = Argc > 3 && !std::strcmp( Argv[ 3 ], "--update" );
     // How different a pixel may be (any channel), and how many pixels may differ: anti-aliasing and
     // float rounding differ a little between compilers / CPUs; real regressions change far more.
-    const int Tol = 40;
-    const double MaxFrac = 0.004;
+    int Tol = 40;
+    double MaxFrac = 0.004;
+#if defined( TG_GOLDEN_VULKAN )
+    // GPUs interpolate and filter a little differently from the software rasterizer (and from each other)
+    Tol = 48;
+    MaxFrac = 0.02;
+    VulkanRenderer Gpu;
+    if ( !Gpu.InitHeadless() )
+    {
+        std::printf( "golden (vulkan): no Vulkan device, skipped\n" );
+        return 0;
+    }
+    std::printf( "golden (vulkan): %s\n", Gpu.DeviceName() );
+#endif
 
     int Failed = 0;
     for ( Scene& Sc : Scenes() )
     {
         GetTheme() = Theme::Dark();
         SoftRenderer R;
+#if defined( TG_GOLDEN_VULKAN )
+        Context C( Gpu );
+#else
         Context C( R );
+#endif
         C.SetFixedTimestep( 1.f / 60 );
         C.TooltipDelay = 1e9f;
         if ( !C.LoadDefaultFonts( 1.f ) ) { std::fprintf( stderr, "fonts failed\n" ); return 1; }
@@ -190,6 +209,12 @@ int main( int Argc, char** Argv )
         Sc.Build( C, Root );
         Settle( C );
         C.Render( Sc.Size );
+#if defined( TG_GOLDEN_VULKAN )
+        R.Width = Gpu.Captured.W; // compare / save the GPU's frame through the same code
+        R.Height = Gpu.Captured.H;
+        R.Pixels = Gpu.Captured.Px;
+        if ( Update ) { std::printf( "%-10s (vulkan never updates references)\n", Sc.Name ); continue; }
+#endif
         std::string RefPath = Ref + "/" + Sc.Name + ".png";
         if ( Update )
         {

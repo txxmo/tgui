@@ -88,6 +88,7 @@ When tg is a subproject, its examples and tests are off by default, so you only 
 | `TG_BUILD_HEADLESS` | `ON` when top-level | The headless test + `ctest` entry |
 | `TG_FREETYPE` | `OFF` | Rasterize with FreeType (hinting) and enable color emoji. Uses the system FreeType, or downloads it. See [Fonts](styling.md#freetype-emoji-and-other-scripts) |
 | `TG_WEBVIEW` | `OFF` | Build `tg::webview`: web pages inside tg (WebView2 / WebKitGTK / WKWebView). See [WebView](widgets.md#webview) |
+| `TG_VULKAN` | `OFF` | Build `tg::vulkan`, the Vulkan renderer. Custom shaders need shaderc. See [Vulkan](backends.md#vulkan) |
 | `TG_INSTALL` | `ON` when top-level | install rules, `find_package( tg )` config, `cpack` |
 | `TG_HARFBUZZ` | `OFF` | Shape emoji sequences (flags, ZWJ families, skin tones, keycaps) with HarfBuzz. Implies `TG_FREETYPE`. Uses the system HarfBuzz, or downloads it. See [Emoji sequences](styling.md#emoji-sequences-harfbuzz) |
 

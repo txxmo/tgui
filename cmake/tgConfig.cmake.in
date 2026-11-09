@@ -3,6 +3,7 @@
 #   tg::soft   software renderer (tests, screenshots)
 #   tg::app    window + renderer + loop (tg/app.h), when it was built
 #   tg::win32 tg::d3d11 tg::d3d9   Windows backends for your own window / overlays
+#   tg::vulkan Vulkan renderer, when built with TG_VULKAN
 @PACKAGE_INIT@
 include( CMakeFindDependencyMacro )
 find_dependency( Threads )
@@ -13,6 +14,7 @@ set( _tg_hb_mode "@TG_DEP_HARFBUZZ@" )
 set( _tg_glfw_mode "@TG_DEP_GLFW@" )
 set( _tg_app "@TG_BUILD_APP@" )
 set( _tg_app_backend "@TG_APP_BACKEND@" )
+set( _tg_vulkan "@TG_VULKAN@" )
 
 if( _tg_freetype )
     find_dependency( Freetype )
@@ -27,6 +29,10 @@ if( _tg_harfbuzz )
 endif()
 if( _tg_app AND _tg_app_backend STREQUAL "glfw" )
     find_dependency( glfw3 3.3 )
+endif()
+
+if( _tg_vulkan )
+    find_dependency( Vulkan )
 endif()
 
 include( "${CMAKE_CURRENT_LIST_DIR}/tgTargets.cmake" )

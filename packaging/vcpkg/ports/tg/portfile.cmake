@@ -19,6 +19,7 @@ vcpkg_check_features( OUT_FEATURE_OPTIONS FEATURE_OPTIONS
         app       TG_BUILD_APP
         freetype  TG_FREETYPE
         harfbuzz  TG_HARFBUZZ
+        vulkan    TG_VULKAN
 )
 
 vcpkg_cmake_configure(

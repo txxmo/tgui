@@ -9,6 +9,7 @@ Use it like stb:
     #define TG_BACKEND_SOFT        // optional backends, in every file that includes it:
     #define TG_BACKEND_GLFW_GL3    //   GLFW + OpenGL 3 (+ tg::App when TG_APP is defined); link glfw
     #define TG_BACKEND_WIN32       //   Win32 platform, D3D11 and D3D9 renderers (+ tg::App with TG_APP)
+    #define TG_BACKEND_VULKAN      //   Vulkan renderer (link vulkan; TG_VULKAN_SHADERC + shaderc for custom shaders)
     #define TG_APP
     #include "tg_single.h"
 
@@ -39,6 +40,7 @@ BACKENDS = [
     ("TG_BACKEND_GLFW_GL3", ["backends/gl3_renderer.h", "backends/glfw_platform.h"], ["backends/gl3_renderer.cpp", "backends/glfw_platform.cpp"]),
     ("TG_BACKEND_WIN32", ["backends/win32_platform.h", "backends/d3d11_renderer.h", "backends/d3d9_renderer.h"],
      ["backends/win32_platform.cpp", "backends/d3d11_renderer.cpp", "backends/d3d9_renderer.cpp"]),
+    ("TG_BACKEND_VULKAN", ["backends/vk_renderer.h"], ["backends/vk_renderer.cpp"]),  # + TG_VULKAN_SHADERC for custom shaders
 ]
 
 INC_RE = re.compile(r'^\s*#\s*include\s*"([^"]+)"')

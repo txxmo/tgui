@@ -14,11 +14,12 @@ jobs:
           - { name: gcc,            cc: gcc,   cxx: g++,     flags: "" }
           - { name: clang,          cc: clang, cxx: clang++, flags: "" }
           - { name: gcc-freetype-hb, cc: gcc,  cxx: g++,     flags: "-DTG_HARFBUZZ=ON" }
+          - { name: gcc-vulkan,     cc: gcc,   cxx: g++,     flags: "-DTG_VULKAN=ON" }   # golden images on lavapipe
     name: linux-${{ matrix.name }}
     steps:
       - uses: actions/checkout@v4
       - name: deps
-        run: sudo apt-get update && sudo apt-get install -y ninja-build libglfw3-dev libgl-dev libfreetype-dev libharfbuzz-dev
+        run: sudo apt-get update && sudo apt-get install -y ninja-build libglfw3-dev libgl-dev libfreetype-dev libharfbuzz-dev libvulkan-dev mesa-vulkan-drivers libshaderc-dev
       - name: configure
         run: cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_C_COMPILER=${{ matrix.cc }} -DCMAKE_CXX_COMPILER=${{ matrix.cxx }} ${{ matrix.flags }}
       - name: build

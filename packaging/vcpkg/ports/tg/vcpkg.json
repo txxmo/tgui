@@ -14,6 +14,10 @@
       "description": "tg::app: window + renderer + event loop (Win32 + D3D11 on Windows, GLFW + OpenGL 3 elsewhere)",
       "dependencies": [ { "name": "glfw3", "platform": "!windows" } ]
     },
+    "vulkan": {
+      "description": "tg::vulkan: the Vulkan renderer (custom shaders via shaderc)",
+      "dependencies": [ "vulkan", "shaderc" ]
+    },
     "freetype": {
       "description": "Rasterize with FreeType (hinting) and color emoji",
       "dependencies": [ { "name": "freetype", "default-features": false, "features": [ "png", "zlib" ] } ]

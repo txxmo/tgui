@@ -11,6 +11,7 @@ tg's core (`tg::tg`) has no platform code. Two small adapters connect it to the 
 | `tg::App` elsewhere | GLFW | OpenGL 3.3 | `tg::app` |
 | Your own Windows app / game / overlay | `tg::win32` | `tg::d3d11` or `tg::d3d9` | link both |
 | Headless | none | software (PNG) | `tg::soft` |
+| Your own Vulkan app / engine | yours (or `glfw_platform`) | Vulkan | `tg::vulkan` (`-DTG_VULKAN=ON`) |
 
 ## tg::App
 
@@ -122,6 +123,39 @@ while ( !glfwWindowShouldClose( Window ) )
     glfwSwapBuffers( Window );
 }
 ```
+
+## Vulkan
+
+`tg::VulkanRenderer` (`backends/vk_renderer.h`) is built with `-DTG_VULKAN=ON`. It has two modes.
+
+**Embedded.** You own the instance, device, swapchain and render pass, and tg records into your command buffer:
+
+```cpp
+tg::VulkanRenderer Vk;
+Vk.Init( { Instance, Physical, Device, QueueFamily, Queue, RenderPass, FramesInFlight } );
+tg::Context Ctx( Vk );
+// each frame, after waiting for that frame slot's fence:
+Ctx.Frame();
+vkBeginCommandBuffer( Cb, ... );
+Vk.BeginFrame( Cb, Slot );
+vkCmdBeginRenderPass( Cb, ... );
+Ctx.Render( { float( Width ), float( Height ) } );   // records tg's draws
+vkCmdEndRenderPass( Cb );
+...submit + present
+```
+
+`examples/vulkan` is a complete GLFW + swapchain program (`tg_vulkan_demo`) that runs the whole showcase this way. The screenshot below is from lavapipe:
+
+<img src="vulkan.png" width="640">
+
+- Use a UNORM swapchain format (`B8G8R8A8_UNORM`) to get the same colors as the GL and D3D renderers.
+- The built-in shaders are embedded as SPIR-V (`backends/vk_shaders/`, compiled by `tools/compile_vk_shaders.py`), so the renderer needs no shader compiler at runtime.
+- Custom shaders (`ShaderDesc::Glsl`, the same source as GL3) are compiled at runtime with shaderc when CMake finds it.
+- Backdrop blur isn't supported, because it would have to end your render pass. Frosted-glass panels show only their tint.
+
+**Headless.** `Vk.InitHeadless()` creates its own device. It prefers a GPU and falls back to Mesa's lavapipe on the CPU. `Render()` draws offscreen and fills `Captured`.
+
+CTest's `golden_vulkan` uses headless mode to check the GPU output against the software renderer's reference images. On lavapipe at most 0.02% of pixels differ.
 
 ## Software renderer
 
