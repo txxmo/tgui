@@ -59,6 +59,9 @@ namespace tg
         // WebView2: Chromium flags, e.g. "--autoplay-policy=no-user-gesture-required". (Ignored elsewhere.)
         static inline std::string BrowserArguments;
         bool DevTools = false;       // allow right-click > Inspect
+        // Camera / microphone / WebRTC / autoplaying media. WebView2 always has them; WebKitGTK ships
+        // with them off. Set before the engine starts. Pages still ask: answer with OnPermission.
+        bool Media = false;
         bool HideUnderPopups = true; // hide the page while a tg popup overlaps it (it would cover the popup)
 
         Vec2 Measure( float AvailWidth ) override;

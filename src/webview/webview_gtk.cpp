@@ -60,6 +60,12 @@ namespace tg
             WebKitSettings* St = webkit_web_view_get_settings( View );
             webkit_settings_set_enable_developer_extras( St, Owner.DevTools );
             webkit_settings_set_javascript_can_access_clipboard( St, TRUE );
+            if ( Owner.Media )
+            {
+                webkit_settings_set_enable_media_stream( St, TRUE );
+                webkit_settings_set_enable_webrtc( St, TRUE );
+                webkit_settings_set_media_playback_requires_user_gesture( St, FALSE );
+            }
 
             g_signal_connect( View, "load-changed", G_CALLBACK( +[]( WebKitWebView* V, WebKitLoadEvent E, gpointer Self ) {
                 if ( E == WEBKIT_LOAD_FINISHED )
