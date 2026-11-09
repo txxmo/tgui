@@ -92,14 +92,7 @@ namespace tg
         return false;
     }
 
-    // ---- key binds: on / off
-    static void OnOffEditor( Container& Into, BindValue& V )
-    {
-        if ( !BindHas( V ) ) V.V.assign( 1, 1.0 );
-        auto& S = Into.Segmented( { "On", "Off" } );
-        S.SetIndex( V.V[ 0 ] >= 0.5 ? 0 : 1 );
-        S.OnChange = [ &V ]( int i ) { V.V = { i == 0 ? 1.0 : 0.0 }; };
-    }
+    // ---- key binds: on / off (editor shared with Toggle / Checkbox: tg/binds.h)
 
     BindValue Checkbox::BindGet() const { return { { IsChecked() ? 1.0 : 0.0 } }; }
     BindValue Checkbox::BindDefault() const { return { { IsChecked() ? 0.0 : 1.0 } }; } // a bind usually flips it

@@ -113,7 +113,7 @@ namespace tg
         P->Reader = std::thread( [ I, OnOutput, OnExit ] {
             char Buf[ 8192 ];
             DWORD N = 0;
-            while ( ReadFile( I->OutRead, Buf, sizeof( Buf ), &N, nullptr ) && N > 0 )
+            while ( ::ReadFile( I->OutRead, Buf, sizeof( Buf ), &N, nullptr ) && N > 0 )
                 if ( OnOutput ) OnOutput( std::string( Buf, N ) );
             DWORD Code = 0;
             WaitForSingleObject( I->Proc.hProcess, 2000 );

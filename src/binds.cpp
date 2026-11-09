@@ -340,4 +340,12 @@ namespace tg
         }
         return N;
     }
+
+    void OnOffEditor( Container& Into, BindValue& V )
+    {
+        if ( !BindHas( V ) ) V.V.assign( 1, 1.0 );
+        auto& S = Into.Segmented( { "On", "Off" } );
+        S.SetIndex( V.V[ 0 ] >= 0.5 ? 0 : 1 );
+        S.OnChange = [ &V ]( int i ) { V.V = { i == 0 ? 1.0 : 0.0 }; };
+    }
 }

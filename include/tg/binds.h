@@ -34,6 +34,7 @@ namespace tg
     const char* BindTriggerName( BindTrigger T ); // "hold", "toggle", "off hold", "press"
     std::string BindNumber( double V, float Step ); // "75", "0.35" — for BindText
     inline bool BindHas( const BindValue& V, size_t i = 0 ) { return i < V.V.size() && V.V[ i ] == V.V[ i ]; } // set and not NaN
+    void OnOffEditor( Container& Into, BindValue& V ); // [ On | Off ] — the bind editor of checkboxes / toggles
 
     struct Binding
     {

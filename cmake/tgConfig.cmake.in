@@ -1,0 +1,33 @@
+# find_package( tg ) — imported targets:
+#   tg::tg     core (widgets, layout, text, tg/os.h)
+#   tg::soft   software renderer (tests, screenshots)
+#   tg::app    window + renderer + loop (tg/app.h), when it was built
+#   tg::win32 tg::d3d11 tg::d3d9   Windows backends for your own window / overlays
+@PACKAGE_INIT@
+include( CMakeFindDependencyMacro )
+find_dependency( Threads )
+
+set( _tg_freetype "@TG_FREETYPE@" )
+set( _tg_harfbuzz "@TG_HARFBUZZ@" )
+set( _tg_hb_mode "@TG_DEP_HARFBUZZ@" )
+set( _tg_glfw_mode "@TG_DEP_GLFW@" )
+set( _tg_app "@TG_BUILD_APP@" )
+set( _tg_app_backend "@TG_APP_BACKEND@" )
+
+if( _tg_freetype )
+    find_dependency( Freetype )
+endif()
+if( _tg_harfbuzz )
+    if( _tg_hb_mode STREQUAL "pkgconfig" )
+        find_dependency( PkgConfig )
+        pkg_check_modules( HARFBUZZ REQUIRED IMPORTED_TARGET harfbuzz )
+    else()
+        find_dependency( harfbuzz CONFIG )
+    endif()
+endif()
+if( _tg_app AND _tg_app_backend STREQUAL "glfw" )
+    find_dependency( glfw3 3.3 )
+endif()
+
+include( "${CMAKE_CURRENT_LIST_DIR}/tgTargets.cmake" )
+check_required_components( tg )

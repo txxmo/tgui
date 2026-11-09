@@ -1,4 +1,5 @@
 #include "tg/widgets/textarea.h"
+#include "../internal.h"
 #include "tg/context.h"
 #include "tg/draw.h"
 #include "tg/font.h"
@@ -8,15 +9,9 @@
 
 namespace tg
 {
-    static size_t PrevCp( const std::string& s, size_t i ) { return PrevGrapheme( s, i ); } // whole emoji sequences
-    static size_t NextCp( const std::string& s, size_t i ) { return NextGrapheme( s, i ); }
-    static void AppendUtf8( std::string& s, uint32_t c )
-    {
-        if ( c < 0x80 ) s += char( c );
-        else if ( c < 0x800 ) { s += char( 0xC0 | c >> 6 ); s += char( 0x80 | ( c & 0x3F ) ); }
-        else if ( c < 0x10000 ) { s += char( 0xE0 | c >> 12 ); s += char( 0x80 | ( ( c >> 6 ) & 0x3F ) ); s += char( 0x80 | ( c & 0x3F ) ); }
-        else { s += char( 0xF0 | c >> 18 ); s += char( 0x80 | ( ( c >> 12 ) & 0x3F ) ); s += char( 0x80 | ( ( c >> 6 ) & 0x3F ) ); s += char( 0x80 | ( c & 0x3F ) ); }
-    }
+    using internal::PrevCp; // whole emoji sequences
+    using internal::NextCp;
+    using internal::AppendUtf8;
 
     TextArea::TextArea( std::string Ph ) : Placeholder( std::move( Ph ) )
     {

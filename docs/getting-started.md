@@ -39,7 +39,7 @@ start build\tg.sln
 ctest --test-dir build          # same test, through CTest
 ```
 
-It prints `headless: all checks passed` and writes PNG screenshots of every page into `out/`. See [Testing](testing.md).
+It prints `headless: all checks passed` and writes PNG screenshots of every page into `out/`. CTest also runs the golden-image tests. See [Testing](testing.md) and [Packaging and tests](packaging.md).
 
 ## Use tg in your own project
 
@@ -65,6 +65,10 @@ target_link_libraries( myapp PRIVATE tg::app )
 
 When tg is a subproject, its examples and tests are off by default, so you only build the libraries.
 
+### Installed package, vcpkg, Conan, single header
+
+`cmake --install` gives you `find_package( tg )`. There are also a vcpkg overlay port, a Conan recipe, and a one-file `tg_single.h`. See [Packaging and tests](packaging.md).
+
 ### Which target to link
 
 | Target | Use it when |
@@ -84,6 +88,7 @@ When tg is a subproject, its examples and tests are off by default, so you only 
 | `TG_BUILD_HEADLESS` | `ON` when top-level | The headless test + `ctest` entry |
 | `TG_FREETYPE` | `OFF` | Rasterize with FreeType (hinting) and enable color emoji. Uses the system FreeType, or downloads it. See [Fonts](styling.md#freetype-emoji-and-other-scripts) |
 | `TG_WEBVIEW` | `OFF` | Build `tg::webview`: web pages inside tg (WebView2 / WebKitGTK / WKWebView). See [WebView](widgets.md#webview) |
+| `TG_INSTALL` | `ON` when top-level | install rules, `find_package( tg )` config, `cpack` |
 | `TG_HARFBUZZ` | `OFF` | Shape emoji sequences (flags, ZWJ families, skin tones, keycaps) with HarfBuzz. Implies `TG_FREETYPE`. Uses the system HarfBuzz, or downloads it. See [Emoji sequences](styling.md#emoji-sequences-harfbuzz) |
 
 ## Your first window

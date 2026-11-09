@@ -1,4 +1,5 @@
 #include "tg/widgets/terminal.h"
+#include "../internal.h"
 #include "tg/context.h"
 #include "tg/draw.h"
 #include "tg/font.h"
@@ -41,13 +42,7 @@ namespace tg
         return C >= 0x60 && C <= 0x7E ? Map[ C - 0x60 ] : C;
     }
 
-    static void AppendUtf8( std::string& S, uint32_t C )
-    {
-        if ( C < 0x80 ) S += char( C );
-        else if ( C < 0x800 ) { S += char( 0xC0 | C >> 6 ); S += char( 0x80 | ( C & 0x3F ) ); }
-        else if ( C < 0x10000 ) { S += char( 0xE0 | C >> 12 ); S += char( 0x80 | ( ( C >> 6 ) & 0x3F ) ); S += char( 0x80 | ( C & 0x3F ) ); }
-        else { S += char( 0xF0 | C >> 18 ); S += char( 0x80 | ( ( C >> 12 ) & 0x3F ) ); S += char( 0x80 | ( ( C >> 6 ) & 0x3F ) ); S += char( 0x80 | ( C & 0x3F ) ); }
-    }
+    using internal::AppendUtf8;
 
     static constexpr uint32_t ColIndex = 0x1000000, ColRgb = 0x2000000, SeqBit = 0x80000000u;
 

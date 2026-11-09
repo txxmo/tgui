@@ -1,0 +1,5 @@
+tg provides CMake targets:
+
+  find_package(tg CONFIG REQUIRED)
+  target_link_libraries(main PRIVATE tg::app)      # window + loop (tg/app.h)
+  # or tg::tg plus a backend: tg::soft, tg::win32 + tg::d3d11 / tg::d3d9

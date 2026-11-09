@@ -44,6 +44,7 @@ Full guide in [`docs/`](docs/README.md):
 | [Rendering](docs/rendering.md) | custom shaders, gradients, blur, render-to-texture, SVG |
 | [Desktop integration](docs/desktop.md) | docking, OS file drops, IME, file dialogs, notifications, tray, multiple windows |
 | [Platforms & renderers](docs/backends.md) | `tg::App`, Win32 + D3D11/9, GLFW + GL3, overlays |
+| [Packaging](docs/packaging.md) | install + `find_package`, vcpkg, Conan, single header, golden-image tests, CI |
 | [Testing](docs/testing.md) | the headless test, scripted input, Wine |
 
 ## Screenshots

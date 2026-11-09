@@ -1,0 +1,6 @@
+cmake_minimum_required( VERSION 3.16 )
+project( test_package CXX )
+find_package( tg CONFIG REQUIRED )
+add_executable( test_package main.cpp )
+target_link_libraries( test_package PRIVATE tg::soft )
+target_compile_features( test_package PRIVATE cxx_std_20 )

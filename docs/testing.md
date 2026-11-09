@@ -61,6 +61,10 @@ Helpers in the test file:
 - `Find<T>( Root, N )` finds the Nth widget of type `T`.
 - `OpenPopup( Ctx )` returns the open popup.
 
+## Golden images
+
+`tg_golden` renders a few fixed scenes and compares them with the PNGs in `tests/golden/ref`. On failure it writes `.actual.png` and `.diff.png` files. After an intended visual change, refresh the references with `cmake --build build --target tg_golden_update`. Details are in [Packaging and tests](packaging.md#tests).
+
 ## Building and running the Windows version from Linux
 
 ```sh

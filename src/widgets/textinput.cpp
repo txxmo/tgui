@@ -1,4 +1,5 @@
 #include "tg/widgets/textinput.h"
+#include "../internal.h"
 #include "tg/context.h"
 #include "tg/draw.h"
 #include "tg/font.h"
@@ -11,17 +12,11 @@ namespace tg
     static const char* Bullet = "\xE2\x80\xA2"; // U+2022, 3 bytes
 
     static bool IsCont( char c ) { return ( static_cast<unsigned char>( c ) & 0xC0 ) == 0x80; }
-    static size_t PrevCp( const std::string& s, size_t i ) { return PrevGrapheme( s, i ); } // whole emoji sequences
-    static size_t NextCp( const std::string& s, size_t i ) { return NextGrapheme( s, i ); }
+    using internal::PrevCp; // whole emoji sequences
+    using internal::NextCp;
     static size_t CountCps( const std::string& s, size_t End ) { size_t n = 0; for ( size_t i = 0; i < End; i++ ) n += !IsCont( s[ i ] ); return n; }
 
-    static void AppendUtf8( std::string& s, uint32_t c )
-    {
-        if ( c < 0x80 ) s += char( c );
-        else if ( c < 0x800 ) { s += char( 0xC0 | c >> 6 ); s += char( 0x80 | ( c & 0x3F ) ); }
-        else if ( c < 0x10000 ) { s += char( 0xE0 | c >> 12 ); s += char( 0x80 | ( ( c >> 6 ) & 0x3F ) ); s += char( 0x80 | ( c & 0x3F ) ); }
-        else { s += char( 0xF0 | c >> 18 ); s += char( 0x80 | ( ( c >> 12 ) & 0x3F ) ); s += char( 0x80 | ( ( c >> 6 ) & 0x3F ) ); s += char( 0x80 | ( c & 0x3F ) ); }
-    }
+    using internal::AppendUtf8;
 
     TextInput::TextInput( std::string Ph ) : Placeholder( std::move( Ph ) )
     {

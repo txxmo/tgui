@@ -23,7 +23,7 @@
 
 namespace tg
 {
-    static std::wstring Widen( const std::string& S )
+    static std::wstring AppWiden( const std::string& S )
     {
         int N = MultiByteToWideChar( CP_UTF8, 0, S.c_str(), -1, nullptr, 0 );
         std::wstring W( size_t( N > 0 ? N - 1 : 0 ), L'\0' );
@@ -46,7 +46,7 @@ namespace tg
 
         Container& Main() override { return *MainArea; }
         Context& GetContext() override { return *Ctx; }
-        void SetTitle( const std::string& T ) override { if ( Wnd ) SetWindowTextW( Wnd, Widen( T ).c_str() ); }
+        void SetTitle( const std::string& T ) override { if ( Wnd ) SetWindowTextW( Wnd, AppWiden( T ).c_str() ); }
         void Close() override { Closing = true; }
         bool IsOpen() const override { return !Closing && Wnd; }
 
@@ -216,7 +216,7 @@ namespace tg
             ReleaseDC( nullptr, Screen );
             RECT R = { 0, 0, LONG( Wd * Scale ), LONG( Ht * Scale ) };
             AdjustWindowRectEx( &R, WS_OVERLAPPEDWINDOW, FALSE, 0 );
-            return CreateWindowExW( 0, L"tg_app", Widen( Title ).c_str(), WS_OVERLAPPEDWINDOW, CW_USEDEFAULT, CW_USEDEFAULT, R.right - R.left,
+            return CreateWindowExW( 0, L"tg_app", AppWiden( Title ).c_str(), WS_OVERLAPPEDWINDOW, CW_USEDEFAULT, CW_USEDEFAULT, R.right - R.left,
                                     R.bottom - R.top, nullptr, nullptr, GetModuleHandleW( nullptr ), nullptr );
         }
     };

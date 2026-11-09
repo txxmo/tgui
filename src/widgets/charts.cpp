@@ -1,4 +1,5 @@
 #include "tg/widgets/charts.h"
+#include "../internal.h"
 #include "tg/draw.h"
 #include "tg/font.h"
 #include <algorithm>
@@ -7,7 +8,7 @@
 
 namespace tg
 {
-    static constexpr float Pi = 3.14159265f;
+    using internal::Pi;
 
     // Arc band (part of a ring) = a thick polyline along the middle radius.
     static void ArcBand( DrawList& D, Vec2 C, float R0, float R1, float A0, float A1, Color Col )

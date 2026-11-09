@@ -1,11 +1,12 @@
 #include "tg/draw.h"
+#include "internal.h"
 #include "tg/font.h"
 #include <algorithm>
 #include <cmath>
 
 namespace tg
 {
-    static constexpr float Pi = 3.14159265358979f;
+    using internal::Pi;
 
     void DrawList::Reset( Rect Vp, float S, TextureId Atlas, Vec2 White )
     {

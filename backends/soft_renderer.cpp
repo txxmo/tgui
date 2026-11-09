@@ -193,13 +193,13 @@ namespace tg
                         if ( E0 < 0 || E1 < 0 || E2 < 0 ) continue;
                         if ( ( E0 == 0 && !Own[ 0 ] ) || ( E1 == 0 && !Own[ 1 ] ) || ( E2 == 0 && !Own[ 2 ] ) ) continue;
 
-                        float B0 = E0 / Area, B1 = E1 / Area, B2 = E2 / Area;
-                        RGBAf C = { Col[ 0 ].r * B0 + Col[ 1 ].r * B1 + Col[ 2 ].r * B2, Col[ 0 ].g * B0 + Col[ 1 ].g * B1 + Col[ 2 ].g * B2,
-                                    Col[ 0 ].b * B0 + Col[ 1 ].b * B1 + Col[ 2 ].b * B2, Col[ 0 ].a * B0 + Col[ 1 ].a * B1 + Col[ 2 ].a * B2 };
+                        float Wt0 = E0 / Area, Wt1 = E1 / Area, Wt2 = E2 / Area;
+                        RGBAf C = { Col[ 0 ].r * Wt0 + Col[ 1 ].r * Wt1 + Col[ 2 ].r * Wt2, Col[ 0 ].g * Wt0 + Col[ 1 ].g * Wt1 + Col[ 2 ].g * Wt2,
+                                    Col[ 0 ].b * Wt0 + Col[ 1 ].b * Wt1 + Col[ 2 ].b * Wt2, Col[ 0 ].a * Wt0 + Col[ 1 ].a * Wt1 + Col[ 2 ].a * Wt2 };
                         if ( Sh )
                         {
-                            float U = V[ 0 ]->UV.x * B0 + V[ 1 ]->UV.x * B1 + V[ 2 ]->UV.x * B2;
-                            float Vv = V[ 0 ]->UV.y * B0 + V[ 1 ]->UV.y * B1 + V[ 2 ]->UV.y * B2;
+                            float U = V[ 0 ]->UV.x * Wt0 + V[ 1 ]->UV.x * Wt1 + V[ 2 ]->UV.x * Wt2;
+                            float Vv = V[ 0 ]->UV.y * Wt0 + V[ 1 ]->UV.y * Wt1 + V[ 2 ]->UV.y * Wt2;
                             static const float Zero[ 32 ] = {};
                             auto Tx = [ T ]( Vec2 Uv ) {
                                 if ( !T || T->Px.empty() ) return Color( 255, 255, 255 );
@@ -212,8 +212,8 @@ namespace tg
                         }
                         else if ( T && !T->Px.empty() )
                         {
-                            float U = V[ 0 ]->UV.x * B0 + V[ 1 ]->UV.x * B1 + V[ 2 ]->UV.x * B2;
-                            float Vv = V[ 0 ]->UV.y * B0 + V[ 1 ]->UV.y * B1 + V[ 2 ]->UV.y * B2;
+                            float U = V[ 0 ]->UV.x * Wt0 + V[ 1 ]->UV.x * Wt1 + V[ 2 ]->UV.x * Wt2;
+                            float Vv = V[ 0 ]->UV.y * Wt0 + V[ 1 ]->UV.y * Wt1 + V[ 2 ]->UV.y * Wt2;
                             RGBAf S = Sample( T->Px, T->W, T->H, U, Vv );
                             C = { C.r * S.r / 255, C.g * S.g / 255, C.b * S.b / 255, C.a * S.a / 255 };
                         }
