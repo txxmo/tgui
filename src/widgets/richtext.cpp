@@ -5,6 +5,7 @@
 #include <cmath>
 #include <cctype>
 #include <cstdlib>
+#include <cstring>
 
 namespace tg
 {
@@ -45,10 +46,17 @@ namespace tg
         return false;
     }
 
+    static bool UrlStart( const std::string& S, size_t i )
+    {
+        return ( S.compare( i, 8, "https://" ) == 0 || S.compare( i, 7, "http://" ) == 0 ) && ( i == 0 || S[ i - 1 ] == ' ' || S[ i - 1 ] == '\n' || S[ i - 1 ] == '(' );
+    }
+
     void RichText::Parse()
     {
         Runs.clear();
-        bool Strong = false, Em = false;
+        Revealed.clear();
+        bool Strong = false, Em = false, Strike = false, Under = false;
+        int Spoiler = -1, Spoilers = 0;
         std::vector<Paint> ColorStack;
         Run Cur;
         auto Flush = [ & ] {
@@ -56,6 +64,9 @@ namespace tg
             Cur = Run{};
             Cur.Strong = Strong;
             Cur.Em = Em;
+            Cur.Strike = Strike;
+            Cur.Under = Under;
+            Cur.Spoiler = Spoiler;
             Cur.K = !ColorStack.empty() ? Colored : Strong ? Bold : Em ? Italic : Plain;
             Cur.Col = ColorStack.empty() ? Paint( Tok::Text ) : ColorStack.back();
         };
@@ -66,6 +77,31 @@ namespace tg
             char C = S[ i ];
             if ( C == '\\' && i + 1 < S.size() ) { Cur.Text += S[ i + 1 ]; i += 2; continue; }
             if ( C == '*' && i + 1 < S.size() && S[ i + 1 ] == '*' ) { Flush(); Strong = !Strong; Flush(); i += 2; continue; }
+            if ( C == '~' && i + 1 < S.size() && S[ i + 1 ] == '~' ) { Flush(); Strike = !Strike; Flush(); i += 2; continue; }
+            if ( C == '_' && i + 1 < S.size() && S[ i + 1 ] == '_' ) { Flush(); Under = !Under; Flush(); i += 2; continue; }
+            if ( C == '|' && i + 1 < S.size() && S[ i + 1 ] == '|' && ( Spoiler >= 0 || S.find( "||", i + 2 ) != std::string::npos ) )
+            {
+                Flush();
+                Spoiler = Spoiler >= 0 ? -1 : Spoilers++;
+                Flush();
+                i += 2;
+                continue;
+            }
+            if ( Style.AutoLink && ( C == 'h' ) && UrlStart( S, i ) )
+            {
+                size_t E = i;
+                while ( E < S.size() && S[ E ] != ' ' && S[ E ] != '\n' && S[ E ] != '<' ) E++;
+                while ( E > i && std::strchr( ".,:;\"')]!?", S[ E - 1 ] ) ) E--;
+                Flush();
+                Run R;
+                R.K = Link;
+                R.Text = R.Target = S.substr( i, E - i );
+                R.Spoiler = Spoiler;
+                Runs.push_back( R );
+                i = E;
+                Flush();
+                continue;
+            }
             if ( C == '*' ) { Flush(); Em = !Em; Flush(); i++; continue; }
             if ( C == '`' )
             {
@@ -115,11 +151,12 @@ namespace tg
                 size_t E = i + 1;
                 while ( E < S.size() && ( std::isalnum( (unsigned char)S[ E ] ) || S[ E ] == '_' || S[ E ] == '-' || S[ E ] == '.' ) ) E++;
                 while ( E > i + 1 && ( S[ E - 1 ] == '.' || S[ E - 1 ] == '-' ) ) E--; // "@mo." ends the sentence
-                if ( E > i + 1 )
+                if ( E > i + 1 && ( !IsMention || IsMention( S.substr( i + 1, E - i - 1 ) ) ) )
                 {
                     Flush();
                     Run R;
                     R.K = Mention;
+                    R.Spoiler = Spoiler;
                     R.Strong = true;
                     R.Text = S.substr( i, E - i );
                     R.Target = S.substr( i + 1, E - i - 1 );
@@ -133,6 +170,7 @@ namespace tg
             i++;
         }
         Flush();
+        Revealed.assign( size_t( Spoilers ), false );
     }
 
     const Font& RichText::FontOf( const Run& R ) const
@@ -232,14 +270,22 @@ namespace tg
                 break;
             case Link: C = Style.Link.Resolve(); break;
             case Mention:
-                C = Style.Mention.Resolve();
+                C = ( !Self.empty() && R.Target == Self ? Style.SelfMention : Style.Mention ).Resolve();
                 D.RectFilled( { Rr.x - 2, Rr.y + 1, Rr.w + 4, Rr.h - 2 }, C.Fade( 0.16f ), 4 );
                 break;
             case Colored: C = R.Col.Resolve(); break;
             default: break;
             }
+            bool Hidden = R.Spoiler >= 0 && size_t( R.Spoiler ) < Revealed.size() && !Revealed[ size_t( R.Spoiler ) ];
+            if ( Hidden ) // a block over the words until it's clicked
+            {
+                D.RectFilled( { Rr.x - 2, Rr.y + 1, Rr.w + 4, Rr.h - 2 }, Style.Spoiler.Resolve(), 3 );
+                continue;
+            }
+            if ( R.Spoiler >= 0 ) D.RectFilled( { Rr.x - 2, Rr.y + 1, Rr.w + 4, Rr.h - 2 }, Style.Spoiler.Resolve().Fade( 0.35f ), 3 );
             D.Text( F, { std::floor( Rr.x ), std::floor( Rr.y ) }, P.Text, C.Fade( Enabled ? 1 : 0.5f ) );
-            if ( R.K == Link && int( P.RunIdx ) == HoverRun ) D.RectFilled( { Rr.x, Rr.y + F.Ascent + 2, Rr.w, 1 }, C );
+            if ( ( R.K == Link && int( P.RunIdx ) == HoverRun ) || R.Under ) D.RectFilled( { Rr.x, Rr.y + F.Ascent + 2, Rr.w, 1 }, C );
+            if ( R.Strike ) D.RectFilled( { Rr.x, std::floor( Rr.y + F.Ascent * 0.62f ), Rr.w, 1 }, C );
         }
     }
 
@@ -247,8 +293,14 @@ namespace tg
     {
         Vec2 O = { Bounds.x + Layout.Padding.Left, Bounds.y + Layout.Padding.Top };
         for ( auto& Pc : Pieces )
-            if ( Pc.R.Offset( O ).Contains( P ) && ( Runs[ Pc.RunIdx ].K == Link || Runs[ Pc.RunIdx ].K == Mention ) ) return int( Pc.RunIdx );
+            if ( Pc.R.Offset( O ).Contains( P ) && Clickable( Runs[ Pc.RunIdx ] ) ) return int( Pc.RunIdx );
         return -1;
+    }
+
+    bool RichText::Clickable( const Run& R ) const
+    {
+        if ( R.Spoiler >= 0 && size_t( R.Spoiler ) < Revealed.size() && !Revealed[ size_t( R.Spoiler ) ] ) return true; // reveal
+        return R.K == Link || R.K == Mention;
     }
 
     Cursor RichText::GetCursor() const { return HoverRun >= 0 ? Cursor::Hand : Cursor::Arrow; }
@@ -269,6 +321,13 @@ namespace tg
         {
             int R = RunAt( E.Pos );
             if ( E.Button != MouseButton::Left || R < 0 ) return false;
+            const Run& Rn = Runs[ size_t( R ) ];
+            if ( Rn.Spoiler >= 0 && size_t( Rn.Spoiler ) < Revealed.size() && !Revealed[ size_t( Rn.Spoiler ) ] )
+            {
+                Revealed[ size_t( Rn.Spoiler ) ] = true;
+                Redraw();
+                return true;
+            }
             if ( Runs[ size_t( R ) ].K == Link && OnLink ) OnLink( Runs[ size_t( R ) ].Target );
             if ( Runs[ size_t( R ) ].K == Mention && OnMention ) OnMention( Runs[ size_t( R ) ].Target );
             return true;

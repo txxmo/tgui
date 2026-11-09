@@ -29,22 +29,12 @@ extern char** environ;
 #endif
 
 #if !defined( _WIN32 ) && !defined( __APPLE__ )
-#define STB_IMAGE_STATIC
-#define STB_IMAGE_IMPLEMENTATION
-#define STBI_ONLY_PNG
-#define STBI_ONLY_BMP
-#define STBI_ONLY_JPEG
-#define STBI_NO_STDIO
 #if defined( __GNUC__ )
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wunused-function"
 #pragma GCC diagnostic ignored "-Wmissing-field-initializers"
 #pragma GCC diagnostic ignored "-Wsign-compare"
-#pragma GCC diagnostic ignored "-Wconversion"
-#pragma GCC diagnostic ignored "-Wdouble-promotion"
-#pragma GCC diagnostic ignored "-Wshadow"
 #endif
-#include "stb_image.h"
 #define STB_IMAGE_WRITE_STATIC
 #define STB_IMAGE_WRITE_IMPLEMENTATION
 #include "stb_image_write.h"
@@ -737,15 +727,7 @@ namespace tg::os
         if ( Wayland() && Have( "wl-paste" ) ) Rc = Run( { "wl-paste", "--no-newline", "--type", "image/png" }, &Data );
         else if ( Have( "xclip" ) ) Rc = Run( { "xclip", "-selection", "clipboard", "-t", "image/png", "-o" }, &Data );
         if ( Rc != 0 || Data.empty() ) return false;
-        int W = 0, H = 0, N = 0;
-        unsigned char* Px = stbi_load_from_memory( (const unsigned char*)Data.data(), int( Data.size() ), &W, &H, &N, 4 );
-        if ( !Px ) return false;
-        Out.Width = W;
-        Out.Height = H;
-        Out.Pixels.resize( size_t( W ) * H );
-        std::memcpy( Out.Pixels.data(), Px, Out.Pixels.size() * 4 );
-        stbi_image_free( Px );
-        return true;
+        return DecodeImage( Data.data(), Data.size(), Out );
     }
 
     bool SetClipboardImage( const Bitmap& Img )

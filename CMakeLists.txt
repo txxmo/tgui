@@ -40,6 +40,7 @@ add_library( tg STATIC
     src/variants.cpp
     src/widget.cpp
     src/os.cpp
+    src/imagedecode.cpp
     src/widgets/bars.cpp
     src/widgets/box.cpp
     src/widgets/button.cpp

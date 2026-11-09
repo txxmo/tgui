@@ -3,6 +3,7 @@
 //   W.Rich( "**Deploy** finished on `fra-01` in <success>42s</>. See [the log](https://ci/123) @mo" );
 //
 //   **bold**   *italic*   `code`   [label](url)   @mention   \* (escape)
+//   ~~strike~~   __underline__   ||spoiler|| (hidden until clicked)   bare https:// links (AutoLink)
 //   <accent>..</>  <dim>..</>  <success>..</>  <warning>..</>  <danger>..</>  <#E5534B>..</>  colored
 //   tg::Icon::... codepoints and emoji work like in any text.
 #pragma once
@@ -25,6 +26,9 @@ namespace tg
         Paint CodeFill = Tok::SurfaceAlt;
         Font* TextFont = nullptr;   // nullptr = Theme().Body; bold = Theme().Bold, code = Theme().Mono
         bool Mentions = true;       // highlight @names
+        bool AutoLink = true;       // bare http(s):// URLs become links
+        Paint Spoiler = Tok::Raised;
+        Paint SelfMention = Tok::Warning; // @you (see RichText::Self)
     };
 
     class RichText : public Widget
@@ -34,6 +38,9 @@ namespace tg
         RichTextStyle Style;
         std::function<void( const std::string& Url )> OnLink;    // [label](url) clicked
         std::function<void( const std::string& Name )> OnMention; // @name clicked
+        // Only these @names count as mentions (nullptr = any @word). Self = your name, highlighted differently.
+        std::function<bool( const std::string& Name )> IsMention;
+        std::string Self;
 
         void SetText( std::string Markup );
         const std::string& GetText() const { return Source; }
@@ -51,7 +58,8 @@ namespace tg
         {
             std::string Text;
             Kind K = Plain;
-            bool Strong = false, Em = false;
+            bool Strong = false, Em = false, Strike = false, Under = false;
+            int Spoiler = -1; // which ||spoiler|| this belongs to
             Paint Col = Tok::Text;
             std::string Target; // link url / mention name
         };
@@ -67,6 +75,8 @@ namespace tg
         float LaidWidth = -1;
         Vec2 LaidSize;
         int HoverRun = -1;
+        std::vector<bool> Revealed; // per spoiler
+        bool Clickable( const Run& R ) const;
         void Parse();
         Vec2 Flow( float Width );
         const Font& FontOf( const Run& R ) const;

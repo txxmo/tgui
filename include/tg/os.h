@@ -35,6 +35,11 @@ namespace tg
         bool Empty() const { return Width <= 0 || Height <= 0; }
     };
 
+    // PNG / JPEG / GIF (first frame) / BMP / TGA bytes -> RGBA. MaxSide > 0 refuses larger images.
+    bool DecodeImage( const void* Data, size_t Size, Bitmap& Out, int MaxSide = 16384 );
+    // Resized copy (box filter when shrinking: avatars, thumbnails).
+    Bitmap ScaleBitmap( const Bitmap& In, int Width, int Height );
+
     namespace os
     {
         struct FileFilter
