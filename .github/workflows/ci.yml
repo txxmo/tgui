@@ -1,0 +1,90 @@
+name: ci
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  linux:
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { name: gcc,            cc: gcc,   cxx: g++,     flags: "" }
+          - { name: clang,          cc: clang, cxx: clang++, flags: "" }
+          - { name: gcc-freetype-hb, cc: gcc,  cxx: g++,     flags: "-DTG_HARFBUZZ=ON" }
+          - { name: gcc-vulkan,     cc: gcc,   cxx: g++,     flags: "-DTG_VULKAN=ON" }   # golden images on lavapipe
+    name: linux-${{ matrix.name }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: deps
+        run: sudo apt-get update && sudo apt-get install -y ninja-build libglfw3-dev libgl-dev libfreetype-dev libharfbuzz-dev libvulkan-dev mesa-vulkan-drivers libshaderc-dev
+      - name: configure
+        run: cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_C_COMPILER=${{ matrix.cc }} -DCMAKE_CXX_COMPILER=${{ matrix.cxx }} ${{ matrix.flags }}
+      - name: build
+        run: cmake --build build
+      - name: test (headless + golden images + single header)
+        run: ctest --test-dir build --output-on-failure
+      - name: golden diffs
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with: { name: golden-${{ matrix.name }}, path: "build/*.png" }
+
+  windows:
+    runs-on: windows-2022
+    strategy:
+      fail-fast: false
+      matrix:
+        app: [ win32, glfw ]
+    name: windows-msvc-${{ matrix.app }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: configure
+        run: cmake -S . -B build -DTG_APP_BACKEND=${{ matrix.app }}
+      - name: build
+        run: cmake --build build --config Release
+      - name: test
+        run: ctest --test-dir build -C Release --output-on-failure
+      - name: golden diffs
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with: { name: golden-windows-${{ matrix.app }}, path: "build/*.png" }
+
+  macos:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+      - name: deps
+        run: brew install glfw ninja
+      - name: build
+        run: cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release && cmake --build build
+      - name: test
+        run: ctest --test-dir build --output-on-failure
+
+  package:
+    needs: [ linux, windows ]
+    strategy:
+      matrix:
+        os: [ ubuntu-24.04, windows-2022 ]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: deps
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y libglfw3-dev libgl-dev
+      - name: build
+        run: |
+          cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DTG_BUILD_EXAMPLES=OFF -DTG_BUILD_HEADLESS=OFF
+          cmake --build build --config Release
+      - name: package (zip / tgz with headers, libs, CMake config)
+        run: cd build && cpack -C Release
+      - name: single header
+        run: python3 tools/amalgamate.py -o dist/tg_single.h
+      - uses: actions/upload-artifact@v4
+        with:
+          name: tg-${{ matrix.os }}
+          path: |
+            build/tg-*.zip
+            build/tg-*.tar.gz
+            dist/tg_single.h

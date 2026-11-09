@@ -1,0 +1,30 @@
+{
+  "name": "tg",
+  "version": "0.5.0",
+  "description": "A small retained-mode C++20 GUI framework: widgets, docking, charts, terminal, custom shaders; Win32 + D3D11/9 and GLFW + OpenGL 3 backends.",
+  "homepage": "https://github.com/txxmo/tgui",
+  "supports": "!uwp",
+  "dependencies": [
+    { "name": "vcpkg-cmake", "host": true },
+    { "name": "vcpkg-cmake-config", "host": true }
+  ],
+  "default-features": [ "app" ],
+  "features": {
+    "app": {
+      "description": "tg::app: window + renderer + event loop (Win32 + D3D11 on Windows, GLFW + OpenGL 3 elsewhere)",
+      "dependencies": [ { "name": "glfw3", "platform": "!windows" } ]
+    },
+    "vulkan": {
+      "description": "tg::vulkan: the Vulkan renderer (custom shaders via shaderc)",
+      "dependencies": [ "vulkan", "shaderc" ]
+    },
+    "freetype": {
+      "description": "Rasterize with FreeType (hinting) and color emoji",
+      "dependencies": [ { "name": "freetype", "default-features": false, "features": [ "png", "zlib" ] } ]
+    },
+    "harfbuzz": {
+      "description": "Emoji sequences (flags, ZWJ families, skin tones) via HarfBuzz",
+      "dependencies": [ { "name": "tg", "features": [ "freetype" ] }, { "name": "harfbuzz", "default-features": false } ]
+    }
+  }
+}
