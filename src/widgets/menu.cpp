@@ -17,9 +17,32 @@ namespace tg
     Vec2 MenuItem::Measure( float )
     {
         const Font& F = *GetTheme().Body;
-        float W = 24 + std::ceil( F.Width( Text ) ) + 12;
+        float W = LeadingLayout().TextX + std::ceil( F.Width( Text ) ) + 12;
         if ( !Shortcut.empty() ) W += 24 + std::ceil( GetTheme().Small->Width( Shortcut ) );
         return { W, F.LineHeight + 12 };
+    }
+
+    MenuItem::Leading MenuItem::LeadingLayout() const
+    {
+        const Font& F = *GetTheme().Body;
+        float Extra = 0;
+        bool HasCheck = false;
+        if ( auto* Parent = GetParent() )
+        {
+            for ( const auto& Child : Parent->Children() )
+                if ( auto* Item = dynamic_cast<MenuItem*>( Child.get() ) )
+                {
+                    HasCheck |= Item->Checked != nullptr;
+                    Extra = std::max( Extra, F.Width( Item->Icon ) );
+                }
+        }
+        else
+        {
+            HasCheck = Checked != nullptr;
+            Extra = F.Width( Icon );
+        }
+        const float IconX = HasCheck ? 24.f : 8.f;
+        return { IconX, Extra > 0 ? std::max( 24.f, IconX + std::ceil( Extra ) + 8 ) : 24.f };
     }
 
     void MenuItem::Draw( DrawList& D )
@@ -34,7 +57,11 @@ namespace tg
             DrawCheckMark( D, { Bounds.x + 6, std::floor( Cy - 7 ), 14, 14 }, T[ Tok::Accent ], 1.8f );
 
         Color Tc = Danger ? T[ Tok::Danger ] : T[ Tok::Text ];
-        D.Text( F, { Bounds.x + 24, std::floor( Cy - F.LineHeight * 0.5f ) }, Text, Tc.Fade( Enabled ? 1 : 0.4f ) );
+        const float Y = std::floor( Cy - F.LineHeight * 0.5f );
+        const auto Leading = LeadingLayout();
+        Tc = Tc.Fade( Enabled ? 1 : 0.4f );
+        if ( !Icon.empty() ) D.Text( F, { Bounds.x + Leading.IconX, Y }, Icon, Tc );
+        D.Text( F, { Bounds.x + Leading.TextX, Y }, Text, Tc );
         if ( !Shortcut.empty() )
         {
             const Font& Sf = *T.Small;

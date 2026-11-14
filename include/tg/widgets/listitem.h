@@ -25,6 +25,8 @@ namespace tg
         explicit ListItem( std::string Text = {} );
 
         std::string Text;
+        std::string Icon;   // optional leading glyph
+        float IconWidth = 0; // minimum icon width for aligning mixed lists
         bool Selected = false;
         bool ShowCheck = false;   // checkbox-style tick on the left (multi-select)
         bool ShowMark = false;    // small tick on the right when selected (single-select dropdowns)

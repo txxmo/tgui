@@ -247,12 +247,15 @@ Click it and the box shows "..." while it listens. The next key **or mouse butto
 W.Combo( "Region", { "Frankfurt", "Amsterdam", "Tokyo" }, &RegionIndex );
 W.Combo( "", Items, &Index );               // no label: full width
 Parent.Add<tg::Combo>( Items, &Index );
+auto& Theme = W.Combo( "Theme", { "Light", "Dark", "System" } );
+Theme.SetItemIcons( { tg::Icon::Sun, tg::Icon::Moon, tg::Icon::Monitor } );
 ```
 
 | API | |
 |---|---|
 | `GetIndex()`, `SetIndex()`, `GetSelectedText()`, `OnChange( int )`, `Bind` | `-1` = nothing selected |
 | `SetItems()`, `GetItems()`, `Placeholder`, `OpenList()`, `CloseList()`, `IsOpen()` | |
+| `SetItemIcons()` | Optional glyphs by index. Use empty strings for rows without an icon. `SetItems()` clears the icons. |
 | `Style`: `Fill`, `Stroke`, `StrokeOpen`, `TextColor`, `Placeholder`, `Chevron`, `Radius`, `Padding`, `MaxPopupHeight` | long lists scroll |
 
 ### MultiCombo (pick several)
@@ -263,6 +266,7 @@ W.MultiCombo( "Alerts", { "CPU", "Disk", "Down", "SSH", "Backup" }, &Alerts );
 ```
 
 The dropdown stays open while you tick items. The field shows "a, b" when it fits, otherwise "3 selected".
+Both dropdowns align icons separately from selection marks. The closed field shows an icon when exactly one item is selected.
 
 | API | |
 |---|---|
@@ -273,10 +277,10 @@ The dropdown stays open while you tick items. The field shows "a, b" when it fit
 ```cpp
 auto& Bar = W.MenuBar();                    // or App.Main().MenuBar() for a window-wide bar
 Bar.Add( "File", [&]( tg::Menu& M ) {        // builder runs each time the menu opens
-    M.Item( "New", [] { ... }, "Ctrl+N" );
+    M.Item( "New", [] { ... }, "Ctrl+N" ).Icon = tg::Icon::Plus;
     M.Separator();
     M.Item( "Quit", [&] { App.Quit(); } );
-} );
+}, tg::Icon::Folder );
 Bar.Add( "View", [&]( tg::Menu& M ) { M.Check( "Word wrap", &Wrap ); } );
 ```
 

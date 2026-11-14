@@ -17,18 +17,23 @@ namespace tg
         if ( OpenMenuPtr ) { OpenMenuPtr->OnClose = nullptr; OpenMenuPtr->Close(); }
     }
 
-    void MenuBar::Add( std::string Title, std::function<void( Menu& )> Build )
+    void MenuBar::Add( std::string Title, std::function<void( Menu& )> Build, std::string Icon )
     {
-        Entries.push_back( { std::move( Title ), std::move( Build ) } );
+        Entries.push_back( { std::move( Title ), std::move( Icon ), std::move( Build ) } );
         Invalidate();
+    }
+
+    float MenuBar::EntryWidth( const Entry& E ) const
+    {
+        const Font& F = *GetTheme().Body;
+        return F.Width( E.Title ) + Style.ItemPadding * 2 + ( E.Icon.empty() ? 0.f : F.Width( E.Icon ) + 8.f );
     }
 
     Rect MenuBar::ItemRect( size_t i ) const
     {
-        const Font& F = *GetTheme().Body;
         float X = Bounds.x + 4;
-        for ( size_t k = 0; k < i; k++ ) X += F.Width( Entries[ k ].Title ) + Style.ItemPadding * 2;
-        return { X, Bounds.y + 3, F.Width( Entries[ i ].Title ) + Style.ItemPadding * 2, Bounds.h - 6 };
+        for ( size_t k = 0; k < i; k++ ) X += EntryWidth( Entries[ k ] );
+        return { X, Bounds.y + 3, EntryWidth( Entries[ i ] ), Bounds.h - 6 };
     }
 
     int MenuBar::At( Vec2 P ) const
@@ -60,7 +65,7 @@ namespace tg
     Vec2 MenuBar::Measure( float Avail )
     {
         float W = 8;
-        for ( auto& E : Entries ) W += GetTheme().Body->Width( E.Title ) + Style.ItemPadding * 2;
+        for ( const auto& E : Entries ) W += EntryWidth( E );
         return { std::min( W, Avail ), Style.Height };
     }
 
@@ -75,7 +80,15 @@ namespace tg
             Rect R = ItemRect( i );
             if ( int( i ) == Open ) D.RectFilled( R, S.Open.Resolve(), S.Radius );
             else if ( int( i ) == Hover && IsHovered() ) D.RectFilled( R, S.Hover.Resolve(), S.Radius );
-            D.Text( F, { R.x + S.ItemPadding, std::floor( R.y + ( R.h - F.LineHeight ) * 0.5f ) }, Entries[ i ].Title, S.TextColor.Resolve() );
+            float X = R.x + S.ItemPadding;
+            const auto Y = std::floor( R.y + ( R.h - F.LineHeight ) * 0.5f );
+            const auto& E = Entries[ i ];
+            if ( !E.Icon.empty() )
+            {
+                D.Text( F, { X, Y }, E.Icon, S.TextColor.Resolve() );
+                X += F.Width( E.Icon ) + 8;
+            }
+            D.Text( F, { X, Y }, E.Title, S.TextColor.Resolve() );
         }
     }
 

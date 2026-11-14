@@ -35,6 +35,15 @@ namespace tg
     void DropdownBase::SetItems( std::vector<std::string> NewItems )
     {
         Items = std::move( NewItems );
+        ItemIcons.clear();
+        CloseList();
+        Invalidate();
+    }
+
+    void DropdownBase::SetItemIcons( std::vector<std::string> Icons )
+    {
+        if ( Icons.size() > Items.size() ) Icons.resize( Items.size() );
+        ItemIcons = std::move( Icons );
         CloseList();
         Invalidate();
     }
@@ -51,9 +60,13 @@ namespace tg
         List.MaxHeight = Style.MaxPopupHeight;
         List.Content().Layout.Gap = 1;
         Rows.clear();
+        float IconWidth = 0;
+        for ( const auto& Icon : ItemIcons ) IconWidth = std::max( IconWidth, GetTheme().Body->Width( Icon ) );
         for ( size_t i = 0; i < Items.size(); i++ )
         {
             auto& Row = List.Content().Add<ListItem>( Items[ i ] );
+            if ( i < ItemIcons.size() ) Row.Icon = ItemIcons[ i ];
+            Row.IconWidth = IconWidth;
             Row.ShowCheck = MultiSelect();
             Row.ShowMark = !MultiSelect();
             Row.OnClick = [ this, i ] { OnItemClicked( i ); };
@@ -77,7 +90,9 @@ namespace tg
     {
         const Font& F = *GetTheme().Body;
         float W = F.Width( Placeholder );
-        for ( auto& I : Items ) W = std::max( W, F.Width( I ) );
+        float IconWidth = 0;
+        for ( const auto& Icon : ItemIcons ) IconWidth = std::max( IconWidth, F.Width( Icon ) );
+        for ( auto& I : Items ) W = std::max( W, F.Width( I ) + ( IconWidth > 0 ? IconWidth + 8 : 0 ) );
         W = std::min( std::max( 120.f, std::ceil( W ) + 24 + Style.Padding.Horizontal() ), std::max( Avail, 120.f ) );
         return { W, F.LineHeight + Style.Padding.Vertical() };
     }
@@ -95,10 +110,22 @@ namespace tg
 
         Rect In = Bounds.Shrink( S.Padding );
         const float ChevronW = 16;
-        std::string Txt = DisplayText( In.w - ChevronW - 6 );
+        std::string_view Icon;
+        size_t Selected = Items.size();
+        for ( size_t i = 0; !ItemIcons.empty() && i < Items.size(); i++ )
+        {
+            if ( !IsItemSelected( i ) ) continue;
+            if ( Selected != Items.size() ) { Selected = Items.size(); break; }
+            Selected = i;
+        }
+        if ( Selected < ItemIcons.size() ) Icon = ItemIcons[ Selected ];
+        float IconSpace = Icon.empty() ? 0.f : F.Width( Icon ) + 8;
+        std::string Txt = DisplayText( In.w - ChevronW - 6 - IconSpace );
         bool Empty = Txt.empty();
         D.PushClip( { In.x, Bounds.y, In.w - ChevronW, Bounds.h } );
-        D.Text( F, { In.x, std::floor( In.y + ( In.h - F.LineHeight ) * 0.5f ) }, Empty ? Placeholder : Txt,
+        const float Y = std::floor( In.y + ( In.h - F.LineHeight ) * 0.5f );
+        if ( !Icon.empty() ) D.Text( F, { In.x, Y }, Icon, S.TextColor.Resolve().Fade( Enabled ? 1 : 0.5f ) );
+        D.Text( F, { In.x + IconSpace, Y }, Empty ? Placeholder : Txt,
                 ( Empty ? S.Placeholder : S.TextColor ).Resolve().Fade( Enabled ? 1 : 0.5f ) );
         D.PopClip();
 

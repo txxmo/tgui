@@ -32,6 +32,8 @@ namespace tg
     {
         const Font& F = *GetTheme().Body;
         float Extra = ( ShowCheck ? Style.CheckSize + 8 : 0 ) + ( ShowMark ? Style.CheckSize + 8 : 0 );
+        const auto Slot = std::max( IconWidth, F.Width( Icon ) );
+        if ( Slot > 0 ) Extra += Slot + 8;
         return { std::ceil( F.Width( Text ) ) + Extra + Style.Padding.Horizontal(), F.LineHeight + Style.Padding.Vertical() };
     }
 
@@ -62,6 +64,13 @@ namespace tg
         }
 
         Color Tc = Color::Lerp( S.TextColor.Resolve(), S.SelectedText.Resolve(), SelT );
+        const auto Slot = std::max( IconWidth, F.Width( Icon ) );
+        if ( Slot > 0 )
+        {
+            if ( !Icon.empty() )
+                D.Text( F, { X, std::floor( Cy - F.LineHeight * 0.5f ) }, Icon, Tc.Fade( Enabled ? 1 : 0.5f ) );
+            X += Slot + 8;
+        }
         D.Text( F, { X, std::floor( Cy - F.LineHeight * 0.5f ) }, Text, Tc.Fade( Enabled ? 1 : 0.5f ) );
 
         // single-select dropdown: tick on the right of the chosen row

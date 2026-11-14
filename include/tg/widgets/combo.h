@@ -42,6 +42,8 @@ namespace tg
 
         const std::vector<std::string>& GetItems() const { return Items; }
         void SetItems( std::vector<std::string> NewItems );
+        // Icons by item index. Empty/missing entries have no icon. SetItems clears them.
+        void SetItemIcons( std::vector<std::string> Icons );
 
         bool IsOpen() const { return Open != nullptr; }
         void OpenList();
@@ -54,6 +56,7 @@ namespace tg
 
     protected:
         std::vector<std::string> Items;
+        std::vector<std::string> ItemIcons;
         std::vector<ListItem*> Rows; // valid while open
 
         virtual std::string DisplayText( float MaxWidth ) const = 0;

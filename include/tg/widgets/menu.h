@@ -21,6 +21,7 @@ namespace tg
         MenuItem( std::string Text, std::function<void()> Fn, std::string Shortcut = {} );
 
         std::string Text, Shortcut;
+        std::string Icon; // optional leading glyph, e.g. tg::Icon::Copy
         std::function<void()> OnClick;
         bool* Checked = nullptr; // shows a tick; clicking flips it
         bool Danger = false;     // red text (delete, kick, ...)
@@ -31,6 +32,8 @@ namespace tg
         Cursor GetCursor() const override { return Cursor::Hand; }
 
     private:
+        struct Leading { float IconX, TextX; };
+        Leading LeadingLayout() const;
         float HoverT = 0;
     };
 

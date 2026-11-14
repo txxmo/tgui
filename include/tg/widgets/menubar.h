@@ -36,7 +36,7 @@ namespace tg
         MenuBarStyle Style;
 
         // The builder runs every time the menu opens, so it can reflect current state.
-        void Add( std::string Title, std::function<void( Menu& )> Build );
+        void Add( std::string Title, std::function<void( Menu& )> Build, std::string Icon = {} );
         void OpenIndex( int i );
         void CloseMenu();
         int OpenIndexNow() const { return Open; }
@@ -48,10 +48,11 @@ namespace tg
         bool OnEvent( const Event& E ) override;
 
     private:
-        struct Entry { std::string Title; std::function<void( Menu& )> Build; };
+        struct Entry { std::string Title, Icon; std::function<void( Menu& )> Build; };
         std::vector<Entry> Entries;
         int Open = -1, Hover = -1;
         Menu* OpenMenuPtr = nullptr;
         int At( Vec2 P ) const;
+        float EntryWidth( const Entry& E ) const;
     };
 }

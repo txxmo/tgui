@@ -392,6 +392,7 @@ int main( int Argc, char** Argv )
     }
 
     // ---------------- combo: open, pick the 3rd item, closes
+    App.RegionCombo->SetItemIcons( { tg::Icon::Globe, "", tg::Icon::MapPin } );
     Click( Ctx, *App.RegionCombo );
     CHECK( App.RegionCombo->IsOpen() );
     tg::Popup* P = OpenPopup( Ctx );
@@ -399,9 +400,12 @@ int main( int Argc, char** Argv )
     Settle( Ctx );
     Shot( Ctx, "combo_open" );
     tg::ListItem* Third = Find<tg::ListItem>( *P, 2 );
-    CHECK( Third && Third->Text == "London" );
+    CHECK( Third && Third->Text == "London" && Third->Icon == tg::Icon::MapPin && Third->ShowMark );
+    auto* NoIcon = Find<tg::ListItem>( *P, 1 );
+    CHECK( NoIcon && NoIcon->Icon.empty() && NoIcon->IconWidth == Third->IconWidth && Third->IconWidth > 0 );
     Click( Ctx, *Third );
     CHECK( App.Region == 2 );
+    CHECK( App.RegionCombo->GetSelectedText() && *App.RegionCombo->GetSelectedText() == "London" );
     CHECK( !App.RegionCombo->IsOpen() );
     CHECK( OpenPopup( Ctx ) == nullptr );
 
@@ -415,10 +419,12 @@ int main( int Argc, char** Argv )
     CHECK( !App.RegionCombo->IsOpen() );
 
     // ---------------- multi combo: toggles stay open, Escape closes
+    App.AlertCombo->SetItemIcons( { tg::Icon::CircleAlert, tg::Icon::Bell } );
     Click( Ctx, *App.AlertCombo );
     P = OpenPopup( Ctx );
     CHECK( P );
     Settle( Ctx );
+    CHECK( Find<tg::ListItem>( *P, 0 )->ShowCheck && Find<tg::ListItem>( *P, 0 )->Icon == tg::Icon::CircleAlert );
     Click( Ctx, *Find<tg::ListItem>( *P, 1 ) );
     Click( Ctx, *Find<tg::ListItem>( *P, 0 ) );
     CHECK( App.Alerts[ 0 ] == false && App.Alerts[ 1 ] == true && App.Alerts[ 2 ] == true );
@@ -848,6 +854,19 @@ int main( int Argc, char** Argv )
     {
         // menu bar: click File, slide to Edit, pick Find
         tg::MenuBar& Bar = *App.Bar;
+        Bar.Add( "Tools", []( tg::Menu& M ) {
+            M.Item( "Copy", {}, "Ctrl+C" ).Icon = tg::Icon::Copy;
+        }, tg::Icon::Folder );
+        Settle( Ctx );
+        ClickAt( Ctx, Bar.ItemRect( Bar.Count() - 1 ).Center() );
+        auto* Tools = OpenPopup( Ctx );
+        CHECK( Tools && Bar.OpenIndexNow() == int( Bar.Count() - 1 ) );
+        auto* Copy = Find<tg::MenuItem>( *Tools, 0 );
+        CHECK( Copy && Copy->Icon == tg::Icon::Copy && Copy->Shortcut == "Ctrl+C" );
+        Settle( Ctx );
+        Shot( Ctx, "menu_icons" );
+        Click( Ctx, *Copy );
+        CHECK( Bar.OpenIndexNow() == -1 );
         ClickAt( Ctx, Bar.ItemRect( 0 ).Center() );
         CHECK( Bar.OpenIndexNow() == 0 );
         Ctx.OnMouseMove( Bar.ItemRect( 1 ).Center() );                 // hover the next title while open
@@ -864,6 +883,7 @@ int main( int Argc, char** Argv )
         // View > Word wrap is a checkable item
         ClickAt( Ctx, Bar.ItemRect( 2 ).Center() );
         M = dynamic_cast<tg::Menu*>( OpenPopup( Ctx ) );
+        Find<tg::MenuItem>( *M, 0 )->Icon = tg::Icon::FileText;
         Settle( Ctx );
         Click( Ctx, *Find<tg::MenuItem>( *M, 0 ) );
         CHECK( !App.WordWrap );
